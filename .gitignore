@@ -1,10 +1,10 @@
-# ── Data directory (large raster/CSV/numpy files) ─────────────────────────────
+# ── Data directory (large raster/CSV/numpy/GRIB files) ────────────────────────
 data/
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 logs/
 
-# ── Scripts archive ───────────────────────────────────────────────────────────
+# ── Scripts archive (v1.0 legacy scripts) ─────────────────────────────────────
 scripts/archive/
 
 # ── Python artifacts ──────────────────────────────────────────────────────────
@@ -12,8 +12,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.npy
-*.npz
 *.egg-info/
 dist/
 build/
@@ -24,10 +22,15 @@ venv/
 env/
 .env
 
-# ── Raster / gridded data ─────────────────────────────────────────────────────
+# ── Raster / gridded data / model outputs ─────────────────────────────────────
 *.tif
 *.tiff
 *.nc
+*.npy
+*.npz
+*.grib2
+*.grib
+*.gz
 
 # ── Jupyter ───────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
@@ -47,3 +50,6 @@ env/
 *.swp
 *.swo
 *~
+
+# ── Claude Code ───────────────────────────────────────────────────────────────
+CLAUDE.md

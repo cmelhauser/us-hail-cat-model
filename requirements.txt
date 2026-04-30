@@ -1,4 +1,4 @@
-# CONUS Hail Cat Model — Python dependencies
+# CONUS Hail Cat Model v2.0 — Python dependencies
 # Install with: pip install -r requirements.txt
 # Python 3.9+ required
 
@@ -11,13 +11,25 @@ scipy>=1.10
 rasterio>=1.3
 xarray>=2023.1
 regionmask>=0.11
+cartopy>=0.22
 
-# L-moments (used in CDF fitting, stage 10)
+# L-moments (CDF fitting, stage 09)
 lmoments3>=1.0.4
 
-# Parquet I/O (stochastic catalog, stage 14)
+# Parquet I/O (stochastic catalog, stage 13)
 pyarrow>=12.0
 
-# Visualisation (pipeline stages + render scripts)
+# Visualisation
 matplotlib>=3.7
-cartopy>=0.22
+
+# v2.0 additions — MRMS/MYRORSS data access
+s3fs>=2023.1              # AWS S3 filesystem access (MYRORSS + MRMS downloads)
+boto3>=1.26               # AWS SDK
+cfgrib>=0.9.10            # GRIB2 reading (operational MRMS data)
+eccodes>=1.5              # GRIB2 backend (required by cfgrib)
+netCDF4>=1.6              # NetCDF reading (MYRORSS / GridRad data)
+h5py>=3.8                 # HDF5 backend
+
+# v2.0 additions — processing and analysis
+scikit-learn>=1.2         # K-means clustering for regional GPD grouping
+tqdm>=4.65                # Progress bars for large downloads
