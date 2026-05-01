@@ -409,7 +409,8 @@ def main():
     cal = compute_calibration(pairs)
     cal_path = OUT_DIR / "calibration_report.csv"
     with open(cal_path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(cal[0].keys()))
+        fieldnames = sorted({k for row in cal for k in row.keys()})
+        w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         w.writerows(cal)
 

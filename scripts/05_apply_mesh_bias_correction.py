@@ -345,6 +345,13 @@ def apply_probabilistic_filter(data: np.ndarray, day_of_year: int, lat_grid: np.
         return deterministic
 
 
+def apply_probabilistic_environmental_filter(data: np.ndarray, lat_grid: np.ndarray,
+                                             month=None, day_of_year: int = 1,
+                                             skip_ml: bool = False) -> np.ndarray:
+    """Compatibility wrapper for the v2.1 optional environmental filter API."""
+    return apply_probabilistic_filter(data, day_of_year, lat_grid, skip_ml=skip_ml)
+
+
 def build_lat_grid() -> np.ndarray:
     lats = LAT_MAX - (np.arange(OUT_NROWS) + 0.5) * OUT_DX
     return np.broadcast_to(lats[:, np.newaxis], (OUT_NROWS, OUT_NCOLS))

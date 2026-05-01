@@ -30,6 +30,8 @@ Usage
   python scripts/12_apply_conus_mask.py --validate
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 import time
@@ -41,6 +43,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_ROOT = REPO_ROOT / "data"
 CDF_DIR   = DATA_ROOT / "analysis" / "cdf"
 OCC_DIR   = DATA_ROOT / "analysis" / "occurrence"
+STOCH_MAP_DIR = DATA_ROOT / "stochastic" / "maps"
 MASK_DIR  = DATA_ROOT / "analysis" / "conus_mask"
 TOPO_DIR  = DATA_ROOT / "analysis" / "topography"
 LOG_DIR   = REPO_ROOT / "logs"
@@ -151,6 +154,7 @@ def apply_mask_to_rasters(conus_mask, topo_correction):
     targets.extend(sorted(CDF_DIR.glob("rp_*yr_hail*.tif")))
     targets.extend(sorted(CDF_DIR.glob("p_occurrence*.tif")))
     targets.extend(sorted(OCC_DIR.glob("p_occ_*.tif")))
+    targets.extend(sorted(STOCH_MAP_DIR.glob("rp_*yr_stochastic.tif")))
 
     log(f"  Applying mask to {len(targets)} rasters ...")
     outside_mask = ~conus_mask

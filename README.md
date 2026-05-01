@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-v2.1-blue)]()
 [![Status](https://img.shields.io/badge/status-methodology_hardening-orange)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Tests](https://img.shields.io/badge/tests-required-critical)]()
 
 A **radar-based probabilistic hail hazard model** for the Continental United States using NOAA MESH data, ERA5 reanalysis, and stochastic event simulation.
@@ -71,7 +71,7 @@ Focus areas:
 - Sparse-safe stochastic simulation  
 - Testing + documentation  
 
-The **15-stage pipeline remains unchanged** from v2.0.
+The **15-stage pipeline remains unchanged** from v2.0. The runner has 16 executable entries because Stage 04 is split into `04a` and `04b`.
 
 ---
 
@@ -86,6 +86,7 @@ These are **non-negotiable**:
 ### 2. Stage 13 Must Be Sparse-Safe
 - ❌ No `(n_events, lat, lon)` arrays  
 - ✔ Sparse-only operations
+- ✔ Stochastic RP maps must be CONUS-masked before rendering
 
 ### 3. Deterministic Fallback (Stage 05)
 - Must support `--skip-ml`
@@ -282,6 +283,8 @@ Located in `/docs`:
 - `data_dictionary.md`  
 - `reproduce.md`  
 - `PRE_RUN_REVIEW.md`  
+
+Generated rasters, logs, and rendered figures under `docs/figures/` are intentionally ignored by git.
 
 ---
 

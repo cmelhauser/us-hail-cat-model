@@ -58,6 +58,7 @@ STOCH_DIR = DATA_ROOT / "stochastic"
 EVENT_DIR = DATA_ROOT / "historical" / "events"
 OCC_DIR   = DATA_ROOT / "analysis" / "occurrence"
 PET_DIR   = STOCH_DIR / "pet"
+MASK_DIR  = DATA_ROOT / "analysis" / "conus_mask"
 
 FIG_HIST  = REPO_ROOT / "docs" / "figures" / "historical"
 FIG_STOCH = REPO_ROOT / "docs" / "figures" / "stochastic"
@@ -113,6 +114,13 @@ def render_rp_map(tif_path, out_path, title, vmax=None):
         data = src.read(1)
         extent = [src.bounds.left, src.bounds.right,
                   src.bounds.bottom, src.bounds.top]
+
+    mask_path = MASK_DIR / "conus_mask.tif"
+    if mask_path.exists():
+        with rasterio.open(mask_path) as msrc:
+            mask = msrc.read(1) > 0
+        if mask.shape == data.shape:
+            data = np.where(mask, data, 0.0)
 
     data_inches = data / 25.4  # convert mm to inches for display
     data_inches[data_inches <= 0] = np.nan
@@ -317,7 +325,11 @@ def validate_outputs() -> bool:
     for d in [FIG_HIST, FIG_STOCH, FIG_ANAL]:
         pngs = list(d.glob("*.png")) if d.exists() else []
         if not pngs:
-            errors.append(f"No figures in {d.relative_to(REPO_ROOT)}")
+            try:
+                label = d.relative_to(REPO_ROOT)
+            except ValueError:
+                label = d
+            errors.append(f"No figures in {label}")
 
     if errors:
         for e in errors:

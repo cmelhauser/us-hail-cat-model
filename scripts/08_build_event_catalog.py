@@ -37,6 +37,8 @@ Usage
   python scripts/08_build_event_catalog.py --validate
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 import time
@@ -63,7 +65,7 @@ DAMAGE_THRESHOLD_MM = 25.4   # 1.0 inch — residential damage onset
 BUFFER_CELLS        = 15     # ~83 km at 0.05° (~5.5 km/cell)
 MAX_DURATION_DAYS   = 5      # hard cap per AIR/RMS conventions
 MAX_TEMPORAL_GAP    = 2      # max gap in days (1=consecutive, 2=one quiet day)
-MAX_CENTROID_KM_DAY = 150.0  # v2.1 physical coherence cap
+MAX_CENTROID_KM_DAY = 100.0  # v2.1 physical coherence cap
 MAX_INTENSITY_RATIO = 3.0    # v2.1 peak jump cap between adjacent days
 
 

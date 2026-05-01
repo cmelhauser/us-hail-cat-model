@@ -88,6 +88,7 @@ OUT_DIR   = DATA_ROOT / "analysis" / "cdf"
 FIG_DIR   = REPO_ROOT / "docs" / "figures" / "analysis"
 LOG_DIR   = REPO_ROOT / "logs"
 LOG_FILE  = LOG_DIR / "09_fit_cdf_regional.log"
+THRESHOLD_SELECTION_FILE = OUT_DIR / "threshold_selection.csv"
 
 NROWS = 520
 NCOLS = 1180
@@ -232,14 +233,18 @@ def cluster_cells(annual_max, n_regions):
 
     log(f"\n  Clustering cells into {n_regions} regions ...")
 
-    # Active cell mask: at least MIN_YEARS_FOR_FIT years with hail
+    # Active cell mask: full runs require MIN_YEARS_FOR_FIT active years, but
+    # smoke tests may intentionally contain fewer total years.
     n_years = annual_max.shape[0]
     p_occ = (annual_max > 0).sum(axis=0) / n_years
-    active = p_occ >= (MIN_YEARS_FOR_FIT / n_years)
+    min_active_years = min(MIN_YEARS_FOR_FIT, n_years)
+    active = (annual_max > 0).sum(axis=0) >= min_active_years
 
     rows, cols = np.where(active)
     n_active = len(rows)
     log(f"  Active cells: {n_active:,} / {NROWS * NCOLS:,}")
+    if n_active == 0:
+        raise RuntimeError("No active hail cells found in annual maxima")
 
     if n_active < n_regions * 10:
         log(f"  WARNING: Too few active cells for {n_regions} regions")
@@ -366,6 +371,13 @@ def compute_mrl_and_threshold(exceedances: np.ndarray, region_id: int) -> float:
         selected = float(rows[best_i]["candidate_threshold_mm"])
 
     THRESHOLD_DIAGNOSTICS.extend(rows)
+    if THRESHOLD_DIAGNOSTICS:
+        THRESHOLD_SELECTION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fieldnames = sorted({k for row in THRESHOLD_DIAGNOSTICS for k in row.keys()})
+        with open(THRESHOLD_SELECTION_FILE, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            w.writerows(THRESHOLD_DIAGNOSTICS)
 
     # Preserve existing MRL plot output for visual review.
     try:
@@ -659,7 +671,7 @@ def save_outputs(p_occ, lognorm_mu, lognorm_sigma, gpd_xi, gpd_sigma,
     log(f"  Saved fitting_report.csv")
 
     # v2.1 threshold diagnostics
-    thresh_path = OUT_DIR / "threshold_selection.csv"
+    thresh_path = THRESHOLD_SELECTION_FILE
     if THRESHOLD_DIAGNOSTICS:
         fieldnames = sorted({k for row in THRESHOLD_DIAGNOSTICS for k in row.keys()})
         with open(thresh_path, "w", newline="") as f:

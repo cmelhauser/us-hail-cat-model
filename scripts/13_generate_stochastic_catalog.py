@@ -55,6 +55,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_ROOT = REPO_ROOT / "data"
@@ -163,6 +164,12 @@ def build_active_index(sparse_events):
     return active_rows, active_cols, lookup
 
 
+def sparse_event_active_mask(sparse_events):
+    """Return unique active rows/cols across sparse historical events."""
+    active_rows, active_cols, _ = build_active_index(sparse_events)
+    return active_rows, active_cols
+
+
 def translate_sparse(rows, cols, rng, sigma_cells=TRANSLATE_CELLS):
     """Gaussian sparse translation clipped to model domain."""
     dr = int(np.rint(rng.normal(0, sigma_cells))) if sigma_cells > 0 else 0
@@ -211,6 +218,15 @@ def update_sparse_max(target_row, rows, cols, vals, active_lookup):
     vv = np.fromiter(by_idx.values(), dtype=np.float32)
     np.maximum.at(target_row, idx, vv)
     return int(np.count_nonzero(vv >= DAMAGE_THRESH_MM)), float(vv.max())
+
+
+def update_sparse_annual_max(target_row, active_lookup, rows, cols, vals):
+    """Compatibility wrapper for updating a compact annual-max row."""
+    tuple_lookup = {
+        ((int(k) // NCOLS, int(k) % NCOLS) if not isinstance(k, tuple) else k): v
+        for k, v in active_lookup.items()
+    }
+    update_sparse_max(target_row, rows, cols, vals, tuple_lookup)
 
 
 def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years):
@@ -374,6 +390,21 @@ def write_geotiff(data, out_path):
         dst.write(data.astype(np.float32), 1)
 
 
+def load_conus_mask():
+    """Load the Stage 12 CONUS mask when available."""
+    import rasterio
+    mask_path = MASK_DIR / "conus_mask.tif"
+    if not mask_path.exists():
+        log(f"  WARN: CONUS mask not found at {mask_path}; stochastic maps unmasked")
+        return None
+    with rasterio.open(mask_path) as src:
+        mask = src.read(1) > 0
+    if mask.shape != (NROWS, NCOLS):
+        log(f"  WARN: CONUS mask shape {mask.shape} does not match {(NROWS, NCOLS)}; stochastic maps unmasked")
+        return None
+    return mask
+
+
 def validate_outputs() -> bool:
     errors = []
     for rp in RP_YEARS:
@@ -431,8 +462,11 @@ def main():
 
     # Empirical RP maps
     rp_maps = compute_empirical_rps(ann_max, active_rows, active_cols, n_years)
+    conus_mask = load_conus_mask()
     MAP_DIR.mkdir(parents=True, exist_ok=True)
     for rp, data in rp_maps.items():
+        if conus_mask is not None:
+            data = np.where(conus_mask, data, 0.0).astype(np.float32)
         path = MAP_DIR / f"rp_{rp:05d}yr_stochastic.tif"
         write_geotiff(data, path)
         peak = float(data.max())

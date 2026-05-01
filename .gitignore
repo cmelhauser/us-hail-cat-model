@@ -4,6 +4,9 @@ data/
 # ── Logs ──────────────────────────────────────────────────────────────────────
 logs/
 
+# ── Rendered figures / generated reports ──────────────────────────────────────
+docs/figures/
+
 # ── Scripts archive (v1.0 legacy scripts) ─────────────────────────────────────
 scripts/archive/
 
