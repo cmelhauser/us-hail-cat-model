@@ -1,0 +1,87 @@
+cff-version: 1.2.0
+message: >
+  If you use this software or its outputs in published research, please cite it
+  using the metadata below.
+type: software
+title: "CONUS Hail Catastrophe Model"
+version: 2.1.0
+date-released: "2026-05-01"
+abstract: >
+  A radar-based probabilistic hail hazard model for the Continental United States.
+  Ingests NOAA MYRORSS, NCAR GridRad, and NOAA MRMS radar-derived MESH data over
+  a 28-year record (1998–present), applies bias correction and environmental
+  filtering, fits regional Generalised Pareto Distribution tails via L-moments,
+  and generates a 50,000-year stochastic event catalog on a 0.05° CONUS grid.
+  Produces return-period hazard maps (10–50,000 years), occurrence probability
+  rasters, and placeholder vulnerability curves for five construction classes.
+authors:
+  - family-names: Melhauser
+    given-names: Christopher
+    email: christopher.melhauser@gmail.com
+license: MIT
+repository-code: "https://github.com/melhauserc/us-hail-cat-model"
+keywords:
+  - hail
+  - catastrophe model
+  - hazard
+  - MESH
+  - MYRORSS
+  - GridRad
+  - MRMS
+  - extreme value theory
+  - stochastic simulation
+  - return period
+  - CONUS
+references:
+  - type: article
+    title: "Severe Hail Estimation from Dual-Polarization Radar: Review and Algorithm Identification"
+    authors:
+      - family-names: Murillo
+        given-names: E. M.
+      - family-names: Homeyer
+        given-names: C. R.
+    journal: "Journal of Applied Meteorology and Climatology"
+    year: 2021
+    volume: 60
+    start: 1197
+    end: 1223
+    doi: "10.1175/JAMC-D-20-0271.1"
+  - type: article
+    title: "Observed and Near-Real-Time (NRT) Attack of Severe and High-Impact Weather over the Contiguous United States"
+    authors:
+      - family-names: Cintineo
+        given-names: J. L.
+      - family-names: Smith
+        given-names: T. M.
+      - family-names: Lakshmanan
+        given-names: V.
+      - family-names: Brooks
+        given-names: H. E.
+      - family-names: Ortega
+        given-names: K. L.
+    journal: "Weather and Forecasting"
+    year: 2012
+    volume: 27
+    start: 31
+    end: 51
+    doi: "10.1175/WAF-D-11-00044.1"
+  - type: article
+    title: "A New Algorithm for the Estimation of Hail Size from WSR-88D Radar"
+    authors:
+      - family-names: Witt
+        given-names: A.
+      - family-names: Eilts
+        given-names: M. D.
+      - family-names: Stumpf
+        given-names: G. J.
+      - family-names: Johnson
+        given-names: J. T.
+      - family-names: Mitchell
+        given-names: E. D.
+      - family-names: Thomas
+        given-names: K. W.
+    journal: "Weather and Forecasting"
+    year: 1998
+    volume: 13
+    start: 286
+    end: 303
