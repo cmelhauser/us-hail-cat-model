@@ -1,29 +1,23 @@
-# CONUS Hail Catastrophe Model v2.1
+# CONUS Hail Catastrophe Model — v2.1
 
 [![Version](https://img.shields.io/badge/version-v2.1-blue)]()
-[![Status](https://img.shields.io/badge/status-methodology_hardening-orange)]()
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
-[![Tests](https://img.shields.io/badge/tests-required-critical)]()
+[![CI](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml/badge.svg)](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml)
 
-A **radar-based probabilistic hail hazard model** for the Continental United States using NOAA MESH data, ERA5 reanalysis, and stochastic event simulation.
+A radar-based probabilistic hail hazard model for the Continental United States. The model ingests 25+ years of NOAA multi-radar MESH data, fits regional extreme-value distributions, and generates a 50,000-year stochastic event catalog on a 0.05° CONUS grid.
 
 ---
 
-## 📌 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
-- [What This Model Does](#what-this-model-does)
-- [Version & Scope](#version--scope)
-- [Critical Implementation Rules](#critical-implementation-rules)
-- [Architecture Overview](#architecture-overview)
-- [Pipeline Stages](#pipeline-stages)
-- [Core Data Sources](#core-data-sources)
+- [Architecture](#architecture)
+- [Pipeline](#pipeline)
+- [Data Sources](#data-sources)
 - [Quick Start](#quick-start)
-- [Validation Workflow](#validation-workflow)
-- [Stochastic Simulation (Stage 13)](#stochastic-simulation-stage-13)
+- [Running the Pipeline](#running-the-pipeline)
 - [Outputs](#outputs)
-- [Recommended Use](#recommended-use)
 - [Limitations](#limitations)
 - [Documentation](#documentation)
 - [License](#license)
@@ -32,157 +26,102 @@ A **radar-based probabilistic hail hazard model** for the Continental United Sta
 
 ## Overview
 
-This repository implements **v2.1** of the CONUS Hail Catastrophe Model.
+Version 2.1 is a **hardening release**, not a redesign. The 15-stage pipeline and 0.05° grid are unchanged from v2.0. This release improves calibration robustness, event grouping logic, EVT diagnostics, stochastic simulation memory safety, and test coverage.
 
-It produces:
-- High-resolution hail hazard maps (0.05° grid)
-- Extreme value return-period estimates (10–50,000 years)
-- A stochastic event catalog
-- Validation and diagnostic outputs
+The model produces:
 
----
+- Corrected daily MESH75 rasters (1998–present)
+- A sparse historical event catalog
+- Regional extreme-value return-period maps (10–50,000 years)
+- A 50,000-year stochastic event catalog
+- Exceedance probability tables and tail-stability diagnostics
 
-## What This Model Does
-
-The model estimates hail hazard using a **homogenized radar-derived dataset**:
-
-- MYRORSS (historical)
-- GridRad (gap-fill)
-- MRMS (operational)
-
-It answers:
-
-1. How often hail occurs at each location  
-2. How large hail can plausibly become  
-3. Analytical vs stochastic tail behavior  
-4. Where tail estimates are unstable  
+**Scope.** Hail hazard only. The vulnerability module is a placeholder and is not claims-calibrated. No exposure integration or financial loss output is included in this release.
 
 ---
 
-## Version & Scope
+## Architecture
 
-**v2.1 = methodology hardening (NOT redesign)**
+The model is organized into four logical phases:
 
-Focus areas:
-- Calibration robustness  
-- Environmental filtering  
-- Event grouping  
-- EVT diagnostics  
-- Sparse-safe stochastic simulation  
-- Testing + documentation  
+**Phase 1 — Ingestion and Calibration (Stages 01–05)**
+Raw MESH data from three radar sources are ingested, time-aligned, and cross-calibrated to a single consistent record. MYRORSS provides the 1998–2011 historical baseline; GridRad-Severe fills the 2012–2019 transition period; operational MRMS covers 2020–present. Stage 05 applies quantile-mapping bias correction between sources, optionally enhanced by a conditional ML model, and filters cells using ERA5 thermodynamic thresholds (0°C / −20°C isotherms).
 
-The **15-stage pipeline remains unchanged** from v2.0. The runner has 16 executable entries because Stage 04 is split into `04a` and `04b`.
+**Phase 2 — Event Catalog (Stages 06–08)**
+Stage 06 cross-validates the corrected MESH record against SPC storm reports (validation use only — SPC is never a hazard input). Stage 07 computes a long-term spatial climatology. Stage 08 groups contiguous hail cells into discrete events using spatial overlap, temporal continuity, centroid displacement (≤ 150 km/day), and intensity jump (≤ 3×) constraints. All events are stored as sparse arrays (`rows`, `cols`, `vals`) — no dense grids are constructed.
 
----
+**Phase 3 — Extreme Value Fitting (Stages 09–11)**
+Stage 09 fits a Generalized Pareto Distribution (GPD) to the tail of each grid cell's MESH distribution using L-moments, with K-means regional pooling (k = 6) and automated threshold diagnostics. Stage 10 applies spatial smoothing (150 km radius, 75 km exponential decay) to stabilize tail estimates. Stage 11 maps exceedance probabilities at eight MESH thresholds.
 
-## ⚠️ Critical Implementation Rules
-
-These are **non-negotiable**:
-
-### 1. Sparse Event Storage
-- Events stored as `(rows, cols, vals)`
-- ❌ Never construct dense event cubes
-
-### 2. Stage 13 Must Be Sparse-Safe
-- ❌ No `(n_events, lat, lon)` arrays  
-- ✔ Sparse-only operations
-- ✔ Stochastic RP maps must be CONUS-masked before rendering
-
-### 3. Deterministic Fallback (Stage 05)
-- Must support `--skip-ml`
-
-### 4. SPC Reports
-- Validation only  
-- ❌ Not hazard input
-
-### 5. Vulnerability
-- Placeholder only  
-- ❌ Not claims-calibrated  
+**Phase 4 — Hazard Output (Stages 12–15)**
+Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correction factor (bounded 1.0–1.25). Stage 13 generates a 50,000-year stochastic catalog by resampling the historical event library with calibrated intensity perturbation and ±3-cell spatial translation — all operations remain sparse throughout. Stage 14 applies the placeholder vulnerability curves. Stage 15 renders diagnostic figures and compares analytical (CDF-derived) against empirical (stochastic) return-period maps; divergence between the two flags GPD misspecification.
 
 ---
 
-## 🧠 Architecture Overview
+## Pipeline
 
-### High-Level Flow
+| Stage | Script | Description |
+|------:|--------|-------------|
+| 01 | `01_ingest_myrorss.py` | MYRORSS MESH ingestion (1998–2011) |
+| 02 | `02_ingest_mrms.py` | MRMS MESH ingestion (2020–present) |
+| 03 | `03_ingest_spc.py` | SPC storm reports — validation only |
+| 04a | `04a_download_era5.py` | ERA5 isotherm download |
+| 04b | `04b_ingest_gridrad.py` | GridRad-Severe ingestion (2012–2019) |
+| 05 | `05_calibrate_sources.py` | Cross-source bias correction and filtering |
+| 06 | `06_validate_spc.py` | SPC validation and detection-rate diagnostics |
+| 07 | `07_compute_climatology.py` | Long-term hail frequency climatology |
+| 08 | `08_build_event_catalog.py` | Sparse historical event catalog |
+| 09 | `09_fit_cdf_regional.py` | Regional GPD EVT fitting via L-moments |
+| 10 | `10_smooth_cdf.py` | Spatial smoothing of tail parameters |
+| 11 | `11_compute_occurrence.py` | Exceedance probability rasters |
+| 12 | `12_apply_mask_topo.py` | CONUS mask and topographic correction |
+| 13 | `13_generate_stochastic_catalog.py` | 50,000-year stochastic simulation |
+| 14 | `14_apply_vulnerability.py` | Placeholder vulnerability curves |
+| 15 | `15_render_figures.py` | Return-period maps and diagnostics |
 
-```
-Radar Data ─┐
-            ├──► Bias Correction ─► Climatology ─► Event Catalog ─► EVT ─► Hazard Maps
-ERA5 ───────┘                               │
-                                            ▼
-                                     Stochastic Simulation
-                                            ▼
-                                      Return Period Maps
-```
-
----
-
-### Pipeline (Mermaid)
-
-```mermaid
-flowchart LR
-    A[Radar Ingestion] --> B[Bias Correction]
-    B --> C[Climatology]
-    C --> D[Event Catalog]
-    D --> E[EVT Fitting]
-    E --> F[Spatial Smoothing]
-    F --> G[Occurrence Probabilities]
-    G --> H[Mask + Topography]
-    H --> I[Stochastic Catalog]
-    I --> J[Diagnostics + Outputs]
-```
-
----
-
-## Pipeline Stages
-
-| Stage | Component                | Purpose                     |
-|------:|--------------------------|-----------------------------|
-| 01–02 | Radar ingestion          | MYRORSS + MRMS             |
-| 03    | SPC data                 | Validation                 |
-| 04    | ERA5 + GridRad           | Gap fill                   |
-| 05    | Bias correction          | + filtering                |
-| 06    | Validation               | SPC comparison             |
-| 07    | Climatology              | Spatial baseline           |
-| 08    | Event catalog            | Sparse representation      |
-| 09    | EVT fitting              | Tail modeling              |
-| 10    | Spatial smoothing        | Stability                  |
-| 11    | Occurrence probabilities | Frequency modeling         |
-| 12    | Mask + topography        | Physical realism           |
-| 13    | Stochastic catalog       | Event simulation           |
-| 14    | Vulnerability            | Placeholder                |
-| 15    | Figures                  | Diagnostics                |
-
----
-
-## Core Data Sources
-
-| Dataset                  | Period        | Role                             |
-|-------------------------|--------------|----------------------------------|
-| MYRORSS MESH            | 1998–2011     | Historical radar                 |
-| GridRad / Severe        | 2012–2019     | Gap-fill                         |
-| MRMS MESH               | 2020–present  | Operational radar                |
-| ERA5                    | 1991–2020     | Thermodynamics                   |
-| SPC reports             | 2004–present  | Validation only                  |
-| DEM (optional)          | Static        | Terrain correction               |
-
----
-
-## 🚀 Quick Start
-
-### Setup
+The pipeline is orchestrated by `run_pipeline.py`:
 
 ```bash
-git clone <repo>
-cd us-hail-cat-model
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--retrain-models]
 ```
 
 ---
 
-### Pre-run Validation (**REQUIRED**)
+## Data Sources
+
+| Dataset | Period | Role |
+|---------|--------|------|
+| MYRORSS MESH | Apr 1998 – Dec 2011 | Historical radar baseline |
+| GridRad / GridRad-Severe | Jan 2012 – Oct 2019 | Transition-period gap fill |
+| MRMS MESH | Oct 2020 – present | Operational radar |
+| ERA5 (0°C / −20°C isotherms) | 1991–2020 | Thermodynamic filtering |
+| SPC storm reports | 2004 – present | Validation only |
+| DEM (SRTM / GMTED) | Static | Topographic correction |
+
+Free accounts are required at [NCAR RDA](https://rda.ucar.edu) (GridRad) and [Copernicus CDS](https://cds.climate.copernicus.eu) (ERA5).
+
+---
+
+## Quick Start
+
+**Requirements:** Python 3.10+, and system libraries for `cartopy`, `eccodes`, and `rasterio` (GEOS, PROJ, ecCodes).
+
+```bash
+git clone https://github.com/melhauserc/us-hail-cat-model.git
+cd us-hail-cat-model
+python3.10 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+Alternatively, use the provided Docker image for a fully reproducible environment:
+
+```bash
+docker build -t hail-cat-model .
+docker run --rm -it hail-cat-model bash
+```
+
+**Pre-run validation (required before first execution):**
 
 ```bash
 python -m py_compile run_pipeline.py scripts/*.py
@@ -192,102 +131,99 @@ python run_pipeline.py --dry-run
 
 ---
 
-### Run Full Pipeline
+## Running the Pipeline
+
+**Recommended first-run sequence:**
+
+```
+01 → 02 → 03 → 04a → 04b → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 12
+→ Stage 13 smoke (--n-years 1000) → Stage 13 full → 14 → 15
+```
+
+Run the full pipeline in one command:
 
 ```bash
 python run_pipeline.py
 ```
 
----
-
-## 🔍 Validation Workflow
+Or run individual stages, ranges, or subsets:
 
 ```bash
-python run_pipeline.py --validate
+python run_pipeline.py --only 9          # re-fit EVT
+python run_pipeline.py --from 13         # resume from stochastic
+python run_pipeline.py --skip 14,15      # skip vulnerability and figures
 ```
 
-Review:
+**Stage 05 without ML artifacts:**
 
-- Stage 06 → SPC validation  
-- Stage 09 → EVT diagnostics  
-- Stage 13 → stochastic outputs  
-- Stage 15 → analytical vs stochastic comparison  
+```bash
+python run_pipeline.py --only 5 --skip-ml
+```
 
----
-
-## ⚠️ Stochastic Simulation (Stage 13)
-
-**Highest-risk stage in the model**
-
-### Rules
-- Must use sparse arrays  
-- Must NOT construct dense grids  
-
-### Smoke Test
+**Stage 13 smoke test (before committing to the 50,000-year run):**
 
 ```bash
 python scripts/13_generate_stochastic_catalog.py --n-years 1000
 ```
 
-### Full Run
+**Post-run validation:**
 
 ```bash
-python scripts/13_generate_stochastic_catalog.py --n-years 50000
+python run_pipeline.py --validate
 ```
 
 ---
 
-## 📦 Outputs
+## Outputs
 
-- Corrected daily MESH75 rasters  
-- Sparse event catalog  
-- EVT return-period maps  
-- Stochastic return-period maps  
-- Exceedance probability tables  
-- Validation diagnostics  
-- Tail stability indicators  
+| Output | Location | Description |
+|--------|----------|-------------|
+| Corrected MESH rasters | `data/historical/corrected_mesh/` | Daily MESH75 grids |
+| Event catalog | `data/historical/events/` | Sparse `.npz` per event |
+| EVT parameters | `data/analysis/cdf/` | GPD ξ, σ, threshold per cell |
+| Return-period maps | `data/analysis/cdf/` | Analytical RP rasters |
+| Stochastic catalog | `data/stochastic/` | 50,000-yr event library |
+| Stochastic RP maps | `data/stochastic/` | Empirical return periods |
+| Exceedance tables | `data/stochastic/` | PET tables by threshold |
+| Figures | `docs/figures/` | Diagnostic and output maps |
 
----
-
-## Recommended Use
-
-Use as a **transparent hazard layer**.
-
-Before underwriting or regulatory use:
-
-- Review validation outputs  
-- Inspect EVT thresholds  
-- Compare analytical vs stochastic tails  
-- Document assumptions  
+All data outputs are excluded from version control via `.gitignore`.
 
 ---
 
 ## Limitations
 
-- Hazard only (no exposure/loss modeling)  
-- Long return periods are extrapolated  
-- Spatial dependence simplified  
-- GridRad gap-fill limitations  
-- SPC validation incomplete  
-- Vulnerability not calibrated  
-- Climate non-stationarity not modeled  
+The following limitations should be documented before any underwriting, regulatory, or risk-transfer application:
+
+- **Long return periods are extrapolative.** RP > ~500 years exceed the observed record and rely on GPD tail assumptions.
+- **Spatial dependence is simplified.** The stochastic catalog does not model inter-event spatial correlation beyond the historical footprint.
+- **Climate non-stationarity is not modeled.** The model assumes a stationary hail climate over the radar record.
+- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions.
+- **SPC validation is incomplete.** Report density is spatially and temporally uneven; rural areas are systematically underrepresented.
+- **Vulnerability is a placeholder.** The five-class lognormal curves are literature-based and not calibrated to claims data.
 
 ---
 
-## 📚 Documentation
+## Documentation
 
-Located in `/docs`:
+Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) for a guided reading path.
 
-- `methodology.md`  
-- `technical_documentation.md`  
-- `data_dictionary.md`  
-- `reproduce.md`  
-- `REVIEW_PRE_RUN.md`  
-
-Generated rasters, logs, and rendered figures under `docs/figures/` are intentionally ignored by git.
+| Document | Description |
+|----------|-------------|
+| `docs/methodology.md` | Scientific assumptions and formulas |
+| `docs/technical_documentation.md` | Per-stage implementation notes |
+| `docs/data_dictionary.md` | All output file schemas |
+| `docs/reproduce.md` | Reproduction guide and environment setup |
+| `docs/uncertainty.md` | Six-category uncertainty budget |
+| `docs/executive_summary.md` | Non-technical overview |
+| `docs/explainer.md` | Plain-language model explanation |
+| `REVIEW_PRE_RUN.md` | Pre-execution audit checklist |
+| `CONTRIBUTING.md` | Development workflow and methodology-change policy |
 
 ---
 
 ## License
 
-MIT  
+MIT License. See [`LICENSE`](LICENSE) for details.
+
+Data sourced from NOAA (MYRORSS, MRMS), NCAR RDA (GridRad), Copernicus CDS (ERA5), and NOAA SPC are subject to their respective terms of use.
