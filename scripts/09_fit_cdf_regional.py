@@ -77,8 +77,6 @@ import warnings
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
-from scipy import stats
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -87,7 +85,6 @@ DATA_ROOT = REPO_ROOT / "data"
 EVENT_DIR = DATA_ROOT / "historical" / "events"
 MESH_DIR  = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR   = DATA_ROOT / "analysis" / "cdf"
-THRESHOLD_SELECTION_FILE = OUT_DIR / "threshold_selection.csv"
 FIG_DIR   = REPO_ROOT / "docs" / "figures" / "analysis"
 LOG_DIR   = REPO_ROOT / "logs"
 LOG_FILE  = LOG_DIR / "09_fit_cdf_regional.log"
@@ -112,6 +109,7 @@ MIN_EXCEEDANCES_GPD = 5     # minimum exceedances for cell-level GPD
 DEFAULT_GPD_THRESHOLD_MM = 50.8  # 2.0 inches — default splice point
 MIN_REGION_EXCEEDANCES = 50  # minimum pooled exceedances for regional ξ
 DEFAULT_N_REGIONS = 6        # K-means clusters for regional pooling
+THRESHOLD_DIAGNOSTICS = []
 
 
 def log(msg):
@@ -284,103 +282,115 @@ def cluster_cells(annual_max, n_regions):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def compute_mrl_and_threshold(exceedances: np.ndarray, region_id: int) -> float:
+    from scipy import stats
+    """Select a GPD threshold using v2.1 auditable diagnostics.
+
+    Scores candidate thresholds using exceedance count, GPD fit stability,
+    KS goodness-of-fit, and approximate MRL linearity. The selected threshold
+    and all candidate diagnostics are written to threshold_selection.csv.
     """
-    v2.1 automated threshold selection using an ensemble score:
-    - KS statistic for GPD exceedance fit
-    - Anderson-Darling statistic where available
-    - local ξ stability penalty across neighboring candidate thresholds
-    """
-    if len(exceedances) < 30:
+    global THRESHOLD_DIAGNOSTICS
+    x = np.asarray(exceedances, dtype=np.float64)
+    x = x[np.isfinite(x) & (x > 0)]
+    if len(x) < 20:
+        THRESHOLD_DIAGNOSTICS.append({
+            "region": region_id, "candidate_threshold_mm": DEFAULT_GPD_THRESHOLD_MM,
+            "selected": 1, "n_exceedances": int(len(x)), "xi": 0.0, "sigma": np.nan,
+            "mrl_score": np.nan, "stability_score": np.nan, "gof_score": np.nan,
+            "reason": "too_few_observations_default",
+        })
         return DEFAULT_GPD_THRESHOLD_MM
 
-    sorted_exc = np.sort(exceedances.astype(np.float64))
-    candidates = np.unique(np.percentile(sorted_exc, np.arange(70, 96, 5)))
-
+    candidate_u = np.unique(np.percentile(x, np.arange(50, 91, 5))).astype(float)
     rows = []
-    xis = []
-    for u in candidates:
-        above = sorted_exc[sorted_exc > u] - u
-        if len(above) < 15:
-            rows.append((region_id, float(u), len(above), np.nan, np.nan, np.nan, np.inf))
-            xis.append(np.nan)
+    prev_xi = None
+    for u in candidate_u:
+        exc = x[x > u] - u
+        n_exc = len(exc)
+        if n_exc < max(10, MIN_EXCEEDANCES_GPD):
             continue
-        xi, sigma = lmom_fit_gpd(above.astype(np.float32))
-        if not np.isfinite(xi) or not np.isfinite(sigma) or sigma <= 0:
-            rows.append((region_id, float(u), len(above), np.nan, np.nan, np.nan, np.inf))
-            xis.append(np.nan)
-            continue
-        xi = float(np.clip(xi, -0.5, 0.5))
         try:
-            ks = stats.kstest(above, "genpareto", args=(xi, 0, sigma)).statistic
+            xi, loc, sigma = stats.genpareto.fit(exc, floc=0)
+            xi = float(np.clip(xi, -0.5, 0.5))
+            sigma = float(max(sigma, 1e-6))
+            ks = float(stats.kstest(exc, "genpareto", args=(xi, 0, sigma)).statistic)
         except Exception:
-            ks = np.nan
-        try:
-            fitted = stats.genpareto.rvs(c=xi, loc=0, scale=sigma, size=len(above), random_state=42)
-            ad = stats.anderson_ksamp([above, fitted]).statistic
-        except Exception:
-            ad = np.nan
-        xis.append(xi)
-        rows.append((region_id, float(u), len(above), xi, float(sigma), float(ks), float(ad)))
+            xi, sigma, ks = np.nan, np.nan, np.inf
 
-    xis_arr = np.array(xis, dtype=float)
-    scored = []
-    for i, row in enumerate(rows):
-        _, u, n_exc, xi, sigma, ks, ad = row
-        if not np.isfinite(xi) or not np.isfinite(ks):
-            score = np.inf
+        # MRL linearity: fit a line to mean residual life values at/above this threshold.
+        later = []
+        for uu in candidate_u[candidate_u >= u]:
+            e2 = x[x > uu] - uu
+            if len(e2) >= 10:
+                later.append((uu, float(e2.mean())))
+        if len(later) >= 3:
+            uu = np.array([a for a, _ in later], dtype=float)
+            mm = np.array([b for _, b in later], dtype=float)
+            coef = np.polyfit(uu, mm, 1)
+            pred = np.polyval(coef, uu)
+            mrl_score = float(np.sqrt(np.mean((mm - pred) ** 2)) / max(np.mean(mm), 1e-6))
         else:
-            lo = max(0, i - 1)
-            hi = min(len(xis_arr), i + 2)
-            local = xis_arr[lo:hi]
-            stability = float(np.nanstd(local)) if np.any(np.isfinite(local)) else 1.0
-            ad_component = 0.0 if not np.isfinite(ad) else 0.05 * float(ad)
-            sample_penalty = 10.0 / max(n_exc, 1)
-            score = float(ks + stability + ad_component + sample_penalty)
-        scored.append(row + (score,))
+            mrl_score = 1.0
 
-    # Append diagnostics for downstream auditability.
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_header = not THRESHOLD_SELECTION_FILE.exists()
-    with open(THRESHOLD_SELECTION_FILE, "a", newline="") as f:
-        w = csv.writer(f)
-        if write_header:
-            w.writerow(["region", "threshold_mm", "n_exceed", "xi", "sigma", "ks", "ad", "score"])
-        for row in scored:
-            w.writerow(row)
+        stability = 0.0 if prev_xi is None or not np.isfinite(prev_xi) or not np.isfinite(xi) else abs(xi - prev_xi)
+        prev_xi = xi
+        # Penalize very high thresholds through small sample size.
+        count_penalty = 1.0 / np.sqrt(max(n_exc, 1))
+        score = ks + mrl_score + stability + count_penalty
+        rows.append({
+            "region": region_id,
+            "candidate_threshold_mm": round(float(u), 3),
+            "selected": 0,
+            "n_exceedances": int(n_exc),
+            "xi": round(float(xi), 6) if np.isfinite(xi) else np.nan,
+            "sigma": round(float(sigma), 6) if np.isfinite(sigma) else np.nan,
+            "mrl_score": round(float(mrl_score), 6),
+            "stability_score": round(float(stability), 6),
+            "gof_score": round(float(ks), 6) if np.isfinite(ks) else np.inf,
+            "score": round(float(score), 6),
+            "reason": "candidate",
+        })
 
-    finite = [row for row in scored if np.isfinite(row[-1])]
-    if not finite:
-        return DEFAULT_GPD_THRESHOLD_MM
-    best = min(finite, key=lambda row: row[-1])
+    if not rows:
+        selected = DEFAULT_GPD_THRESHOLD_MM
+        rows = [{
+            "region": region_id, "candidate_threshold_mm": selected, "selected": 1,
+            "n_exceedances": int((x > selected).sum()), "xi": 0.0, "sigma": np.nan,
+            "mrl_score": np.nan, "stability_score": np.nan, "gof_score": np.nan,
+            "score": np.nan, "reason": "no_valid_candidate_default",
+        }]
+    else:
+        best_i = int(np.nanargmin([r["score"] for r in rows]))
+        rows[best_i]["selected"] = 1
+        rows[best_i]["reason"] = "selected_min_score"
+        selected = float(rows[best_i]["candidate_threshold_mm"])
 
-    # Save MRL plot for visual review.
+    THRESHOLD_DIAGNOSTICS.extend(rows)
+
+    # Preserve existing MRL plot output for visual review.
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         mrl_fig_dir = OUT_DIR / "mrl_diagnostics"
         mrl_fig_dir.mkdir(parents=True, exist_ok=True)
+        test_u = np.array([r["candidate_threshold_mm"] for r in rows], dtype=float)
         mrl_vals = []
-        us = []
-        for u in candidates:
-            above = sorted_exc[sorted_exc > u] - u
-            if len(above) >= 10:
-                us.append(u)
-                mrl_vals.append(float(above.mean()))
+        for u in test_u:
+            above = x[x > u] - u
+            mrl_vals.append(float(above.mean()) if len(above) else np.nan)
         fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(us, mrl_vals, "o-", label="MRL")
-        ax.axvline(best[1], color="k", ls="--", label=f"selected {best[1]:.1f} mm")
-        ax.axvline(DEFAULT_GPD_THRESHOLD_MM, color="r", ls=":", alpha=0.5, label="default")
+        ax.plot(test_u, mrl_vals, "o-")
+        ax.axvline(selected, color="r", ls="--", alpha=0.7, label=f"selected {selected:.1f} mm")
         ax.set_xlabel("Threshold u (mm)")
         ax.set_ylabel("Mean Residual Life (mm)")
-        ax.set_title(f"MRL + Automated Threshold — Region {region_id}")
+        ax.set_title(f"MRL Plot — Region {region_id}")
         ax.legend()
         fig.savefig(mrl_fig_dir / f"mrl_region_{region_id}.png", dpi=100, bbox_inches="tight")
         plt.close()
     except Exception:
         pass
-
-    return float(best[1])
+    return selected
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -522,6 +532,7 @@ def fit_regional_gpd(annual_max, region_map, n_regions):
 
 def compute_return_periods(p_occ, lognorm_mu, lognorm_sigma,
                             gpd_xi, gpd_sigma, gpd_threshold, fit_type):
+    from scipy import stats
     """Invert the composite CDF to get hail sizes at each return period."""
     log(f"\n  Computing return period maps for {RP_YEARS} ...")
 
@@ -647,10 +658,20 @@ def save_outputs(p_occ, lognorm_mu, lognorm_sigma, gpd_xi, gpd_sigma,
         w.writerows(fit_report)
     log(f"  Saved fitting_report.csv")
 
+    # v2.1 threshold diagnostics
+    thresh_path = OUT_DIR / "threshold_selection.csv"
+    if THRESHOLD_DIAGNOSTICS:
+        fieldnames = sorted({k for row in THRESHOLD_DIAGNOSTICS for k in row.keys()})
+        with open(thresh_path, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            w.writerows(THRESHOLD_DIAGNOSTICS)
+        log(f"  Saved threshold_selection.csv")
+
 
 def validate_outputs() -> bool:
     errors = []
-    for fname in ["cdf_parameters.npz", "p_occurrence.tif", "region_map.tif", "fitting_report.csv"]:
+    for fname in ["cdf_parameters.npz", "p_occurrence.tif", "region_map.tif", "fitting_report.csv", "threshold_selection.csv"]:
         p = OUT_DIR / fname
         if not p.exists():
             errors.append(f"Missing: {fname}")

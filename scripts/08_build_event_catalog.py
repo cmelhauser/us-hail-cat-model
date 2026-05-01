@@ -44,7 +44,6 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_ROOT = REPO_ROOT / "data"
@@ -64,8 +63,8 @@ DAMAGE_THRESHOLD_MM = 25.4   # 1.0 inch — residential damage onset
 BUFFER_CELLS        = 15     # ~83 km at 0.05° (~5.5 km/cell)
 MAX_DURATION_DAYS   = 5      # hard cap per AIR/RMS conventions
 MAX_TEMPORAL_GAP    = 2      # max gap in days (1=consecutive, 2=one quiet day)
-MAX_CENTROID_SHIFT_KM = 150.0  # v2.1: reject implausible day-to-day jumps
-MAX_PEAK_RATIO        = 3.0    # v2.1: reject abrupt intensity discontinuities
+MAX_CENTROID_KM_DAY = 150.0  # v2.1 physical coherence cap
+MAX_INTENSITY_RATIO = 3.0    # v2.1 peak jump cap between adjacent days
 
 
 def log(msg):
@@ -116,41 +115,85 @@ def load_daily_data() -> tuple:
 
 
 def footprints_overlap(fp1: np.ndarray, fp2: np.ndarray) -> bool:
-    """Check if two footprints overlap after dilating fp1 by BUFFER_CELLS."""
-    from scipy.ndimage import binary_dilation
-    dilated = binary_dilation(fp1, iterations=BUFFER_CELLS)
-    return bool(np.any(dilated & fp2))
+    """Check if two footprints overlap after buffering fp1 by BUFFER_CELLS.
+
+    Implemented with an integral image instead of scipy.ndimage so Stage 08
+    remains lightweight and avoids dependency/import failures in production runs.
+    The buffer is a conservative square approximation to the 83 km dilation.
+    """
+    if not np.any(fp1) or not np.any(fp2):
+        return False
+
+    r1, c1 = np.where(fp1)
+    r2, c2 = np.where(fp2)
+
+    # Fast bounding-box rejection.
+    if (r2.max() < r1.min() - BUFFER_CELLS or r2.min() > r1.max() + BUFFER_CELLS or
+        c2.max() < c1.min() - BUFFER_CELLS or c2.min() > c1.max() + BUFFER_CELLS):
+        return False
+
+    # Integral image lets us query whether each fp2 cell falls inside any
+    # buffered fp1 rectangle in O(n_active_fp2).
+    padded = np.pad(fp1.astype(np.int16), BUFFER_CELLS, mode="constant")
+    integral = padded.cumsum(axis=0).cumsum(axis=1)
+    rr = r2 + BUFFER_CELLS
+    cc = c2 + BUFFER_CELLS
+    rlo = rr - BUFFER_CELLS
+    rhi = rr + BUFFER_CELLS
+    clo = cc - BUFFER_CELLS
+    chi = cc + BUFFER_CELLS
+
+    def rect_sum(a, r0, c0, r1, c1):
+        total = a[r1, c1]
+        total = total - np.where(r0 > 0, a[r0 - 1, c1], 0)
+        total = total - np.where(c0 > 0, a[r1, c0 - 1], 0)
+        total = total + np.where((r0 > 0) & (c0 > 0), a[r0 - 1, c0 - 1], 0)
+        return total
+
+    return bool(np.any(rect_sum(integral, rlo, clo, rhi, chi) > 0))
+
 
 
 def haversine_km(lat1, lon1, lat2, lon2):
-    dlat = np.radians(lat2 - lat1)
-    dlon = np.radians(lon2 - lon1)
-    a = np.sin(dlat / 2) ** 2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2) ** 2
-    return float(6371.0 * 2.0 * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0))))
+    """Great-circle distance in km for scalar coordinates."""
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
+    return float(6371.0 * 2.0 * np.arcsin(np.sqrt(np.clip(a, 0, 1))))
 
 
-def footprint_centroid(fp: np.ndarray) -> tuple:
+def footprint_centroid(fp: np.ndarray, peak: np.ndarray | None = None) -> tuple[float, float]:
+    """Return an intensity-weighted centroid for an active footprint."""
     rows, cols = np.where(fp)
     if len(rows) == 0:
         return np.nan, np.nan
-    lat = LAT_MAX - (rows.mean() + 0.5) * DX
-    lon = LON_MIN + (cols.mean() + 0.5) * DX
-    return float(lat), float(lon)
+    lats = LAT_MAX - (rows + 0.5) * DX
+    lons = LON_MIN + (cols + 0.5) * DX
+    if peak is not None:
+        w = peak[rows, cols].astype(float)
+        if np.isfinite(w).all() and w.sum() > 0:
+            return float(np.average(lats, weights=w)), float(np.average(lons, weights=w))
+    return float(lats.mean()), float(lons.mean())
 
 
-def physically_coherent(prev_idx: int, curr_idx: int, footprints: list, peaks: list | None = None) -> bool:
-    """v2.1 merge guard: reject geometrically overlapping but meteorologically implausible merges."""
-    lat1, lon1 = footprint_centroid(footprints[prev_idx])
-    lat2, lon2 = footprint_centroid(footprints[curr_idx])
-    if np.isfinite(lat1) and np.isfinite(lat2):
-        if haversine_km(lat1, lon1, lat2, lon2) > MAX_CENTROID_SHIFT_KM:
-            return False
-    if peaks is not None:
-        p1 = float(np.nanmax(peaks[prev_idx]))
-        p2 = float(np.nanmax(peaks[curr_idx]))
-        if min(p1, p2) > 0 and max(p1, p2) / min(p1, p2) > MAX_PEAK_RATIO:
-            return False
-    return True
+def peak_intensity(peak: np.ndarray, fp: np.ndarray) -> float:
+    """Maximum hail intensity inside a footprint."""
+    vals = peak[fp]
+    return float(vals.max()) if vals.size else 0.0
+
+
+def physically_coherent_merge(dates, footprints, peaks, prev_idx: int, curr_idx: int) -> tuple[bool, float, float]:
+    """v2.1 merge sanity checks: centroid speed and peak-intensity jump."""
+    gap_days = max(1, (dates[curr_idx] - dates[prev_idx]).days)
+    c1 = footprint_centroid(footprints[prev_idx], peaks[prev_idx])
+    c2 = footprint_centroid(footprints[curr_idx], peaks[curr_idx])
+    speed = np.inf if not np.all(np.isfinite(c1 + c2)) else haversine_km(c1[0], c1[1], c2[0], c2[1]) / gap_days
+    p1 = max(peak_intensity(peaks[prev_idx], footprints[prev_idx]), 1e-6)
+    p2 = max(peak_intensity(peaks[curr_idx], footprints[curr_idx]), 1e-6)
+    ratio = max(p1, p2) / min(p1, p2)
+    ok = (speed <= MAX_CENTROID_KM_DAY) and (ratio <= MAX_INTENSITY_RATIO)
+    return ok, float(speed), float(ratio)
 
 
 def group_events(dates: list, footprints: list, peaks: list | None = None) -> list:
@@ -169,9 +212,13 @@ def group_events(dates: list, footprints: list, peaks: list | None = None) -> li
         gap_days = (dates[k] - dates[k - 1]).days
 
         if gap_days <= MAX_TEMPORAL_GAP:
-            if footprints_overlap(footprints[k - 1], footprints[k]) and physically_coherent(k - 1, k, footprints, peaks):
-                current.append(k)
-                continue
+            if footprints_overlap(footprints[k - 1], footprints[k]):
+                coherent = True
+                if peaks is not None:
+                    coherent, _, _ = physically_coherent_merge(dates, footprints, peaks, k - 1, k)
+                if coherent:
+                    current.append(k)
+                    continue
 
         groups.append(current)
         current = [k]
@@ -210,6 +257,7 @@ def group_events(dates: list, footprints: list, peaks: list | None = None) -> li
 
 def build_catalog(dates, footprints, peaks, groups):
     """Build event catalog DataFrame and sparse peak arrays."""
+    import pandas as pd
 
     # Lat/lon grids for centroid computation
     lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
@@ -259,6 +307,19 @@ def build_catalog(dates, footprints, peaks, groups):
         start = dates[grp[0]]
         end = dates[grp[-1]]
 
+        # v2.1 merge diagnostics within the grouped event
+        centroid_speed_km_day = 0.0
+        max_intensity_jump_ratio = 1.0
+        if len(grp) > 1:
+            speeds = []
+            ratios = []
+            for a, b in zip(grp[:-1], grp[1:]):
+                _, speed, ratio = physically_coherent_merge(dates, footprints, peaks, a, b)
+                speeds.append(speed)
+                ratios.append(ratio)
+            centroid_speed_km_day = float(np.nanmax(speeds)) if speeds else 0.0
+            max_intensity_jump_ratio = float(np.nanmax(ratios)) if ratios else 1.0
+
         records.append({
             "event_id":           event_id,
             "start_date":         start,
@@ -272,6 +333,9 @@ def build_catalog(dates, footprints, peaks, groups):
             "centroid_lat":       round(centroid_lat, 3),
             "centroid_lon":       round(centroid_lon, 3),
             "doy":                start.timetuple().tm_yday,
+            "centroid_speed_km_day": round(centroid_speed_km_day, 1),
+            "max_intensity_jump_ratio": round(max_intensity_jump_ratio, 2),
+            "merge_quality_flag": "ok" if centroid_speed_km_day <= MAX_CENTROID_KM_DAY and max_intensity_jump_ratio <= MAX_INTENSITY_RATIO else "review",
         })
 
     return pd.DataFrame(records), sparse_events
@@ -338,6 +402,7 @@ def validate_outputs() -> bool:
     elif csv_path.stat().st_size == 0:
         errors.append("Empty event_catalog.csv")
     else:
+        import pandas as pd
         df = pd.read_csv(csv_path)
         if len(df) < 100:
             errors.append(f"Too few events: {len(df)}")
