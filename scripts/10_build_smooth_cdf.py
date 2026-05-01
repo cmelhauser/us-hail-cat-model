@@ -40,7 +40,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-from scipy import stats
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_ROOT = REPO_ROOT / "data"
@@ -111,6 +110,7 @@ def write_geotiff(data, out_path):
 
 
 def return_period_value(rp, mu, sigma, xi_gpd, sigma_gpd, thresh, p_occ):
+    from scipy import stats
     """Compute hail size at a given return period from composite CDF."""
     if p_occ <= 0:
         return 0.0

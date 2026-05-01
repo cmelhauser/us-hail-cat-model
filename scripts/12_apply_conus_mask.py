@@ -43,7 +43,6 @@ CDF_DIR   = DATA_ROOT / "analysis" / "cdf"
 OCC_DIR   = DATA_ROOT / "analysis" / "occurrence"
 MASK_DIR  = DATA_ROOT / "analysis" / "conus_mask"
 TOPO_DIR  = DATA_ROOT / "analysis" / "topography"
-ERA5_FILE = DATA_ROOT / "historical" / "era5" / "era5_monthly_isotherms_conus.nc"
 LOG_DIR   = REPO_ROOT / "logs"
 LOG_FILE  = LOG_DIR / "12_apply_conus_mask.log"
 
@@ -83,43 +82,42 @@ def build_conus_mask():
     return conus_mask
 
 
-def load_freezing_level_grid() -> np.ndarray | None:
-    """Return annual-mean ERA5 0°C height on the model grid, in meters AGL."""
-    if not ERA5_FILE.exists():
-        return None
-    try:
-        import xarray as xr
-        ds = xr.open_dataset(ERA5_FILE)
-        h0 = ds["h_0C_km"].mean("month").values
-        src_lats = ds["latitude"].values
-        src_lons = ds["longitude"].values
-        ds.close()
-        out = np.zeros((NROWS, NCOLS), dtype=np.float32)
-        tgt_lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
-        tgt_lons = LON_MIN + (np.arange(NCOLS) + 0.5) * DX
-        lat_idx = np.abs(src_lats[:, None] - tgt_lats[None, :]).argmin(axis=0)
-        lon_idx = np.abs(src_lons[:, None] - tgt_lons[None, :]).argmin(axis=0)
-        for r, si in enumerate(lat_idx):
-            out[r, :] = h0[si, lon_idx]
-        out = np.clip(out * 1000.0, 1000.0, 7000.0)
-        return out.astype(np.float32)
-    except Exception as e:
-        log(f"  WARN: could not use ERA5 freezing levels for topo correction: {e}")
-        return None
+def compute_topo_factor(elevation_m: np.ndarray, freezing_level_km: np.ndarray | None = None) -> np.ndarray:
+    """Compute bounded v2.1 hail-survival topographic factor.
+
+    Preferred formula uses elevation relative to freezing-level height.
+    Fallback preserves the v2.0 elevation-only 5%/km correction.
+    """
+    elev_km = np.clip(np.asarray(elevation_m, dtype=np.float32), 0, 4000) / 1000.0
+    if freezing_level_km is not None:
+        fl = np.asarray(freezing_level_km, dtype=np.float32)
+        fl = np.where(np.isfinite(fl) & (fl > 0.25), fl, np.nan)
+        factor = 1.0 + 0.25 * (elev_km / fl)
+        factor = np.where(np.isfinite(factor), factor, 1.0 + 0.05 * elev_km)
+        return np.clip(factor, 1.0, 1.25).astype(np.float32)
+    factor = 1.0 + 0.05 * elev_km
+    return np.clip(factor, 1.0, 1.20).astype(np.float32)
 
 
 def build_topo_correction():
     """
-    Build topographic correction grid from elevation and, when available,
-    ERA5 freezing level height.
+    Build topographic correction grid from elevation.
 
-    v2.1 replaces the fixed 5%/km rule with a physically interpretable hail
-    survival factor proportional to elevation / freezing-level height. If the
-    ERA5 file is unavailable, the v2.0 5%/km fallback is retained.
+    The correction is a simple model:
+    - Baseline: 0 m elevation → correction factor = 1.0
+    - Higher elevation → hail survives better (shorter melt path)
+    - Factor = 1.0 + 0.05 × (elevation_km)  (5% per km of elevation)
+    - Capped at 1.0–1.20 range
+
+    This is a first-order approximation. A full treatment would use
+    ERA5 melting layer heights and Rasmussen & Heymsfield (1987) melt models.
+
+    If DEM data is not available, returns a uniform 1.0 grid.
     """
     log("  Building topographic correction ...")
     TOPO_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Check if DEM exists
     dem_path = TOPO_DIR / "elevation_0.05deg.tif"
     if dem_path.exists():
         import rasterio
@@ -129,20 +127,15 @@ def build_topo_correction():
     else:
         log(f"  No DEM found at {dem_path}")
         log(f"  Using uniform correction factor = 1.0")
+        log(f"  To add topographic correction, download GMTED2010 or SRTM")
+        log(f"  and resample to 0.05° at {dem_path}")
         correction = np.ones((NROWS, NCOLS), dtype=np.float32)
         write_geotiff(correction, TOPO_DIR / "topo_correction.tif")
         return correction
 
-    elev_m = np.clip(elev, 0, 4000).astype(np.float32)
-    freezing_m = load_freezing_level_grid()
-    if freezing_m is not None:
-        correction = 1.0 + (elev_m / np.maximum(freezing_m, 1000.0))
-        correction = np.clip(correction, 1.0, 1.25).astype(np.float32)
-        log("  Topo method: elevation / ERA5 freezing-level height")
-    else:
-        elev_km = elev_m / 1000.0
-        correction = np.clip(1.0 + 0.05 * elev_km, 1.0, 1.20).astype(np.float32)
-        log("  Topo method: v2.0 fallback 5% per km")
+    # Compute correction factor. If future workflows write a same-grid freezing-level
+    # raster, pass it into compute_topo_factor here. Fallback remains deterministic.
+    correction = compute_topo_factor(elev)
 
     write_geotiff(correction, TOPO_DIR / "topo_correction.tif")
     log(f"  Topo correction: min={correction.min():.3f} max={correction.max():.3f}")
