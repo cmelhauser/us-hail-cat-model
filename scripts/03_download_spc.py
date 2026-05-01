@@ -1,5 +1,24 @@
 #!/usr/bin/env python3
-"""SPC NOAA Full Archive Downloader — 2004-03-01 to yesterday"""
+"""
+03_download_spc.py — Download SPC Hail Reports (Validation / Calibration)
+==========================================================================
+Downloads daily storm report CSVs from NOAA SPC for 2004 through yesterday.
+
+In v2.0, SPC hail reports are used for VALIDATION and CALIBRATION only —
+the primary hazard input is radar-derived MESH from stages 01, 02, and 04b.
+SPC reports serve three purposes:
+
+  1. Cross-validation of corrected MESH75 against ground truth (stage 06)
+  2. Building the GridRad cross-calibration overlap sample (stage 05)
+  3. Independent check of return period plausibility
+
+Source: https://www.spc.noaa.gov/climo/reports/YYMMDD_rpts_TYPE.csv
+Output: data/historical/spc/YYYY/YYMMDD_rpts_{torn,hail,wind}.csv
+
+Usage:
+  python scripts/03_download_spc.py
+  python scripts/03_download_spc.py --validate
+"""
 
 import os
 import sys
@@ -10,13 +29,13 @@ from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent  # scripts/ -> hail_model/
+REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_ROOT = REPO_ROOT / "data"
 LOGS_ROOT = REPO_ROOT / "logs"
 
 BASE_URL = "https://www.spc.noaa.gov/climo/reports"
-OUT_DIR  = DATA_ROOT / "spc"
-LOG_FILE = LOGS_ROOT / "spc_download.log"
+OUT_DIR  = DATA_ROOT / "historical" / "spc"
+LOG_FILE = LOGS_ROOT / "03_download_spc.log"
 TYPES = ["torn", "hail", "wind"]
 WORKERS = 10
 HEADER_SIZE = 60  # bytes — header-only files are ~52 bytes (no data)
@@ -46,10 +65,9 @@ def download_one(url, outfile):
         return f"err:{e}"
 
 def validate_outputs() -> bool:
-    """Validate all outputs produced by this stage. Returns True if all pass."""
+    """Validate all outputs produced by this stage."""
     import csv as _csv
     import random
-    import sys
     errors = []
 
     if not OUT_DIR.exists():
@@ -59,6 +77,7 @@ def validate_outputs() -> bool:
         if len(csv_files) <= 1000:
             errors.append(f"Too few CSV files: {len(csv_files)} (expected >1000)")
         else:
+            log(f"  Found {len(csv_files):,} SPC report files")
             sample = random.sample(csv_files, min(5, len(csv_files)))
             for p in sample:
                 try:
@@ -79,6 +98,10 @@ def validate_outputs() -> bool:
 
 
 def main():
+    log(f"\n{'='*60}")
+    log(f"  SPC Storm Reports Download — Stage 03 (validation data)")
+    log(f"{'='*60}")
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     start = date(2004, 3, 1)
     end = date.today() - timedelta(days=1)
@@ -99,8 +122,8 @@ def main():
         d += timedelta(days=1)
 
     total = len(tasks)
-    log(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Starting: {total} files to check")
-    log(f"Output: {OUT_DIR}")
+    log(f"  Files to check: {total:,}")
+    log(f"  Output: {OUT_DIR}")
 
     counts = {"ok": 0, "skip": 0, "miss": 0, "empty": 0, "err": 0}
     done = 0
@@ -114,22 +137,24 @@ def main():
             counts[key] += 1
             if done % 500 == 0 or done == total:
                 pct = done / total * 100
-                log(f"  [{done}/{total}] {pct:.1f}% — saved:{counts['ok']} skipped:{counts['skip']} empty/404:{counts['miss']+counts['empty']} errors:{counts['err']}")
+                log(f"  [{done}/{total}] {pct:.1f}% — saved:{counts['ok']} "
+                    f"skipped:{counts['skip']} empty/404:{counts['miss']+counts['empty']} "
+                    f"errors:{counts['err']}")
 
-    saved = counts["ok"] + counts["skip"]
-    log(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Done! Files with data: {counts['ok']} new + {counts['skip']} already had. Total in archive: {counts['ok']+counts['skip']}")
+    log(f"\n{'='*60}")
+    log(f"  Done! New: {counts['ok']}, Already had: {counts['skip']}")
+    log(f"{'='*60}\n")
 
     if not validate_outputs():
-        import sys
         sys.exit(1)
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Download SPC storm reports (validation/calibration data).")
     parser.add_argument("--validate", action="store_true")
     args = parser.parse_args()
     if args.validate:
-        import sys
         ok = validate_outputs()
         sys.exit(0 if ok else 1)
     main()

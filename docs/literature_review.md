@@ -90,15 +90,17 @@ The v1.0 model's β=2.37 superlinear scaling exponent captures the population-de
 |---|---|---|---|---|
 | GridRad V3.1 | 1995–2017 | ~0.02° (~2 km), hourly | NetCDF | NCAR RDA (gridrad.org) |
 | GridRad V4.2 | 2008–2021 | ~0.02° (~2 km), hourly | NetCDF | NCAR RDA |
+| GridRad-Severe V4.2 | 2010–2023 | ~0.02° (~2 km), 5-min | NetCDF | NCAR RDA |
 | MYRORSS | Apr 1998–Dec 2011 | ~0.01° (~1 km), ~5-min | NetCDF/GRIB | AWS S3 (noaa-oar-myrorss-pds) |
-| Operational MRMS | 2012–present | ~0.01° (~1 km), 2-min | GRIB2 | NCEP HTTP, AWS S3 (noaa-mrms-pds), Iowa State archive |
-| Iowa State MRMS archive | 2021–present (hourly zips) | ~0.01°, hourly | GRIB2 | mrms.agron.iastate.edu |
+| Operational MRMS | Oct 2020–present | ~0.01° (~1 km), 2-min | GRIB2 | AWS S3 (noaa-mrms-pds) |
+| Iowa State MRMS archive | 2019–present (hourly zips) | ~0.01°, hourly | GRIB2 | mrms.agron.iastate.edu |
 
-**Recommended data strategy for our model:**
-1. **Primary (1998–2011):** MYRORSS MESH from AWS S3 — provides pre-operational MRMS-equivalent data.
-2. **Primary (2012–present):** Operational MRMS MESH from Iowa State archive or AWS S3.
-3. **Calibration/validation:** GridRad MESH75/MESH95 from Murillo et al. (2021) for bias correction benchmarking.
-4. **Validation:** SPC hail reports (2004–present) for ground-truth comparison in populated areas.
+**Recommended data strategy for our model (v2.0):**
+1. **1998–2011:** MYRORSS MESH from AWS S3 (pre-computed, stage 01).
+2. **2012–2019:** GridRad 3D reflectivity from NCAR RDA → compute SHI → MESH75 (stage 04).
+3. **2020–present:** Operational MRMS MESH from AWS S3 (pre-computed, stage 02).
+4. **Bias correction:** Apply MESH75 recalibration to MYRORSS and MRMS outputs; GridRad already uses MESH75 directly (stage 05).
+5. **Validation:** SPC hail reports (2004–present) for ground-truth comparison (stage 06).
 
 ---
 
@@ -199,7 +201,7 @@ Our v1.0 event-resampling approach preserves real spatial footprint geometry (a 
 - The current σ=0.15 log-normal perturbation was chosen a priori. It should be calibrated by computing the empirical inter-annual coefficient of variation of peak hail intensity across historical events in the same DOY window. If the observed CV exceeds 0.15, the perturbation is too conservative and underestimates tail risk.
 
 **Spatial translation:**
-- The existing `SPATIAL_TRANSLATE` flag (±2 cells, disabled) should be enabled with a displacement distribution calibrated from observed event centroid variance. For synoptic-scale events, inter-annual centroid displacement of ±50–100 km is physically plausible (1–3 cells at 0.25° or 2–4 cells at the new resolution).
+- The existing `SPATIAL_TRANSLATE` flag (±2 cells, disabled) should be enabled with a displacement distribution calibrated from observed event centroid variance. For synoptic-scale events, inter-annual centroid displacement of ±50–100 km is physically plausible (2–4 cells at 0.05°).
 
 ---
 
@@ -281,14 +283,13 @@ For a production-grade cat model, the exposure layer requires total insured valu
 
 ### 10.1 Matching Resolution to Data
 
-The v1.0 model uses a 0.25° (~28 km) analysis grid — chosen to smooth the sparse SPC report data into stable cell-level statistics. With MRMS/GridRad MESH at ~1–2 km native resolution, the analysis grid should be reconsidered.
+With MRMS/GridRad MESH at ~1–2 km native resolution, the analysis grid resolution should balance spatial detail against CDF fitting stability.
 
-**Recommended analysis resolution: 0.05° (~5.5 km).**
+**Analysis resolution: 0.05° (~5.5 km).**
 
 Rationale:
 - Native MRMS is ~0.01° (~1 km) — working at native resolution produces cells with a single hail swath width, leading to binary (hail/no-hail) cell behavior that is poorly suited to CDF fitting.
 - 0.05° aggregation (~5×5 MRMS cells) provides sufficient spatial averaging for stable CDF statistics while preserving the spatial variability of hail swaths.
-- 0.05° is the resolution of the v1.0 raw rasters (before aggregation to 0.25°) — the existing grid infrastructure can be reused.
 - At 0.05°, the CONUS grid is 1180 × 520 = ~614,000 cells. With 28 years of data, most cells in Hail Alley will have 15–25+ hail events — sufficient for stable GPD fitting.
 - For comparison: Moody's RMS HD models operate at property-level resolution for vulnerability but use ~5 km for hazard grids.
 
