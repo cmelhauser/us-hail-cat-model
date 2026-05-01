@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_pipeline.py — CONUS Hail Cat Model v2.0: Full Pipeline Runner
+run_pipeline.py — CONUS Hail Cat Model v2.1: Full Pipeline Runner
 ==================================================================
 Runs all pipeline stages in order. Stops on any failure.
 
@@ -11,6 +11,7 @@ Usage:
     python run_pipeline.py --dry-run    # Print stages without running
     python run_pipeline.py --skip 14,15 # Skip stages
     python run_pipeline.py --validate   # Validate outputs only
+    python run_pipeline.py --skip-ml    # Use deterministic v2.1 fallbacks
 """
 
 import argparse
@@ -62,7 +63,7 @@ STAGES = [
     ("03",  "03_download_spc.py",              "Download SPC hail reports (validation)",           "~5 min"),
     ("04a", "04a_download_era5_isotherms.py",  "Download ERA5 monthly isotherm heights",           "~30 min"),
     ("04b", "04b_fill_gridrad_gap.py",         "Compute MESH75 from GridRad (2012–2019)",          "~8–24 hrs"),
-    ("05",  "05_apply_mesh_bias_correction.py","Unified bias correction + cross-calibration",      "~1 hr"),
+    ("05",  "05_apply_mesh_bias_correction.py","v2.1 bias correction + optional ML filtering",     "~1 hr"),
     ("06",  "06_validate_mesh_vs_spc.py",      "Validate corrected MESH vs SPC reports",           "~15 min"),
     ("07",  "07_build_hail_climo.py",          "Build 366-day daily climatology",                  "~10 min"),
     ("08",  "08_build_event_catalog.py",       "Event identification + catalog",                   "~15 min"),
@@ -94,14 +95,15 @@ def fmt_duration(seconds: float) -> str:
 def print_header():
     n = len(STAGES)
     print(f"\n{BOLD}{'='*60}{RESET}")
-    print(f"{BOLD}  CONUS Hail Cat Model v2.0 — Pipeline Runner{RESET}")
+    print(f"{BOLD}  CONUS Hail Cat Model v2.1 — Pipeline Runner{RESET}")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Repo:   {REPO_ROOT}")
     print(f"  Stages: {n}")
     print(f"{BOLD}{'='*60}{RESET}\n")
 
 def run_stage(stage_id: str, script: str, desc: str, eta: str,
-              dry_run: bool, validate_only: bool = False) -> bool:
+              dry_run: bool, validate_only: bool = False,
+              retrain_models: bool = False, skip_ml: bool = False) -> bool:
     script_path = SCRIPTS / script
     log_path    = LOGS / f"{script.replace('.py', '')}.log"
     LOGS.mkdir(exist_ok=True)
@@ -124,6 +126,11 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
     cmd = [sys.executable, str(script_path)]
     if validate_only:
         cmd.append("--validate")
+    elif stage_id == "05":
+        if retrain_models:
+            cmd.append("--retrain-models")
+        if skip_ml:
+            cmd.append("--skip-ml")
 
     try:
         with open(log_path, "w") as log_fh:
@@ -162,7 +169,7 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the CONUS hail cat model v2.0 pipeline.")
+    parser = argparse.ArgumentParser(description="Run the CONUS hail cat model v2.1 pipeline.")
     parser.add_argument("--from",   dest="from_stage", type=str, default=None,
                         help="Start from this stage ID (e.g., 05 or 04b)")
     parser.add_argument("--only",   dest="only_stage", type=str, default=None,
@@ -171,6 +178,10 @@ def main():
                         help="Comma-separated stage IDs to skip")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true")
     parser.add_argument("--validate", dest="validate_only", action="store_true")
+    parser.add_argument("--retrain-models", dest="retrain_models", action="store_true",
+                        help="Retrain optional v2.1 calibration/filter models where supported")
+    parser.add_argument("--skip-ml", dest="skip_ml", action="store_true",
+                        help="Disable optional v2.1 ML calibration/filtering and use deterministic fallbacks")
     args = parser.parse_args()
 
     if not args.dry_run:
@@ -182,6 +193,11 @@ def main():
         skip = {s.strip() for s in args.skip_stages.split(",")}
 
     print_header()
+
+    if args.retrain_models:
+        print(f"  {YELLOW}Mode: RETRAIN OPTIONAL v2.1 MODELS{RESET}")
+    if args.skip_ml:
+        print(f"  {YELLOW}Mode: SKIP OPTIONAL ML; deterministic fallbacks only{RESET}")
 
     if args.validate_only:
         print(f"  {YELLOW}Mode: VALIDATE ONLY{RESET}\n")
@@ -214,7 +230,8 @@ def main():
     results = []
 
     for stage_id, script, desc, eta in stages_to_run:
-        ok = run_stage(stage_id, script, desc, eta, args.dry_run, args.validate_only)
+        ok = run_stage(stage_id, script, desc, eta, args.dry_run, args.validate_only,
+                       args.retrain_models, args.skip_ml)
         results.append((stage_id, desc, ok))
         if not ok and not args.dry_run:
             print(f"{RED}{BOLD}Pipeline stopped at stage {stage_id}.{RESET}")

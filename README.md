@@ -1,36 +1,104 @@
 # CONUS Hail Catastrophe Model
 
-**A ground-up probabilistic hail hazard model for the Continental United States, built from ~28 years of NOAA radar-derived MESH hail size estimates.**
+**A public-data, radar-based probabilistic hail hazard model for the Continental United States, built from NOAA radar-derived MESH hail size estimates, ERA5 reanalysis, and stochastic event simulation.**
 
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Model Version](https://img.shields.io/badge/model-v2.1-purple)
+
+---
+
+## Overview
+
+This repository builds a CONUS hail catastrophe-model hazard layer on a 0.05° grid, approximately 5.5 km per cell. The model uses radar-derived Maximum Expected Size of Hail (MESH) rather than SPC storm reports as the primary hazard input. SPC reports are retained for validation and calibration only.
+
+Version **v2.1** is a production-hardening update to the v2.0 methodology. It preserves the 15-stage pipeline and output structure while improving the most important statistical and operational weaknesses:
+
+- more robust GridRad cross-calibration with optional conditional model artifacts;
+- optional probabilistic environmental filtering with deterministic fallback;
+- physically constrained event grouping;
+- automated EVT threshold diagnostics;
+- physically informed topographic correction;
+- sparse-safe stochastic simulation that avoids dense event-grid reconstruction in the hot loop;
+- expanded validation and unit-test coverage for all stages.
+
+The model produces **hazard only**. Vulnerability curves are included as literature-based placeholders, but production loss modeling requires calibrated vulnerability and exposure layers.
 
 ---
 
 ## What This Produces
 
-- **Return period maps** — Hail size (inches) at 10–500-year return periods for every 0.05° grid cell (~5.5 km) across CONUS.
-- **Annual occurrence probability rasters** — Probability of exceeding 0.25", 0.50", 1.00", 1.50", 2.00", 3.00", 4.00", or 5.00" at each cell per year.
-- **Event catalog** — Discrete historical storm events (1998–present) grouped by synoptic system.
-- **Daily climatology** — 366 daily rasters capturing seasonal variation.
-- **50,000-year stochastic catalog** — Event-resampled with calibrated intensity perturbation and spatial translation.
-- **Vulnerability curves** — Lognormal MDR by construction class (placeholder — requires claims calibration).
-- **MESH validation report** — Cross-validation of corrected MESH against SPC ground reports.
+- **Analytical return period maps** — hail size at 10, 25, 50, 100, 200, 250, 500, 1,000, 5,000, 10,000, and 50,000-year return periods.
+- **Smoothed return period maps** — spatially pooled CDF outputs for more stable regional hazard gradients.
+- **Annual occurrence probability rasters** — probability of exceeding 0.25", 0.50", 1.00", 1.50", 2.00", 3.00", 4.00", and 5.00" per year.
+- **Historical event catalog** — sparse, active-cell event footprints grouped by synoptic system.
+- **Daily climatology** — 366 daily climatology rasters capturing seasonal hail activity.
+- **50,000-year stochastic catalog** — sparse event-resampling simulation with calibrated intensity perturbation and Gaussian spatial translation.
+- **Probable Exceedance Tables** — occurrence and aggregate exceedance summaries from the stochastic catalog.
+- **Validation outputs** — corrected MESH75 vs. SPC report diagnostics.
+- **Vulnerability lookup tables** — placeholder lognormal MDR curves by construction class.
 
-Uses **no commercial hazard data** — only publicly available NOAA radar, SPC reports (validation), and ERA5 reanalysis.
+Uses **no commercial hazard data**. Required data sources are public, except optional claims/exposure data for downstream loss modeling.
 
 ---
 
 ## Data Sources
 
 | Source | Role | Period | Access |
-|---|---|---|---|
-| NOAA MYRORSS MESH | Primary hazard (historical) | 1998–2011 | AWS S3: `noaa-oar-myrorss-pds` |
-| GridRad 3D NEXRAD | Primary hazard (gap fill) | 2012–2019 | NCAR RDA: `d841000` / `d841006` |
-| NOAA Operational MRMS MESH | Primary hazard (operational) | 2020–present | AWS S3: `noaa-mrms-pds` |
-| ERA5 Reanalysis | Isotherm heights for SHI | Climatology | Copernicus CDS |
-| NOAA SPC Hail Reports | Validation / calibration | 2004–present | spc.noaa.gov |
-| Murillo & Homeyer (2019/2021) | MESH75 correction coefficients | — | doi:10.1175/JAMC-D-18-0247.1 |
+|---|---:|---:|---|
+| NOAA MYRORSS MESH | Primary historical radar hazard | 1998–2011 | AWS S3: `noaa-oar-myrorss-pds` |
+| GridRad / GridRad-Severe | Gap-fill radar hazard | 2012–2019 | NCAR RDA: `d841000` / `d841006` |
+| NOAA Operational MRMS MESH | Operational radar hazard | 2020–present | AWS S3: `noaa-mrms-pds` |
+| ERA5 Reanalysis | Freezing-level / isotherm inputs | 1991–2020 climatology | Copernicus CDS |
+| NOAA SPC Hail Reports | Validation and calibration | 2004–present | `spc.noaa.gov` |
+| DEM, optional | Topographic correction | static | GMTED2010, SRTM, or equivalent |
+
+---
+
+## v2.1 Methodology Highlights
+
+### 1. Bias correction and environmental filtering
+
+Stage 05 remains backward-compatible with the original deterministic v2.0 workflow:
+
+- MYRORSS/MRMS: Witt MESH → MESH75 recalibration.
+- GridRad: quantile mapping to MYRORSS/MRMS overlap distribution.
+- Environmental filtering: noise floor and subtropical winter suppression.
+
+v2.1 adds optional model-artifact hooks:
+
+- `data/analysis/calibration/gridrad_cqm_model.pkl`
+- `data/analysis/calibration/hail_filter_model.pkl`
+
+If these files exist, Stage 05 uses them. If they do not exist, Stage 05 automatically falls back to deterministic quantile mapping and deterministic environmental filtering.
+
+### 2. Event grouping refinement
+
+Stage 08 still uses synoptic grouping, but v2.1 adds meteorological coherence checks before merging adjacent hail days:
+
+- maximum centroid displacement constraint;
+- maximum peak-intensity jump constraint;
+- existing maximum duration cap preserved.
+
+This reduces false merges without redesigning event storage.
+
+### 3. EVT threshold hardening
+
+Stage 09 keeps the zero-inflated lognormal + GPD framework with regional GPD shape-parameter pooling. v2.1 adds automated threshold scoring around the MRL diagnostic concept so GPD threshold choice is less subjective and easier to audit.
+
+### 4. Topographic correction
+
+Stage 12 replaces the purely fixed 5% per km assumption with a physically bounded correction that can use freezing-level context when available. If no DEM is available, the correction remains neutral at 1.0.
+
+### 5. Sparse-safe stochastic catalog
+
+Stage 13 no longer reconstructs all event templates as dense `(n_events, 520, 1180)` arrays. It operates directly on sparse event arrays:
+
+```text
+rows, cols, vals
+```
+
+This is the most important implementation hardening change in v2.1 because it keeps memory bounded and preserves the sparse design introduced in Stage 08.
 
 ---
 
@@ -43,36 +111,48 @@ pip install -r requirements.txt
 python run_pipeline.py
 ```
 
-Pipeline flags: `--from 05`, `--only 04b`, `--skip 14,15`, `--dry-run`, `--validate`
+Common pipeline commands:
+
+```bash
+python run_pipeline.py --dry-run
+python run_pipeline.py --validate
+python run_pipeline.py --only 05
+python run_pipeline.py --from 07
+python run_pipeline.py --skip 14,15
+python run_pipeline.py --skip-ml
+python run_pipeline.py --retrain-models --only 05
+```
+
+`--skip-ml` forces deterministic v2.1 fallbacks even if optional model artifacts are present. `--retrain-models` is passed through to Stage 05 for external model-training workflows; the current Stage 05 implementation expects trained artifacts to be supplied separately.
 
 ---
 
 ## Pipeline
 
 | Stage | Script | What it does | Runtime |
-|---|---|---|---|
-| 01 | `01_download_myrorss.py` | Download MYRORSS MESH (1998–2011), aggregate to 0.05° | ~2–6 hrs |
-| 02 | `02_download_mrms_mesh.py` | Download operational MRMS MESH (2020–present), aggregate to 0.05° | ~3–8 hrs |
-| 03 | `03_download_spc.py` | Download SPC hail reports (validation only) | ~5 min |
-| 04a | `04a_download_era5_isotherms.py` | Download ERA5 monthly 0°C/−20°C isotherm heights | ~30 min |
-| 04b | `04b_fill_gridrad_gap.py` | Compute MESH75 from GridRad 3D reflectivity (2012–2019) | ~8–24 hrs |
-| 05 | `05_apply_mesh_bias_correction.py` | Unified: MESH75 recalibration + GridRad cross-calibration + env filter | ~1 hr |
-| 06 | `06_validate_mesh_vs_spc.py` | Cross-validate corrected MESH against SPC ground reports | ~15 min |
-| 07 | `07_build_hail_climo.py` | Build 366-file daily climatology at 0.05° | ~10 min |
-| 08 | `08_build_event_catalog.py` | Event identification (synoptic grouping) + catalog | ~15 min |
-| 09 | `09_fit_cdf_regional.py` | Lognormal + GPD CDF fitting with regional ξ pooling | ~30 min |
-| 10 | `10_build_smooth_cdf.py` | Spatially-pooled CDF rebuild (150 km kernel) | ~30 min |
-| 11 | `11_build_occurrence_probs.py` | Annual occurrence probability rasters (8 thresholds) | ~10 min |
-| 12 | `12_apply_conus_mask.py` | CONUS mask + topographic correction | ~10 min |
-| 13 | `13_generate_stochastic_catalog.py` | 50,000-yr event-resampling catalog | ~3 hrs |
-| 14 | `14_build_vulnerability.py` | MDR vulnerability curves by construction class | ~5 min |
-| 15 | `15_render_figures.py` | All figures: historical, stochastic, analysis, validation | ~45 min |
+|---|---|---|---:|
+| 01 | `01_download_myrorss.py` | Download MYRORSS MESH, aggregate to 0.05° daily rasters | ~2–6 hrs |
+| 02 | `02_download_mrms_mesh.py` | Download operational MRMS MESH, aggregate to 0.05° daily rasters | ~3–8 hrs |
+| 03 | `03_download_spc.py` | Download SPC reports for validation/calibration | ~5 min |
+| 04a | `04a_download_era5_isotherms.py` | Build ERA5 0°C and −20°C isotherm climatology | ~30 min |
+| 04b | `04b_fill_gridrad_gap.py` | Compute MESH75 from GridRad / GridRad-Severe reflectivity | ~8–24 hrs |
+| 05 | `05_apply_mesh_bias_correction.py` | v2.1 MESH75 correction, GridRad calibration, optional probabilistic filter | ~1 hr |
+| 06 | `06_validate_mesh_vs_spc.py` | Validate corrected MESH75 against SPC ground reports | ~15 min |
+| 07 | `07_build_hail_climo.py` | Build 366-day climatology | ~10 min |
+| 08 | `08_build_event_catalog.py` | Build sparse event catalog with physical merge constraints | ~15 min |
+| 09 | `09_fit_cdf_regional.py` | Fit lognormal + GPD CDF with regional ξ pooling and threshold diagnostics | ~30 min |
+| 10 | `10_build_smooth_cdf.py` | Build spatially pooled CDF return period maps | ~30 min |
+| 11 | `11_build_occurrence_probs.py` | Build annual exceedance probability rasters | ~10 min |
+| 12 | `12_apply_conus_mask.py` | Apply CONUS mask and bounded topographic correction | ~10 min |
+| 13 | `13_generate_stochastic_catalog.py` | Generate sparse-safe 50,000-year stochastic catalog | ~3 hrs |
+| 14 | `14_build_vulnerability.py` | Build placeholder MDR vulnerability curves | ~5 min |
+| 15 | `15_render_figures.py` | Render figures and comparison diagnostics | ~45 min |
 
 ---
 
-## Directory Structure
+## Repository Layout
 
-```
+```text
 us-hail-cat-model/
 ├── scripts/
 │   ├── 01_download_myrorss.py
@@ -90,89 +170,92 @@ us-hail-cat-model/
 │   ├── 12_apply_conus_mask.py
 │   ├── 13_generate_stochastic_catalog.py
 │   ├── 14_build_vulnerability.py
-│   ├── 15_render_figures.py
-│   └── archive/v1/                   # Archived v1.0 scripts
-├── data/                             # Gitignored — see below
+│   └── 15_render_figures.py
+├── tests/
 ├── docs/
-│   ├── data_dictionary.md
-│   ├── executive_summary.md
-│   ├── explainer.md
-│   ├── literature_review.md
-│   ├── methodology.md
-│   ├── migration_plan.md
-│   ├── reproduce.md
-│   ├── technical_documentation.md
-│   └── figures/
-│       ├── historical/
-│       ├── stochastic/
-│       └── analysis/
+├── data/                  # gitignored
+├── logs/                  # gitignored
 ├── run_pipeline.py
 ├── requirements.txt
-└── .gitignore
-```
-
-**Data directory (gitignored):**
-
-```
-data/
-├── historical/
-│   ├── myrorss/                ← MYRORSS MESH downloads (1998–2011)
-│   ├── mrms/                   ← Operational MRMS MESH (2020–present)
-│   ├── gridrad/                ← GridRad V3.1/V4.2 (2012–2019)
-│   ├── gridrad_severe/         ← GridRad-Severe 5-min data
-│   ├── era5/                   ← ERA5 monthly isotherm heights
-│   ├── spc/                    ← SPC hail reports
-│   ├── mesh_0.05deg/           ← Raw 0.05° daily MESH rasters (all sources)
-│   ├── mesh_0.05deg_corrected/ ← Bias-corrected MESH75 rasters
-│   ├── mesh_0.05deg_climo/     ← 366 daily climatology files
-│   ├── events/                 ← Historical event catalog
-│   └── validation/             ← MESH vs SPC cross-validation + figures
-├── analysis/
-│   ├── calibration/            ← GridRad→MYRORSS quantile mapping
-│   ├── cdf/                    ← CDF parameters, GPD fits, MRL diagnostics
-│   ├── occurrence/             ← Occurrence probability rasters
-│   ├── topography/             ← DEM and hail survival correction grids
-│   ├── vulnerability/          ← MDR curves by construction class
-│   └── conus_mask/             ← CONUS land mask
-└── stochastic/
-    ├── catalog/                ← 50,000-yr event catalog (Parquet)
-    ├── maps/                   ← Return period + p_occ GeoTIFFs
-    └── pet/                    ← Probable Exceedance Tables
+└── README.md
 ```
 
 ---
 
-## Key Results
+## Data Layout
 
-*Populated after pipeline run.*
+```text
+data/
+├── historical/
+│   ├── mesh_0.05deg/              # Raw daily MESH rasters
+│   ├── mesh_0.05deg_corrected/    # Corrected daily MESH75 rasters
+│   ├── mesh_0.05deg_climo/        # Daily climatology
+│   ├── events/                    # Sparse event catalog
+│   ├── era5/                      # ERA5 isotherms
+│   ├── gridrad/                   # GridRad inputs
+│   ├── gridrad_severe/            # GridRad-Severe inputs
+│   ├── spc/                       # SPC reports
+│   └── validation/                # Validation outputs
+├── analysis/
+│   ├── calibration/               # Quantile maps and optional ML artifacts
+│   ├── cdf/                       # CDF parameters, RP maps, threshold diagnostics
+│   ├── occurrence/                # Occurrence probability rasters
+│   ├── topography/                # DEM and correction rasters
+│   ├── conus_mask/                # CONUS land mask
+│   └── vulnerability/             # MDR curves
+└── stochastic/
+    ├── catalog/                   # Stochastic event summary
+    ├── maps/                      # Stochastic RP maps
+    └── pet/                       # PET tables
+```
 
-| Metric | Value |
-|---|---|
-| Period of record | 1998–present (~28 years) |
-| Grid resolution | 0.05° (~5.5 km) |
-| Data sources | MYRORSS + GridRad + MRMS (radar) |
-| MESH calibration | MESH75 (corrected Murillo & Homeyer 2021) |
-| Total events | *pending* |
-| GPD fallback cells | Target: <10 |
-| Stochastic catalog | 50,000 years |
+---
+
+## Testing
+
+The v2.1 implementation package includes pytest coverage for all 15 stages plus the pipeline runner.
+
+```bash
+pip install pytest
+pytest tests -q
+```
+
+The tests are designed to validate pure functions, storage assumptions, CLI wiring, and output-schema expectations without downloading full NOAA datasets.
+
+---
+
+## Production / Underwriting Use Notes
+
+Before using outputs for underwriting or regulatory communication:
+
+1. Run the full pipeline from clean inputs.
+2. Run `python run_pipeline.py --validate`.
+3. Run `pytest tests -q`.
+4. Review Stage 06 validation output for SPC-vs-MESH bias and detection metrics.
+5. Compare analytical and stochastic return period maps at 100-, 500-, 1,000-, and 10,000-year return periods.
+6. Document any regions where stochastic and analytical tails diverge materially.
+7. Do not use placeholder vulnerability curves for production loss estimates without claims calibration.
 
 ---
 
 ## Known Limitations
 
-1. **MESH overestimation bias** — MESH75 reduces but does not eliminate radar overforecast tendency.
-2. **GridRad temporal resolution** — Hourly composites miss short-lived peaks; cross-calibration corrects for this statistically but not event-by-event.
-3. **28-year record** — Return periods beyond ~100 years carry significant extrapolation uncertainty.
-4. **Event-resampling** — Cannot generate novel footprint geometries absent from the historical record.
-5. **Vulnerability placeholder** — MDR parameters from literature, not calibrated to claims data.
-6. **No exposure layer** — Hazard only; EP curve and AAL require TIV database.
+1. MESH75 reduces but does not eliminate radar hail-size bias.
+2. GridRad hourly files may miss short-lived hail peaks where GridRad-Severe is unavailable.
+3. Tail estimates beyond the observed record remain extrapolative, especially above 500-year return periods.
+4. Stochastic resampling preserves historical footprint families and perturbs them, but it is not a fully generative storm-physics model.
+5. Vulnerability curves are literature placeholders, not claims-calibrated production curves.
+6. No exposure layer is included.
+7. Optional ML artifacts are not trained by default; deterministic fallbacks remain the baseline.
 
 ---
 
 ## Documentation
 
-See [`docs/`](docs/) for methodology, technical reference, data dictionary, and reproduction guide.
+See `docs/` for detailed methodology, technical documentation, data dictionary, reproduction guide, literature review, and plain-language explainer.
+
+---
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT License. See `LICENSE`.
