@@ -87,6 +87,7 @@ DATA_ROOT = REPO_ROOT / "data"
 EVENT_DIR = DATA_ROOT / "historical" / "events"
 MESH_DIR  = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR   = DATA_ROOT / "analysis" / "cdf"
+THRESHOLD_SELECTION_FILE = OUT_DIR / "threshold_selection.csv"
 FIG_DIR   = REPO_ROOT / "docs" / "figures" / "analysis"
 LOG_DIR   = REPO_ROOT / "logs"
 LOG_FILE  = LOG_DIR / "09_fit_cdf_regional.log"
@@ -284,57 +285,102 @@ def cluster_cells(annual_max, n_regions):
 
 def compute_mrl_and_threshold(exceedances: np.ndarray, region_id: int) -> float:
     """
-    Compute Mean Residual Life plot for a region and determine optimal
-    GPD threshold. If MRL is approximately linear above a threshold u,
-    GPD is appropriate there.
-
-    Returns the optimal threshold (mm).
+    v2.1 automated threshold selection using an ensemble score:
+    - KS statistic for GPD exceedance fit
+    - Anderson-Darling statistic where available
+    - local ξ stability penalty across neighboring candidate thresholds
     """
-    if len(exceedances) < 20:
+    if len(exceedances) < 30:
         return DEFAULT_GPD_THRESHOLD_MM
 
-    sorted_exc = np.sort(exceedances)
-    # Test thresholds from p25 to p90 of the exceedances
-    test_u = np.percentile(sorted_exc, np.arange(25, 91, 5))
+    sorted_exc = np.sort(exceedances.astype(np.float64))
+    candidates = np.unique(np.percentile(sorted_exc, np.arange(70, 96, 5)))
 
-    mrl_vals = []
-    mrl_counts = []
-    for u in test_u:
+    rows = []
+    xis = []
+    for u in candidates:
         above = sorted_exc[sorted_exc > u] - u
-        if len(above) >= 10:
-            mrl_vals.append(float(above.mean()))
-            mrl_counts.append(len(above))
-        else:
-            mrl_vals.append(np.nan)
-            mrl_counts.append(0)
+        if len(above) < 15:
+            rows.append((region_id, float(u), len(above), np.nan, np.nan, np.nan, np.inf))
+            xis.append(np.nan)
+            continue
+        xi, sigma = lmom_fit_gpd(above.astype(np.float32))
+        if not np.isfinite(xi) or not np.isfinite(sigma) or sigma <= 0:
+            rows.append((region_id, float(u), len(above), np.nan, np.nan, np.nan, np.inf))
+            xis.append(np.nan)
+            continue
+        xi = float(np.clip(xi, -0.5, 0.5))
+        try:
+            ks = stats.kstest(above, "genpareto", args=(xi, 0, sigma)).statistic
+        except Exception:
+            ks = np.nan
+        try:
+            fitted = stats.genpareto.rvs(c=xi, loc=0, scale=sigma, size=len(above), random_state=42)
+            ad = stats.anderson_ksamp([above, fitted]).statistic
+        except Exception:
+            ad = np.nan
+        xis.append(xi)
+        rows.append((region_id, float(u), len(above), xi, float(sigma), float(ks), float(ad)))
 
-    # Save MRL plot data
+    xis_arr = np.array(xis, dtype=float)
+    scored = []
+    for i, row in enumerate(rows):
+        _, u, n_exc, xi, sigma, ks, ad = row
+        if not np.isfinite(xi) or not np.isfinite(ks):
+            score = np.inf
+        else:
+            lo = max(0, i - 1)
+            hi = min(len(xis_arr), i + 2)
+            local = xis_arr[lo:hi]
+            stability = float(np.nanstd(local)) if np.any(np.isfinite(local)) else 1.0
+            ad_component = 0.0 if not np.isfinite(ad) else 0.05 * float(ad)
+            sample_penalty = 10.0 / max(n_exc, 1)
+            score = float(ks + stability + ad_component + sample_penalty)
+        scored.append(row + (score,))
+
+    # Append diagnostics for downstream auditability.
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_header = not THRESHOLD_SELECTION_FILE.exists()
+    with open(THRESHOLD_SELECTION_FILE, "a", newline="") as f:
+        w = csv.writer(f)
+        if write_header:
+            w.writerow(["region", "threshold_mm", "n_exceed", "xi", "sigma", "ks", "ad", "score"])
+        for row in scored:
+            w.writerow(row)
+
+    finite = [row for row in scored if np.isfinite(row[-1])]
+    if not finite:
+        return DEFAULT_GPD_THRESHOLD_MM
+    best = min(finite, key=lambda row: row[-1])
+
+    # Save MRL plot for visual review.
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-
         mrl_fig_dir = OUT_DIR / "mrl_diagnostics"
         mrl_fig_dir.mkdir(parents=True, exist_ok=True)
-
+        mrl_vals = []
+        us = []
+        for u in candidates:
+            above = sorted_exc[sorted_exc > u] - u
+            if len(above) >= 10:
+                us.append(u)
+                mrl_vals.append(float(above.mean()))
         fig, ax = plt.subplots(figsize=(8, 5))
-        valid = ~np.isnan(mrl_vals)
-        ax.plot(test_u[valid], np.array(mrl_vals)[valid], "o-")
+        ax.plot(us, mrl_vals, "o-", label="MRL")
+        ax.axvline(best[1], color="k", ls="--", label=f"selected {best[1]:.1f} mm")
+        ax.axvline(DEFAULT_GPD_THRESHOLD_MM, color="r", ls=":", alpha=0.5, label="default")
         ax.set_xlabel("Threshold u (mm)")
-        ax.set_ylabel("Mean Residual Life E[X-u | X>u] (mm)")
-        ax.set_title(f"MRL Plot — Region {region_id}")
-        ax.axvline(DEFAULT_GPD_THRESHOLD_MM, color="r", ls="--", alpha=0.5,
-                    label=f"Default threshold ({DEFAULT_GPD_THRESHOLD_MM:.0f} mm)")
+        ax.set_ylabel("Mean Residual Life (mm)")
+        ax.set_title(f"MRL + Automated Threshold — Region {region_id}")
         ax.legend()
-        fig.savefig(mrl_fig_dir / f"mrl_region_{region_id}.png",
-                    dpi=100, bbox_inches="tight")
+        fig.savefig(mrl_fig_dir / f"mrl_region_{region_id}.png", dpi=100, bbox_inches="tight")
         plt.close()
-    except ImportError:
+    except Exception:
         pass
 
-    # Simple threshold selection: use default unless data suggests otherwise
-    # A more sophisticated approach would fit piecewise linear models
-    return DEFAULT_GPD_THRESHOLD_MM
+    return float(best[1])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

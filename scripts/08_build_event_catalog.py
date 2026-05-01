@@ -64,6 +64,8 @@ DAMAGE_THRESHOLD_MM = 25.4   # 1.0 inch — residential damage onset
 BUFFER_CELLS        = 15     # ~83 km at 0.05° (~5.5 km/cell)
 MAX_DURATION_DAYS   = 5      # hard cap per AIR/RMS conventions
 MAX_TEMPORAL_GAP    = 2      # max gap in days (1=consecutive, 2=one quiet day)
+MAX_CENTROID_SHIFT_KM = 150.0  # v2.1: reject implausible day-to-day jumps
+MAX_PEAK_RATIO        = 3.0    # v2.1: reject abrupt intensity discontinuities
 
 
 def log(msg):
@@ -120,7 +122,38 @@ def footprints_overlap(fp1: np.ndarray, fp2: np.ndarray) -> bool:
     return bool(np.any(dilated & fp2))
 
 
-def group_events(dates: list, footprints: list) -> list:
+def haversine_km(lat1, lon1, lat2, lon2):
+    dlat = np.radians(lat2 - lat1)
+    dlon = np.radians(lon2 - lon1)
+    a = np.sin(dlat / 2) ** 2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2) ** 2
+    return float(6371.0 * 2.0 * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0))))
+
+
+def footprint_centroid(fp: np.ndarray) -> tuple:
+    rows, cols = np.where(fp)
+    if len(rows) == 0:
+        return np.nan, np.nan
+    lat = LAT_MAX - (rows.mean() + 0.5) * DX
+    lon = LON_MIN + (cols.mean() + 0.5) * DX
+    return float(lat), float(lon)
+
+
+def physically_coherent(prev_idx: int, curr_idx: int, footprints: list, peaks: list | None = None) -> bool:
+    """v2.1 merge guard: reject geometrically overlapping but meteorologically implausible merges."""
+    lat1, lon1 = footprint_centroid(footprints[prev_idx])
+    lat2, lon2 = footprint_centroid(footprints[curr_idx])
+    if np.isfinite(lat1) and np.isfinite(lat2):
+        if haversine_km(lat1, lon1, lat2, lon2) > MAX_CENTROID_SHIFT_KM:
+            return False
+    if peaks is not None:
+        p1 = float(np.nanmax(peaks[prev_idx]))
+        p2 = float(np.nanmax(peaks[curr_idx]))
+        if min(p1, p2) > 0 and max(p1, p2) / min(p1, p2) > MAX_PEAK_RATIO:
+            return False
+    return True
+
+
+def group_events(dates: list, footprints: list, peaks: list | None = None) -> list:
     """Group active days into events using synoptic rules."""
     if not dates:
         return []
@@ -136,7 +169,7 @@ def group_events(dates: list, footprints: list) -> list:
         gap_days = (dates[k] - dates[k - 1]).days
 
         if gap_days <= MAX_TEMPORAL_GAP:
-            if footprints_overlap(footprints[k - 1], footprints[k]):
+            if footprints_overlap(footprints[k - 1], footprints[k]) and physically_coherent(k - 1, k, footprints, peaks):
                 current.append(k)
                 continue
 
@@ -359,7 +392,7 @@ def main():
 
     # Group events
     log("\n[2/3] Identifying events")
-    groups = group_events(dates, footprints)
+    groups = group_events(dates, footprints, peaks)
 
     # Build catalog
     log("\n[3/3] Building catalog and sparse peak arrays")

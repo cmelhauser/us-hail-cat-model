@@ -70,6 +70,8 @@ LOG_FILE  = LOG_DIR / "05_mesh_bias_correction.log"
 
 QQ_FILE   = CAL_DIR / "gridrad_quantile_map.npz"
 DIAG_FILE = CAL_DIR / "calibration_diagnostics.csv"
+CQM_MODEL_FILE = CAL_DIR / "gridrad_cqm_model.pkl"
+FILTER_MODEL_FILE = CAL_DIR / "hail_filter_model.pkl"
 
 OUT_NROWS = 520
 OUT_NCOLS = 1180
@@ -96,6 +98,8 @@ _gridrad_days = None
 _qq_gridrad   = None
 _qq_myrorss   = None
 _qq_type      = None
+_cqm_model    = None
+_filter_model = None
 
 
 def log(msg):
@@ -252,6 +256,87 @@ def build_lat_grid() -> np.ndarray:
     return np.broadcast_to(lats[:, np.newaxis], (OUT_NROWS, OUT_NCOLS))
 
 
+def build_month_grid(month: int) -> np.ndarray:
+    """Return a full-size raster containing the calendar month."""
+    return np.full((OUT_NROWS, OUT_NCOLS), month, dtype=np.float32)
+
+
+def build_feature_matrix(mesh: np.ndarray, lat_grid: np.ndarray, month: int) -> np.ndarray:
+    """
+    Build the minimal v2.1 feature matrix for optional ML calibration/filtering.
+
+    The optional model API intentionally uses features that are always available
+    in Stage 05. Future ERA5 CAPE/freezing-level rasters can be appended without
+    changing downstream calls as long as the trained artifact expects them.
+    """
+    month_grid = build_month_grid(month)
+    features = np.stack([
+        mesh.astype(np.float32),
+        lat_grid.astype(np.float32),
+        month_grid,
+    ], axis=-1)
+    return features.reshape(-1, features.shape[-1])
+
+
+def _load_joblib_model(path: Path):
+    if not path.exists():
+        return None
+    try:
+        import joblib
+        return joblib.load(path)
+    except Exception as e:
+        log(f"  WARN: could not load optional model {path.name}: {e}")
+        return None
+
+
+def load_optional_models(skip_ml: bool = False):
+    """Load optional v2.1 model artifacts if present; otherwise use fallbacks."""
+    global _cqm_model, _filter_model
+    if skip_ml:
+        _cqm_model = None
+        _filter_model = None
+        log("  Optional ML disabled via --skip-ml")
+        return
+    _cqm_model = _load_joblib_model(CQM_MODEL_FILE)
+    _filter_model = _load_joblib_model(FILTER_MODEL_FILE)
+    if _cqm_model is not None:
+        log(f"  Loaded optional CQM model: {CQM_MODEL_FILE.name}")
+    else:
+        log("  Optional CQM model not found; using quantile-map fallback")
+    if _filter_model is not None:
+        log(f"  Loaded optional hail filter model: {FILTER_MODEL_FILE.name}")
+    else:
+        log("  Optional hail filter model not found; using deterministic environmental filter")
+
+
+def apply_optional_cqm_model(data: np.ndarray, lat_grid: np.ndarray, month: int) -> np.ndarray:
+    """Apply optional conditional calibration model to GridRad rasters."""
+    if _cqm_model is None:
+        return apply_gridrad_calibration(data)
+    features = build_feature_matrix(data, lat_grid, month)
+    pred = _cqm_model.predict(features).reshape(data.shape)
+    pred = np.where(np.isfinite(pred) & (pred > 0), pred, 0.0)
+    return pred.astype(np.float32)
+
+
+def apply_probabilistic_environmental_filter(data: np.ndarray, lat_grid: np.ndarray,
+                                             month: int, day_of_year: int) -> np.ndarray:
+    """
+    Apply optional probabilistic hail-real filter; fallback preserves v2.0 logic.
+
+    A trained classifier must expose predict_proba(X) with hail probability in
+    column 1. The filter is multiplicative rather than a hard cutoff.
+    """
+    if _filter_model is None:
+        return apply_environmental_filter(data, day_of_year, lat_grid)
+    features = build_feature_matrix(data, lat_grid, month)
+    prob = _filter_model.predict_proba(features)[:, 1].reshape(data.shape)
+    prob = np.clip(np.where(np.isfinite(prob), prob, 0.0), 0.0, 1.0)
+    out = (data * prob).astype(np.float32)
+    out[out < MIN_MESH75_MM] = 0.0
+    return out
+
+
 def apply_environmental_filter(data, day_of_year, lat_grid):
     out = data.copy()
     out[out < MIN_MESH75_MM] = 0.0
@@ -272,16 +357,18 @@ def process_file(in_path, out_path, lat_grid):
         profile = src.profile.copy()
 
     datestr = in_path.stem.replace("mesh_", "")
-    doy = datetime.strptime(datestr, "%Y%m%d").timetuple().tm_yday
+    dt = datetime.strptime(datestr, "%Y%m%d")
+    doy = dt.timetuple().tm_yday
+    month = dt.month
 
     if is_gridrad_source(datestr):
-        corrected = apply_gridrad_calibration(data)
+        corrected = apply_optional_cqm_model(data, lat_grid, month)
         source = "GridRad"
     else:
         corrected = apply_mesh75_correction(data)
         source = "MYRORSS/MRMS"
 
-    filtered = apply_environmental_filter(corrected, doy, lat_grid)
+    filtered = apply_probabilistic_environmental_filter(corrected, lat_grid, month, doy)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     profile.update(compress="lzw", tiled=True, blockxsize=256, blockysize=256)
@@ -337,6 +424,10 @@ def main():
     parser.add_argument("--year", type=int, default=None)
     parser.add_argument("--skip-calibration", action="store_true",
                         help="Skip Phase A (use existing calibration file)")
+    parser.add_argument("--skip-ml", action="store_true",
+                        help="Disable optional v2.1 ML calibration/filter artifacts")
+    parser.add_argument("--retrain-models", action="store_true",
+                        help="Reserved for external training workflows; current script uses saved artifacts if present")
     parser.add_argument("--validate", action="store_true")
     args = parser.parse_args()
 
@@ -361,6 +452,9 @@ def main():
 
     load_qq_map()
     log(f"  Cross-calibration type: {_qq_type}")
+    if args.retrain_models:
+        log("  NOTE: --retrain-models requested; train artifacts externally, then rerun Stage 05")
+    load_optional_models(skip_ml=args.skip_ml)
 
     log("\n[Phase B] Applying corrections to all rasters")
     lat_grid = build_lat_grid()

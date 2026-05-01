@@ -245,6 +245,33 @@ def render_analytical_vs_stochastic():
     log(f"    analytical_vs_stochastic_rp.png")
 
 
+def render_delta_rp_maps():
+    """Write analytical-minus-stochastic diagnostic rasters as PNGs for tail QA."""
+    import rasterio
+    plt = setup_matplotlib()
+    log("\n  [ΔRP Diagnostics]")
+    FIG_ANAL.mkdir(parents=True, exist_ok=True)
+    for rp in [100, 500, 1000, 10000]:
+        anal = CDF_DIR / f"rp_{rp:05d}yr_hail_smooth.tif"
+        stoch = STOCH_DIR / "maps" / f"rp_{rp:05d}yr_stochastic.tif"
+        if not (anal.exists() and stoch.exists()):
+            continue
+        with rasterio.open(anal) as s1:
+            a = s1.read(1) / 25.4
+            extent = [s1.bounds.left, s1.bounds.right, s1.bounds.bottom, s1.bounds.top]
+        with rasterio.open(stoch) as s2:
+            b = s2.read(1) / 25.4
+        delta = np.where((a > 0) & (b > 0), b - a, np.nan)
+        fig, ax = plt.subplots(figsize=(12, 6))
+        vmax = float(np.nanpercentile(np.abs(delta), 98)) if np.any(np.isfinite(delta)) else 1.0
+        im = ax.imshow(delta, extent=extent, origin="upper", cmap="RdBu_r", vmin=-vmax, vmax=vmax)
+        plt.colorbar(im, ax=ax, label="Stochastic − Analytical (inches)")
+        ax.set_title(f"ΔRP Diagnostic: {rp:,}-yr Stochastic − Analytical")
+        fig.savefig(FIG_ANAL / f"delta_rp_{rp:05d}yr.png")
+        plt.close()
+        log(f"    delta_rp_{rp:05d}yr.png")
+
+
 def render_event_summary():
     """Render event catalog summary charts."""
     plt = setup_matplotlib()
@@ -326,6 +353,7 @@ def main():
 
         log("\n[4/5] Analytical vs stochastic comparison")
         render_analytical_vs_stochastic()
+        render_delta_rp_maps()
 
         log("\n[5/5] Event summary charts")
         render_event_summary()

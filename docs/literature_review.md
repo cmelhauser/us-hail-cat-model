@@ -1,341 +1,235 @@
-# Literature Review: CONUS Hail Catastrophe Model v2.0
+# Literature Review
 
-**Date:** 2026-04-30
-**Purpose:** Foundation for migrating the hail cat model from SPC-report-based to MRMS/GridRad-MESH-based hazard input, with supporting literature for all planned methodology improvements.
-
----
-
-## 1. Population Bias in SPC Storm Reports
-
-### 1.1 The Core Problem
-
-The NOAA Storm Prediction Center hail report database is the most widely used source for US hail climatologies, but it suffers from well-documented spatial and temporal biases that fundamentally limit its utility for quantitative hazard modeling.
-
-**Allen, J.T. and M.L. Tippett (2015).** "The characteristics of United States hail reports: 1955–2014." *Electronic J. Severe Storms Meteor.*, 10(3), 1–31.
-- Demonstrated that SPC hail report density is strongly correlated with population density, road network proximity, and proximity to NWS offices.
-- Found that simple population-density corrections are of limited effectiveness because road networks, spotter networks, and NWS warning verification practices introduce additional non-population biases.
-- Documented systematic size-rounding in reports (clustering at whole-inch and reference-object sizes: quarter, golf ball, baseball).
-- Showed that nighttime hail is dramatically underreported relative to daytime events.
-
-**Allen, J.T., M.L. Tippett, and A.H. Sobel (2015).** "An empirical model relating U.S. monthly hail occurrence to large-scale meteorological environment." *J. Adv. Model. Earth Syst.*, 7(1), 226–243.
-- Developed an environmental proxy model for hail occurrence using CAPE, wind shear, and freezing level height from reanalysis data.
-- Confirmed that the road network imprint on hail reports limits the effectiveness of population-only corrections.
-- Proposed environmental proxies as a complementary approach to ground-truth reports for spatial hail frequency estimation.
-
-**Blair, S.F., D.R. Deroche, J.M. Boustead, J.W. Leighton, B.L. Barjenbruch, and W.P. Gargan (2011, 2017).** "A radar-based assessment of the detectability of giant hail." *Electronic J. Severe Storms Meteor.*, 6(7), 1–30; and "High-resolution hail observations: implications for NWS warning operations." *Wea. Forecasting*, 32, 1101–1119.
-- Documented that hail reports systematically underestimate true hail size due to surface melting, measurement timing, and use of approximate reference objects.
-- Found size discrepancies of 0.5–1.0 inches between radar-inferred and ground-reported sizes for large hail events.
-- Implications for our model: even with radar-based MESH as primary input, a ground-truth calibration layer is needed for size accuracy.
-
-### 1.2 Implications for Our Model
-
-The v1.0 model's β=2.37 superlinear scaling exponent captures the population-density component of the reporting bias but cannot address road-network effects, nighttime underreporting, size-rounding artifacts, or temporal non-stationarity in reporting practices. Migrating to radar-based MESH as the primary hazard input eliminates the population and temporal biases entirely. SPC reports are retained as a validation/calibration dataset rather than the primary input.
+**CONUS Hail Catastrophe Model v2.1**
 
 ---
 
-## 2. Radar-Based Hail Climatologies
+## 1. Purpose
 
-### 2.1 MRMS MESH — The Operational Standard
+This literature review documents the scientific basis for the v2.1 hail catastrophe model methodology. It covers report bias, radar-based hail climatology, MESH correction, environmental filtering, extreme-value theory, spatial extremes, stochastic event simulation, topography, and vulnerability.
 
-**Witt, A., M.D. Eilts, G.J. Stumpf, J.T. Johnson, E.D. Mitchell, and K.W. Thomas (1998).** "An enhanced hail detection algorithm for the WSR-88D." *Wea. Forecasting*, 13, 286–303.
-- Original MESH algorithm: estimates maximum hail size from the vertical profile of radar reflectivity above the 0°C isotherm.
-- MESH integrates reflectivity-weighted kinetic energy flux (Severe Hail Index, SHI) and converts it to an estimated hail diameter.
-- Designed as an intentional overforecast: approximately 75% of observed hail falls below the MESH estimate.
-- Key parameters: reflectivity thresholds, 0°C and −20°C isotherm heights from environmental temperature profiles.
-
-**Smith, T.M., V. Lakshmanan, G.J. Stumpf, K.L. Ortega, et al. (2016).** "Multi-Radar Multi-Sensor (MRMS) severe weather and aviation products: initial operating capabilities." *Bull. Amer. Meteor. Soc.*, 97, 1617–1630.
-- Describes the operational MRMS system deployed at NCEP in 2014.
-- MESH product computed on an approximately 1-km horizontal grid across CONUS.
-- Updates every 2 minutes using data from 143+ WSR-88D radars plus Canadian radars.
-- Provides spatially continuous hail size estimates eliminating all population-density biases.
-
-**Wendt, N.A. and I.L. Jirak (2021).** "An hourly climatology of operational MRMS MESH-diagnosed severe and significant hail with comparisons to Storm Data hail reports." *Wea. Forecasting*, 36, 645–659.
-- Constructed an hourly MESH climatology for CONUS from 2012–2019.
-- Demonstrated that MESH captures severe hail occurrence in low-population-density areas where SPC reports are sparse.
-- Showed MESH detects nocturnal hail events missed by ground-based reports, particularly in regions prone to elevated convection and mesoscale convective systems.
-- Key finding: MESH spatial patterns broadly agree with SPC report patterns in population-dense areas but reveal significantly more hail activity in rural Great Plains and Mountain West — exactly the regions where our v1.0 model is weakest.
-
-### 2.2 GridRad MESH — The Extended Record
-
-**Murillo, E.M., C.R. Homeyer, and J.T. Allen (2021).** "A 23-year severe hail climatology using GridRad MESH observations." *Mon. Wea. Rev.*, 149, 945–958.
-- **This is the foundational paper for our v2.0 migration.**
-- Applied improved MESH configurations (MESH75, MESH95) to the full GridRad archive of hourly composite NEXRAD data from 1995–2017.
-- GridRad provides ~2-km horizontal resolution and 1-km vertical resolution composite radar volumes across most of CONUS (West Coast excluded due to negligible severe hail).
-- The improved MESH configurations (from Murillo & Homeyer 2019) use updated SHI–hail size relationships fitted to a larger calibration dataset than the original Witt et al. (1998) 147-report sample.
-- MESH75: 75th percentile of observed hail given SHI — captures severe hail (≥1.0") with higher sensitivity.
-- MESH95: 95th percentile — captures significant severe hail (≥2.0") with higher specificity.
-- Key finding for our model: the filtered MESH climatology shifts the Central Plains hail maximum further into southwest Texas and eastern Colorado compared to SPC reports, likely reflecting better capture of hail in low-population areas.
-- Environmental filtering using MERRA-2 reanalysis constrains MESH to environments supportive of hail reaching the ground, reducing false detections from deep tropical convection.
-
-**Murillo, E.M. and C.R. Homeyer (2019).** "Revised estimates of the maximum expected size of hail." *J. Appl. Meteor. Climatol.*, 58, 2037–2056.
-- Developed the recalibrated MESH75 and MESH95 algorithms used in the 23-year climatology.
-- Fitted SHI–hail-size relationships to a much larger set of hail reports than Witt et al. (1998).
-- MESH75 provides the best balance of detection and false alarm for severe hail (≥1.0").
-- MESH95 is better suited for significant severe hail (≥2.0") detection.
-- For our cat model, MESH75 is the recommended primary product for hazard raster construction.
-
-### 2.3 MYRORSS — The Historical Reanalysis
-
-**Ortega, K.L., T.M. Smith, G.J. Stumpf, et al. (2022).** "Comprehensive radar data for the contiguous United States: Multi-Year Reanalysis of Remotely Sensed Storms." *Bull. Amer. Meteor. Soc.*, 103, E732–E749.
-- MYRORSS reprocesses the WSR-88D Level-II archive from April 1998 through December 2011 using the MRMS framework.
-- Produces a seamless 3D reflectivity volume on a ~1-km grid across CONUS with ~5-min update frequency.
-- Includes derived severe-storm products including MESH.
-- Data is manually quality-controlled to remove erroneous radar scans.
-- Freely available on AWS: `s3://noaa-oar-myrorss-pds/`
-- Combined with operational MRMS (2012–present), this provides a potential 28-year radar-based hail record (1998–2026).
-
-### 2.4 Data Availability Summary
-
-| Dataset | Period | Resolution | Format | Access |
-|---|---|---|---|---|
-| GridRad V3.1 | 1995–2017 | ~0.02° (~2 km), hourly | NetCDF | NCAR RDA (gridrad.org) |
-| GridRad V4.2 | 2008–2021 | ~0.02° (~2 km), hourly | NetCDF | NCAR RDA |
-| GridRad-Severe V4.2 | 2010–2023 | ~0.02° (~2 km), 5-min | NetCDF | NCAR RDA |
-| MYRORSS | Apr 1998–Dec 2011 | ~0.01° (~1 km), ~5-min | NetCDF/GRIB | AWS S3 (noaa-oar-myrorss-pds) |
-| Operational MRMS | Oct 2020–present | ~0.01° (~1 km), 2-min | GRIB2 | AWS S3 (noaa-mrms-pds) |
-| Iowa State MRMS archive | 2019–present (hourly zips) | ~0.01°, hourly | GRIB2 | mrms.agron.iastate.edu |
-
-**Recommended data strategy for our model (v2.0):**
-1. **1998–2011:** MYRORSS MESH from AWS S3 (pre-computed, stage 01).
-2. **2012–2019:** GridRad 3D reflectivity from NCAR RDA → compute SHI → MESH75 (stage 04).
-3. **2020–present:** Operational MRMS MESH from AWS S3 (pre-computed, stage 02).
-4. **Bias correction:** Apply MESH75 recalibration to MYRORSS and MRMS outputs; GridRad already uses MESH75 directly (stage 05).
-5. **Validation:** SPC hail reports (2004–present) for ground-truth comparison (stage 06).
+v2.1 does not replace the v2.0 radar-based design. It strengthens it by adding conditional calibration, probabilistic filtering, automated EVT threshold diagnostics, sparse-safe stochastic perturbations, and stronger model-risk diagnostics.
 
 ---
 
-## 3. MESH Bias Correction
+## 2. SPC Report Bias
 
-### 3.1 Known MESH Biases
+### Allen and Tippett (2015)
 
-MESH systematically overestimates ground-level hail size. This is by design — Witt et al. (1998) calibrated MESH so that approximately 75% of observed hail falls below the MESH estimate, making it a useful "upper bound" for warning purposes but a biased estimate for climatological and actuarial use.
+Allen and Tippett documented major biases in U.S. hail reports, including population-density effects, road-network effects, time-of-day reporting bias, and report-size rounding. This supports the model decision to avoid using SPC reports as the primary hazard input.
 
-Additional bias sources:
-- **Tropical/subtropical deep convection:** MESH produces false hail signals from deep convection without hail (high reflectivity aloft but warm melting layer). Environmental filtering (surface temperature, CAPE, freezing level) mitigates this.
-- **Beam blockage and range degradation:** Radar coverage degrades with distance from radar sites, particularly in mountainous terrain. The Intermountain West and parts of the Northern Plains have reduced radar coverage.
-- **Temporal sampling:** MRMS updates every 2 minutes; shorter-lived hail cores may be partially captured depending on radar scan strategy.
+**Model implication:** SPC reports should be used for validation and calibration support, not as the primary hazard field.
 
-### 3.2 Correction Approaches
+### Allen, Tippett, and Sobel (2015)
 
-**Murillo and Homeyer (2019) recalibration:**
-- MESH75/MESH95 provide improved SHI-to-hail-size conversions.
-- For our model, applying the MESH75 calibration to raw MESH values provides the most physically grounded bias correction.
-- The environmental filtering approach (requiring CAPE > threshold, surface T < threshold, and freezing level within supportive range) from the GridRad climatology paper should be applied to eliminate false detections.
+This work connected hail occurrence to large-scale environmental predictors such as CAPE, shear, and freezing level. It also reinforced that report-based hail climatologies are affected by non-meteorological reporting biases.
 
-**Ortega, K.L. (2018).** "Evaluating multi-radar, multi-sensor products for surface hailfall estimation." *Electronic J. Severe Storms Meteor.*, 13(1), 1–36.
-- Proposed a Linear Discriminant Analysis (LDA) approach to distinguish hail-producing from non-hail-producing MESH signals.
-- Used environmental variables (CAPE, shear, freezing level) as discriminant features.
-- This approach could serve as the basis for our environmental filtering step.
+**Model implication:** Environmental predictors are appropriate covariates for v2.1 conditional calibration and probabilistic filtering.
 
-**Recommended correction pipeline for our model:**
-1. Ingest raw MESH values from MYRORSS/MRMS.
-2. Apply MESH75 recalibration (Murillo & Homeyer 2019) to convert raw MESH to calibrated hail size estimates.
-3. Apply environmental filter: require coincident lightning within 40 km (as in Wendt & Jirak 2021) and/or CAPE/freezing-level thresholds from reanalysis.
-4. Validate corrected MESH against SPC reports where both data sources co-occur.
+### Blair et al. (2011, 2017)
+
+Blair and coauthors documented the difficulty of measuring large hail at the surface and the mismatch between radar-inferred and ground-reported sizes.
+
+**Model implication:** MESH validation against SPC should be interpreted cautiously. Ground reports are not perfect truth.
 
 ---
 
-## 4. Extreme Value Theory for Hail
+## 3. Radar-Based Hail Products
 
-### 4.1 Block Maxima vs. Peaks Over Threshold
+### Witt et al. (1998)
 
-The standard EVT framework offers two approaches: the Block Maxima (BM) approach using the Generalized Extreme Value (GEV) distribution, and the Peaks Over Threshold (POT) approach using the Generalized Pareto Distribution (GPD). Our v1.0 model uses a hybrid: block maxima (annual maximum series) for the lognormal body, and POT for the GPD tail above 2.0".
+Witt et al. introduced the original MESH algorithm, which estimates maximum hail size from radar reflectivity above the freezing level using the Severe Hail Index.
 
-**Hosking, J.R.M. and J.R. Wallis (1997).** *Regional Frequency Analysis: An Approach Based on L-Moments.* Cambridge University Press.
-- The foundational text for L-moment-based regional frequency analysis.
-- Recommends pooling data from hydrologically/climatologically similar sites to improve parameter estimation stability.
-- Key technique for our model: **regional pooling of GPD shape parameter ξ** — fit a shared ξ across neighboring cells while allowing cell-specific scale σ. This eliminates most of the 88 empirical-fallback cells in v1.0.
-- L-moment ratio diagrams can be used to verify distributional assumptions across groups of cells.
+**Model implication:** MESH is physically grounded but warning-oriented and intentionally conservative. Bias correction is required for climatological and actuarial use.
 
-**Coles, S. (2001).** *An Introduction to Statistical Modeling of Extreme Values.* Springer.
-- Standard reference for EVT methodology in practice.
-- Mean Residual Life (MRL) plots: for data exceeding threshold u, plot E[X − u | X > u] vs. u. If GPD is appropriate above u, the MRL plot should be approximately linear. This diagnostic should be used to validate the 2.0" splice point per region.
-- Profile likelihood confidence intervals for GPD parameters provide uncertainty quantification.
+### Smith et al. (2016)
 
-### 4.2 Threshold Selection
+Smith et al. describe the operational MRMS system, including multi-radar severe-weather products and high-frequency gridded radar output.
 
-**Scarrott, C. and A. MacDonald (2012).** "A review of extreme value threshold estimation and uncertainty quantification." *REVSTAT*, 10(1), 33–60.
-- Reviews automated threshold selection methods including sequential Anderson-Darling tests, cross-validation, and mixture model approaches.
-- For our model: the 2.0" threshold was chosen heuristically. MRL diagnostics should be computed per region (e.g., Great Plains core, Southeast, Northeast, Mountain West) to determine whether a single threshold is appropriate or whether regional thresholds better capture the GPD asymptote.
+**Model implication:** Operational MRMS is the best public recent radar source for spatially continuous hail estimates.
 
-### 4.3 Regional Frequency Analysis for the 88 Fallback Cells
+### Ortega et al. (2022)
 
-The 88 cells where GPD fitting fails (shape parameter ξ too large, producing physically impossible extrapolations) are concentrated in data-sparse areas at the edges of the active domain. The solution from the literature is clear:
+MYRORSS reprocesses historical radar data through the MRMS framework, providing a consistent historical radar record.
 
-**Hosking and Wallis (1997), Chapter 9:**
-- Group cells into climatologically homogeneous regions.
-- Fit a shared GPD shape parameter ξ for the region using pooled L-moment ratios.
-- Allow cell-specific scale parameters σ and occurrence probabilities p_occ.
-- This preserves local hazard characteristics while stabilizing the tail fit.
+**Model implication:** MYRORSS is the backbone for the pre-operational historical radar period.
 
-For implementation: define regions using K-means clustering on cell attributes (mean annual hail, p_occ, latitude, longitude, elevation). Pool GPD exceedances within each region for L-moment estimation of ξ. This should reduce the 88 fallback cells to near zero.
+### Wendt and Jirak (2021)
+
+Wendt and Jirak produced an MRMS MESH climatology and compared it with Storm Data reports. They showed that radar-based MESH captures hail in rural and nocturnal settings that reports often miss.
+
+**Model implication:** Radar-based input improves spatial completeness and reduces population/reporting bias.
+
+### Murillo, Homeyer, and Allen (2021)
+
+This GridRad-based hail climatology is foundational for extending the radar-based hail record. It used revised MESH configurations and environmental filtering to build a long-term hail climatology.
+
+**Model implication:** GridRad can fill the MYRORSS-to-MRMS gap, but temporal-resolution and smoothing differences require cross-calibration.
 
 ---
 
-## 5. Stochastic Event Set Generation
+## 4. MESH Bias Correction and Environmental Filtering
 
-### 5.1 Industry Approaches
+### Murillo and Homeyer (2019; corrected 2021)
 
-**Moody's RMS North America Severe Convective Storm HD Model:**
-- 50,000 simulation years, producing 12+ million stochastic events.
-- Calibrated against $50+ billion in historical insurance claims data.
-- 16 distinct hail size categories.
-- Uses a combination of historical event resampling and parametric perturbation of track, intensity, and footprint geometry.
-- Explicitly captures rare high-impact events including derechos.
+Murillo and Homeyer developed revised SHI-to-hail-size relationships, including MESH75 and MESH95. MESH75 is appropriate for a hazard model seeking broad sensitivity to severe hail.
 
-**Verisk/AIR Touchstone Severe Thunderstorm Model:**
-- Parametric storm generation using environmental proxies (CAPE, shear, moisture) from reanalysis.
-- Stochastic storm tracks with spatially varying intensity.
-- Vulnerability functions calibrated to claims data by construction class, roof type, and roof age.
+**Model implication:** The v2.1 model retains the corrected MESH75 relationship.
 
-### 5.2 Improving Event Resampling
+### Ortega (2018)
 
-Our v1.0 event-resampling approach preserves real spatial footprint geometry (a significant advantage over purely parametric methods) but cannot generate novel footprint shapes. The literature suggests several enhancements:
+Ortega evaluated multi-radar products for surface hail estimation and discussed discriminating hail-producing from non-hail-producing radar signatures.
 
-**Miralles, O., A.C. Davison, and T. Schmid (2023).** "Bayesian modeling of insurance claims for hail damage." *arXiv:2308.04926.*
-- Develops a Gaussian line process with extreme marks to model both the geographic footprint of a hailstorm and the damage to buildings.
-- Appears to be the first open stochastic hail impact function providing realistic estimates for individual buildings.
-- Models the hail swath as a spatial process with a centerline and lateral decay — directly relevant to improving our footprint perturbation approach.
+**Model implication:** Environmental filtering should use predictors, not just fixed thresholds. v2.1’s probabilistic filter follows this principle.
 
-**Intensity perturbation calibration:**
-- The current σ=0.15 log-normal perturbation was chosen a priori. It should be calibrated by computing the empirical inter-annual coefficient of variation of peak hail intensity across historical events in the same DOY window. If the observed CV exceeds 0.15, the perturbation is too conservative and underestimates tail risk.
+### Gneiting et al. (2005)
 
-**Spatial translation:**
-- The existing `SPATIAL_TRANSLATE` flag (±2 cells, disabled) should be enabled with a displacement distribution calibrated from observed event centroid variance. For synoptic-scale events, inter-annual centroid displacement of ±50–100 km is physically plausible (2–4 cells at 0.05°).
+Gneiting and coauthors introduced calibrated probabilistic forecasting using ensemble model output statistics and minimum CRPS estimation. Although not a hail-specific paper, it is directly relevant to post-processing biased model outputs into calibrated probabilistic predictions.
+
+**Model implication:** v2.1 conditional calibration and probabilistic filtering should be evaluated using calibration-oriented metrics such as Brier score, reliability, and distributional calibration.
 
 ---
 
-## 6. Vulnerability Functions
+## 5. Extreme Value Theory
 
-### 6.1 Published Hail Vulnerability Curves
+### Coles (2001)
 
-**Brown, T.M., et al. (2015).** "Evaluating hail damage using property insurance claims data." *Wea. Climate Soc.*, 7(3), 197–210.
-- Analyzed insurance claims and policy-in-force data from 5 insurance companies for 67,000+ residential properties across 20 ZIP codes.
-- Evaluated roofing material type vs. hail damage susceptibility.
-- Found that roofing system damage dominates total hail loss (typically 60–80% of claim value).
-- Compared WSR-88D radar-estimated hail sizes to claim damage levels.
-- Key finding: damage onset begins at approximately 1.0–1.25" for aged 3-tab asphalt shingles, 1.5" for architectural/laminated shingles, and 2.0"+ for impact-resistant (IR/Class 4) products.
+Coles provides the standard practical reference for extreme-value modeling, including generalized Pareto distributions, mean residual life diagnostics, return-level estimation, and uncertainty interpretation.
 
-**IBHS (Insurance Institute for Business & Home Safety) research programs:**
-- Conducted controlled impact testing of roofing materials using ice-ball launchers at various sizes and velocities.
-- Class 4 (UL 2218) roofing withstands 2.0" steel ball impacts from 20 feet.
-- Haag Engineering ice-ball tests: aged organic-mat 3-tab shingles sustain damage at 50% of impacts with 1.0" stones; fiberglass-mat at 60% with 1.25" stones.
+**Model implication:** Stage 09 GPD fitting should report threshold diagnostics and uncertainty indicators rather than relying on fixed thresholds alone.
 
-### 6.2 MDR Functional Form
+### Hosking and Wallis (1997)
 
-The standard mean damage ratio (MDR) curve for hail follows a lognormal CDF:
+Hosking and Wallis provide the foundation for regional frequency analysis using L-moments. Pooling similar sites improves tail-parameter stability when local samples are sparse.
 
-```
-MDR(h) = Φ((ln(h) − μ_v) / σ_v)
-```
+**Model implication:** v2.1 retains regional ξ pooling because hail extremes are sparse at individual grid cells.
 
-where h is hail diameter (inches), μ_v and σ_v are construction-class-specific parameters, and Φ is the standard normal CDF.
+### Scarrott and MacDonald (2012)
 
-**Typical parameter estimates from the literature and industry practice:**
+Scarrott and MacDonald review threshold selection and uncertainty quantification for peaks-over-threshold extreme-value models.
 
-| Construction Class | Roof Type | μ_v | σ_v | MDR at 1.0" | MDR at 2.0" | MDR at 3.0" |
-|---|---|---|---|---|---|---|
-| Frame, 3-tab asphalt (aged) | Standard | 0.40 | 0.60 | 0.16 | 0.63 | 0.89 |
-| Frame, architectural shingle | Laminated | 0.70 | 0.55 | 0.06 | 0.42 | 0.77 |
-| Frame, Class 4 IR | Impact-resistant | 1.10 | 0.50 | 0.01 | 0.14 | 0.48 |
-| Metal roof | Standing seam | 1.30 | 0.45 | <0.01 | 0.06 | 0.30 |
-| Masonry, flat built-up | Commercial BUR | 0.80 | 0.65 | 0.04 | 0.36 | 0.70 |
-
-*Note: These are approximate values compiled from published studies and industry practice. Actual MDR calibration requires claims data.*
+**Model implication:** v2.1 implements automated threshold diagnostics using MRL behavior, parameter stability, and goodness-of-fit measures.
 
 ---
 
-## 7. Exposure Data Sources
+## 6. Spatial Extremes and Dependence
 
-For a production-grade cat model, the exposure layer requires total insured value (TIV) by location and construction class. Public data sources include:
+### Davison, Padoan, and Ribatet (2012)
 
-- **US Census American Community Survey:** Housing unit counts, median home values, and building age by census tract/block group.
-- **CoreLogic / ATTOM property databases:** Commercial sources providing property-level construction details, roof type, and replacement cost estimates.
-- **FEMA HAZUS:** Provides default building inventory by census tract including occupancy class, construction type, and replacement cost.
-- **County assessor records:** Publicly available in many jurisdictions; vary widely in format and completeness.
+Davison and coauthors review spatial extremes and discuss latent-variable, copula, and max-stable approaches.
 
----
+**Model implication:** Independent cell-level tails can understate aggregate risk. v2.1 should at least diagnose spatial dependence and may add a lightweight Gaussian-copula sampling option. Full max-stable modeling is better suited for a later major version.
 
-## 8. Topographic Effects on Hail
+### Cooley, Nychka, and Naveau (2007)
 
-**Li, F., D.R. Chavas, K.A. Need, N. Rosenbloom, and D.T. Dawson (2021).** "The role of elevated terrain and the Gulf of Mexico in the production of severe local storm environments over North America." *J. Climate*, 34, 7799–7819.
-- Demonstrated that the Rocky Mountain Front Range creates pronounced hail enhancement through upslope flow triggering.
-- Elevated terrain affects hail survival through shorter fall distances in the melting layer.
-- Implications: a topographic correction factor should account for both enhanced hail production (orographic lift) and reduced melting (shorter path through warm air at elevation).
+Cooley and coauthors developed Bayesian spatial modeling approaches for extreme precipitation using max-stable process ideas.
 
-**Andrews, M.S., et al. (2024).** "Climatology of the elevated mixed layer over the contiguous United States and Northern Mexico using ERA5: 1979–2021." *J. Climate*, 37, 1833–1851.
-- The elevated mixed layer (EML) is a key ingredient for severe hail-producing environments.
-- EML frequency is strongly modulated by terrain — the lee of the Rockies produces the highest EML frequency in North America.
-- Relevant for our topographic correction: cells near the Front Range should have elevated base hail rates that account for this orographic enhancement.
+**Model implication:** This supports future v3.0 consideration of spatial extreme processes, but v2.1 deliberately avoids the complexity.
 
 ---
 
-## 9. Climate Non-Stationarity
+## 7. Stochastic Hail Event Modeling
 
-**Nature Geoscience (2025).** "Contrasting trends in very large hail events and related economic losses across the globe."
-- Recent evidence that very large hail events may be increasing in frequency and/or intensity in some regions.
-- Our v1.0 model assumes stationarity over the 22-year record. If the record is extended to 28 years (1998–2026) using MRMS/MYRORSS, testing for temporal trends becomes more feasible and important.
-- Recommended: include a trend diagnostic (Mann-Kendall test on annual event counts and peak intensities) without building trend into the CDF fitting, which would require much longer records to do defensibly.
+### Miralles, Davison, and Schmid (2023)
 
----
+This work models hail insurance claims using spatial stochastic structures, including hail swath representations and extreme marks.
 
-## 10. Grid Resolution Considerations
+**Model implication:** Historical event resampling can be strengthened with parametric perturbations of location, intensity, and footprint shape. v2.1 implements lightweight sparse-safe perturbation rather than a full generative storm process.
 
-### 10.1 Matching Resolution to Data
+### Commercial severe convective storm model practices
 
-With MRMS/GridRad MESH at ~1–2 km native resolution, the analysis grid resolution should balance spatial detail against CDF fitting stability.
+Commercial models generally use long stochastic catalogs, event perturbation, spatial correlation, and vulnerability/exposure layers calibrated to claims.
 
-**Analysis resolution: 0.05° (~5.5 km).**
-
-Rationale:
-- Native MRMS is ~0.01° (~1 km) — working at native resolution produces cells with a single hail swath width, leading to binary (hail/no-hail) cell behavior that is poorly suited to CDF fitting.
-- 0.05° aggregation (~5×5 MRMS cells) provides sufficient spatial averaging for stable CDF statistics while preserving the spatial variability of hail swaths.
-- At 0.05°, the CONUS grid is 1180 × 520 = ~614,000 cells. With 28 years of data, most cells in Hail Alley will have 15–25+ hail events — sufficient for stable GPD fitting.
-- For comparison: Moody's RMS HD models operate at property-level resolution for vulnerability but use ~5 km for hazard grids.
-
-**Not recommended: 0.01° or 0.02° (native MRMS/GridRad).**
-- At ~1–2 km resolution, individual hail swaths are only 1–5 cells wide. Most cells would have 0–2 events in the 28-year record — far too few for any meaningful CDF fitting.
-- Would require 30+ million cells for CONUS — computationally prohibitive for the spatial correlation and stochastic modules.
-- These resolutions are appropriate for event footprint characterization but not for the frequency/severity CDF layer.
+**Model implication:** A 50,000-year event catalog is reasonable, but diagnostics must clearly distinguish hazard uncertainty from vulnerability and exposure uncertainty.
 
 ---
 
-## References (Alphabetical)
+## 8. Topographic Effects
 
-Allen, J.T. and M.L. Tippett, 2015: The characteristics of United States hail reports: 1955–2014. *Electronic J. Severe Storms Meteor.*, 10(3), 1–31.
+### Li et al. (2021)
 
-Allen, J.T., M.L. Tippett, and A.H. Sobel, 2015: An empirical model relating U.S. monthly hail occurrence to large-scale meteorological environment. *J. Adv. Model. Earth Syst.*, 7(1), 226–243.
+Li and coauthors discuss the role of elevated terrain and the Gulf of Mexico in severe storm environments, including the importance of the Rocky Mountain Front Range.
 
-Andrews, M.S., et al., 2024: Climatology of the elevated mixed layer over the contiguous United States and Northern Mexico using ERA5: 1979–2021. *J. Climate*, 37, 1833–1851.
+**Model implication:** Terrain matters for hail production and survival. v2.1 replaces a purely fixed elevation adjustment with a freezing-level-relative survival factor where ERA5 is available.
 
-Blair, S.F., et al., 2011: A radar-based assessment of the detectability of giant hail. *Electronic J. Severe Storms Meteor.*, 6(7), 1–30.
+### Andrews et al. (2024)
 
-Blair, S.F., et al., 2017: High-resolution hail observations: implications for NWS warning operations. *Wea. Forecasting*, 32, 1101–1119.
+Andrews and coauthors describe the climatology of elevated mixed layers over CONUS and northern Mexico using ERA5, highlighting the terrain-linked severe-storm environment.
 
-Brown, T.M., et al., 2015: Evaluating hail damage using property insurance claims data. *Wea. Climate Soc.*, 7(3), 197–210.
+**Model implication:** Topography affects both storm initiation environments and hail survival. v2.1 only addresses the survival component; production treatment would require environmental occurrence modeling.
 
-Coles, S., 2001: *An Introduction to Statistical Modeling of Extreme Values.* Springer, 208 pp.
+---
 
-Doswell, C.A., H.E. Brooks, and M.P. Kay, 2005: Climatological estimates of daily local nontornadic severe thunderstorm probability for the United States. *Wea. Forecasting*, 20(4), 577–595.
+## 9. Vulnerability
 
-Hosking, J.R.M. and J.R. Wallis, 1997: *Regional Frequency Analysis: An Approach Based on L-Moments.* Cambridge University Press, 224 pp.
+### Brown et al. (2015)
 
-Li, F., et al., 2021: The role of elevated terrain and the Gulf of Mexico in the production of severe local storm environments over North America. *J. Climate*, 34, 7799–7819.
+Brown and coauthors evaluated hail damage using property insurance claims and found roofing material and roof vulnerability are central to hail loss.
+
+**Model implication:** Stage 14 placeholder MDR curves are directionally useful but must be calibrated with claims data for production loss modeling.
+
+### IBHS and impact-testing literature
+
+IBHS and related impact-testing programs provide evidence on how roofing materials respond to hail sizes and impact energy.
+
+**Model implication:** Construction class, roof type, roof age, and material matter. A complete catastrophe model must include these exposure/vulnerability attributes.
+
+---
+
+## 10. Climate Non-Stationarity
+
+Recent severe-hail literature increasingly discusses possible non-stationarity in large hail environments and losses. The v2.1 model remains stationary because the record is still short for robust non-stationary tail estimation.
+
+**Recommended v2.1 diagnostic:**
+
+- Mann-Kendall trend tests for annual event counts.
+- Rolling 10-year summaries of peak intensity and occurrence.
+- Regional trend diagnostics reported separately from the stationary CDF fit.
+
+**Model implication:** Do not force a trend into the tail model without stronger evidence and a longer homogeneous record.
+
+---
+
+## 11. References
+
+Allen, J.T. and M.L. Tippett, 2015: The characteristics of United States hail reports: 1955–2014. *Electronic Journal of Severe Storms Meteorology*, 10(3), 1–31.
+
+Allen, J.T., M.L. Tippett, and A.H. Sobel, 2015: An empirical model relating U.S. monthly hail occurrence to large-scale meteorological environment. *Journal of Advances in Modeling Earth Systems*, 7(1), 226–243.
+
+Andrews, M.S., et al., 2024: Climatology of the elevated mixed layer over the contiguous United States and Northern Mexico using ERA5: 1979–2021. *Journal of Climate*, 37, 1833–1851.
+
+Blair, S.F., et al., 2011: A radar-based assessment of the detectability of giant hail. *Electronic Journal of Severe Storms Meteorology*, 6(7), 1–30.
+
+Blair, S.F., et al., 2017: High-resolution hail observations: implications for NWS warning operations. *Weather and Forecasting*, 32, 1101–1119.
+
+Brown, T.M., et al., 2015: Evaluating hail damage using property insurance claims data. *Weather, Climate, and Society*, 7(3), 197–210.
+
+Coles, S., 2001: *An Introduction to Statistical Modeling of Extreme Values.* Springer.
+
+Cooley, D., D. Nychka, and P. Naveau, 2007: Bayesian spatial modeling of extreme precipitation return levels. *Journal of the American Statistical Association*, 102(479), 824–840.
+
+Davison, A.C., S.A. Padoan, and M. Ribatet, 2012: Statistical modeling of spatial extremes. *Statistical Science*, 27(2), 161–186.
+
+Gneiting, T., A.E. Raftery, A.H. Westveld III, and T. Goldman, 2005: Calibrated probabilistic forecasting using ensemble model output statistics and minimum CRPS estimation. *Monthly Weather Review*, 133(5), 1098–1118.
+
+Hosking, J.R.M. and J.R. Wallis, 1997: *Regional Frequency Analysis: An Approach Based on L-Moments.* Cambridge University Press.
+
+Li, F., D.R. Chavas, K.A. Reed, N. Rosenbloom, and D.T. Dawson, 2021: The role of elevated terrain and the Gulf of Mexico in the production of severe local storm environments over North America. *Journal of Climate*, 34, 7799–7819.
 
 Miralles, O., A.C. Davison, and T. Schmid, 2023: Bayesian modeling of insurance claims for hail damage. *arXiv:2308.04926*.
 
-Murillo, E.M. and C.R. Homeyer, 2019: Revised estimates of the maximum expected size of hail. *J. Appl. Meteor. Climatol.*, 58, 2037–2056.
+Murillo, E.M. and C.R. Homeyer, 2019: Revised estimates of the maximum expected size of hail. *Journal of Applied Meteorology and Climatology*, 58, 2037–2056.
 
-Murillo, E.M., C.R. Homeyer, and J.T. Allen, 2021: A 23-year severe hail climatology using GridRad MESH observations. *Mon. Wea. Rev.*, 149, 945–958.
+Murillo, E.M., C.R. Homeyer, and J.T. Allen, 2021: A 23-year severe hail climatology using GridRad MESH observations. *Monthly Weather Review*, 149, 945–958.
 
-Ortega, K.L., 2018: Evaluating multi-radar, multi-sensor products for surface hailfall estimation. *Electronic J. Severe Storms Meteor.*, 13(1), 1–36.
+Ortega, K.L., 2018: Evaluating multi-radar, multi-sensor products for surface hailfall estimation. *Electronic Journal of Severe Storms Meteorology*, 13(1), 1–36.
 
-Ortega, K.L., et al., 2022: Comprehensive radar data for the contiguous United States: Multi-Year Reanalysis of Remotely Sensed Storms. *Bull. Amer. Meteor. Soc.*, 103, E732–E749.
+Ortega, K.L., et al., 2022: Comprehensive radar data for the contiguous United States: Multi-Year Reanalysis of Remotely Sensed Storms. *Bulletin of the American Meteorological Society*, 103, E732–E749.
 
 Scarrott, C. and A. MacDonald, 2012: A review of extreme value threshold estimation and uncertainty quantification. *REVSTAT*, 10(1), 33–60.
 
-Smith, T.M., et al., 2016: Multi-Radar Multi-Sensor (MRMS) severe weather and aviation products: initial operating capabilities. *Bull. Amer. Meteor. Soc.*, 97, 1617–1630.
+Smith, T.M., et al., 2016: Multi-Radar Multi-Sensor severe weather and aviation products: initial operating capabilities. *Bulletin of the American Meteorological Society*, 97, 1617–1630.
 
-Wendt, N.A. and I.L. Jirak, 2021: An hourly climatology of operational MRMS MESH-diagnosed severe and significant hail with comparisons to Storm Data hail reports. *Wea. Forecasting*, 36, 645–659.
+Wendt, N.A. and I.L. Jirak, 2021: An hourly climatology of operational MRMS MESH-diagnosed severe and significant hail with comparisons to Storm Data hail reports. *Weather and Forecasting*, 36, 645–659.
 
-Witt, A., et al., 1998: An enhanced hail detection algorithm for the WSR-88D. *Wea. Forecasting*, 13, 286–303.
+Witt, A., et al., 1998: An enhanced hail detection algorithm for the WSR-88D. *Weather and Forecasting*, 13, 286–303.

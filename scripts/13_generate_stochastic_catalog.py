@@ -78,7 +78,8 @@ N_SIM_YEARS       = 50_000
 DAMAGE_THRESH_MM  = 25.4    # 1.0 inch
 MAX_HAIL_MM       = 250.0   # physical ceiling (~10 inches)
 SPATIAL_TRANSLATE  = True
-TRANSLATE_CELLS    = 3       # ±3 cells (~16.5 km)
+TRANSLATE_SIGMA_CELLS = 2.0     # Gaussian translation σ (~11 km)
+MAX_TRANSLATE_CELLS = 8       # clip Gaussian displacement to avoid unrealistic jumps
 RNG_SEED           = 42
 RP_YEARS = [10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000]
 
@@ -92,29 +93,62 @@ def log(msg):
 
 
 def load_historical_events():
-    """Load event catalog and reconstruct dense peak arrays from sparse storage."""
+    """Load event catalog and sparse peak arrays without dense reconstruction."""
     event_df = pd.read_csv(EVENT_DIR / "event_catalog.csv", parse_dates=["start_date", "end_date"])
     npz = np.load(EVENT_DIR / "event_peaks.npz")
 
     event_ids = npz["event_ids"]
-    n_events = len(event_ids)
-
-    # Reconstruct dense arrays (only active cells are nonzero)
-    peak_arrays = []
+    sparse_events = []
     for eid in event_ids:
-        rows = npz[f"rows_{eid}"]
-        cols = npz[f"cols_{eid}"]
-        vals = npz[f"vals_{eid}"]
-        grid = np.zeros((NROWS, NCOLS), dtype=np.float32)
-        grid[rows, cols] = vals
-        peak_arrays.append(grid)
+        rows = npz[f"rows_{eid}"].astype(np.int32)
+        cols = npz[f"cols_{eid}"].astype(np.int32)
+        vals = npz[f"vals_{eid}"].astype(np.float32)
+        sparse_events.append({"event_id": int(eid), "rows": rows, "cols": cols, "vals": vals})
 
-    event_peaks = np.stack(peak_arrays, axis=0)  # (n_events, NROWS, NCOLS)
-    log(f"  Loaded {n_events:,} historical events, peak array: {event_peaks.shape}")
-    return event_df, event_peaks
+    log(f"  Loaded {len(sparse_events):,} historical sparse events")
+    return event_df, sparse_events
 
 
-def calibrate_sigma(event_df, event_peaks):
+def sparse_event_peak(sparse_event: dict) -> float:
+    return float(sparse_event["vals"].max()) if len(sparse_event["vals"]) else 0.0
+
+
+def sparse_event_active_mask(sparse_events: list) -> tuple:
+    """Return unique active rows/cols across all sparse templates."""
+    flat_parts = []
+    for ev in sparse_events:
+        if len(ev["rows"]):
+            flat_parts.append(ev["rows"].astype(np.int64) * NCOLS + ev["cols"].astype(np.int64))
+    if not flat_parts:
+        return np.array([], dtype=np.int32), np.array([], dtype=np.int32)
+    flat = np.unique(np.concatenate(flat_parts))
+    return (flat // NCOLS).astype(np.int32), (flat % NCOLS).astype(np.int32)
+
+
+def translate_sparse_event(rows: np.ndarray, cols: np.ndarray, rng) -> tuple:
+    if not SPATIAL_TRANSLATE:
+        return rows, cols, 0, 0
+    dr = int(np.rint(rng.normal(0.0, TRANSLATE_SIGMA_CELLS)))
+    dc = int(np.rint(rng.normal(0.0, TRANSLATE_SIGMA_CELLS)))
+    dr = int(np.clip(dr, -MAX_TRANSLATE_CELLS, MAX_TRANSLATE_CELLS))
+    dc = int(np.clip(dc, -MAX_TRANSLATE_CELLS, MAX_TRANSLATE_CELLS))
+    r2 = rows + dr
+    c2 = cols + dc
+    keep = (r2 >= 0) & (r2 < NROWS) & (c2 >= 0) & (c2 < NCOLS)
+    return r2[keep], c2[keep], dr, dc
+
+
+def update_sparse_annual_max(ann_row: np.ndarray, active_lookup: dict,
+                             rows: np.ndarray, cols: np.ndarray, vals: np.ndarray):
+    """Update annual maxima vector using sparse event coordinates."""
+    flat = rows.astype(np.int64) * NCOLS + cols.astype(np.int64)
+    idx = np.fromiter((active_lookup.get(int(f), -1) for f in flat), dtype=np.int64, count=len(flat))
+    keep = idx >= 0
+    if np.any(keep):
+        np.maximum.at(ann_row, idx[keep], vals[keep])
+
+
+def calibrate_sigma(event_df, sparse_events):
     """
     Calibrate σ_perturb from empirical inter-annual peak intensity variance.
 
@@ -127,7 +161,7 @@ def calibrate_sigma(event_df, event_peaks):
     # Group events by month, compute CV of peak hail within each month
     event_df = event_df.copy()
     event_df["month"] = event_df["start_date"].dt.month
-    event_df["peak"] = event_peaks.max(axis=(1, 2))
+    event_df["peak"] = [sparse_event_peak(ev) for ev in sparse_events]
 
     monthly_cv = []
     for month in range(3, 10):  # Mar–Sep (hail season)
@@ -167,32 +201,24 @@ def build_doy_distribution(event_df):
     return cdf
 
 
-def simulate_catalog(event_df, event_peaks, sigma, doy_cdf, n_years):
-    """Run the stochastic simulation."""
+def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years):
+    """Run the stochastic simulation using sparse templates end-to-end."""
     rng = np.random.default_rng(RNG_SEED)
     n_hist = len(event_df)
     event_doys = event_df["doy"].values
     event_ids = event_df["event_id"].values
 
-    # Poisson rate
     hist_years = event_df["start_date"].dt.year.nunique()
     lam = n_hist / hist_years
     log(f"  λ = {lam:.1f} events/year ({n_hist} events / {hist_years} years)")
 
-    # Annual tracking: max hail per cell per year (sparse — only store active cells)
-    # For memory efficiency, we accumulate annual max incrementally
-    # and only store the cell-level annual max for RP computation.
-
-    # Find active cells (any historical event)
-    any_active = (event_peaks > 0).any(axis=0)
-    active_rows, active_cols = np.where(any_active)
+    active_rows, active_cols = sparse_event_active_mask(sparse_events)
+    active_flat = active_rows.astype(np.int64) * NCOLS + active_cols.astype(np.int64)
+    active_lookup = {int(f): i for i, f in enumerate(active_flat)}
     n_active = len(active_rows)
     log(f"  Active cells: {n_active:,}")
 
-    # Annual max at active cells: (n_years, n_active) — manageable
     ann_max = np.zeros((n_years, n_active), dtype=np.float32)
-
-    # PET tracking
     ann_occ_peak = np.zeros(n_years, dtype=np.float32)
     ann_occ_cells = np.zeros(n_years, dtype=np.int32)
     ann_agg_cells = np.zeros(n_years, dtype=np.int32)
@@ -205,53 +231,37 @@ def simulate_catalog(event_df, event_peaks, sigma, doy_cdf, n_years):
         n_ev = int(rng.poisson(lam))
         if n_ev == 0:
             continue
-
         ann_n_events[yr] = n_ev
 
-        # Draw DOYs from seasonal distribution
-        u_dates = rng.random(n_ev)
-        ev_doys = np.searchsorted(doy_cdf, u_dates) + 1
-
+        ev_doys = np.searchsorted(doy_cdf, rng.random(n_ev)) + 1
         year_max_peak = 0.0
         year_max_cells = 0
 
         for ei in range(n_ev):
             doy = int(ev_doys[ei])
-
-            # Seasonal template selection
             doy_diff = np.abs(event_doys - doy)
             doy_diff = np.minimum(doy_diff, 366 - doy_diff)
             weights = np.exp(-doy_diff / 30.0)
             weights /= weights.sum()
 
             template_idx = int(rng.choice(n_hist, p=weights))
-            peak = event_peaks[template_idx].copy()
-
-            # Intensity perturbation
+            ev = sparse_events[template_idx]
             scale = float(np.exp(sigma * rng.standard_normal()))
-            peak = np.clip(peak * scale, 0, MAX_HAIL_MM)
+            vals = np.clip(ev["vals"] * scale, 0, MAX_HAIL_MM).astype(np.float32)
+            rows, cols, dr, dc = translate_sparse_event(ev["rows"], ev["cols"], rng)
+            if len(rows) != len(vals):
+                # translation clipped some cells at domain edge
+                r_full = ev["rows"] + dr
+                c_full = ev["cols"] + dc
+                keep = (r_full >= 0) & (r_full < NROWS) & (c_full >= 0) & (c_full < NCOLS)
+                vals = vals[keep]
 
-            # Spatial translation
-            if SPATIAL_TRANSLATE:
-                dr = int(rng.integers(-TRANSLATE_CELLS, TRANSLATE_CELLS + 1))
-                dc = int(rng.integers(-TRANSLATE_CELLS, TRANSLATE_CELLS + 1))
-                if dr != 0 or dc != 0:
-                    peak = np.roll(np.roll(peak, dr, axis=0), dc, axis=1)
-                    if dr > 0: peak[:dr, :] = 0
-                    elif dr < 0: peak[dr:, :] = 0
-                    if dc > 0: peak[:, :dc] = 0
-                    elif dc < 0: peak[:, dc:] = 0
+            update_sparse_annual_max(ann_max[yr], active_lookup, rows, cols, vals)
 
-            # Update annual max at active cells
-            active_vals = peak[active_rows, active_cols]
-            np.maximum(ann_max[yr], active_vals, out=ann_max[yr])
-
-            # Event stats
-            fp = peak >= DAMAGE_THRESH_MM
+            fp = vals >= DAMAGE_THRESH_MM
             n_cells = int(fp.sum())
-            peak_val = float(peak.max())
+            peak_val = float(vals.max()) if len(vals) else 0.0
             ann_agg_cells[yr] += n_cells
-
             if peak_val > year_max_peak:
                 year_max_peak = peak_val
                 year_max_cells = n_cells
@@ -264,6 +274,8 @@ def simulate_catalog(event_df, event_peaks, sigma, doy_cdf, n_years):
                 "scale_factor": round(scale, 4),
                 "peak_hail_mm": round(peak_val, 1),
                 "n_cells": n_cells,
+                "dr": dr,
+                "dc": dc,
             })
 
         ann_occ_peak[yr] = year_max_peak
@@ -388,15 +400,15 @@ def main():
     log(f"  Stochastic Catalog — Stage 13")
     log(f"{'='*60}")
     log(f"  Simulation years: {n_years:,}")
-    log(f"  Spatial translate: {SPATIAL_TRANSLATE} (±{TRANSLATE_CELLS} cells)")
+    log(f"  Spatial translate: {SPATIAL_TRANSLATE} (Gaussian σ={TRANSLATE_SIGMA_CELLS} cells, clip ±{MAX_TRANSLATE_CELLS})")
 
     # Load historical events
     log("\n[1/5] Loading historical events")
-    event_df, event_peaks = load_historical_events()
+    event_df, sparse_events = load_historical_events()
 
     # Calibrate σ
     log("\n[2/5] Calibrating intensity perturbation")
-    sigma = calibrate_sigma(event_df, event_peaks)
+    sigma = calibrate_sigma(event_df, sparse_events)
 
     # DOY distribution
     log("\n[3/5] Building seasonal distribution")
@@ -406,7 +418,7 @@ def main():
     log(f"\n[4/5] Simulating {n_years:,} years (σ={sigma:.3f})")
     (ann_max, active_rows, active_cols,
      ann_occ_peak, ann_occ_cells, ann_agg_cells, ann_n_events,
-     stoch_df) = simulate_catalog(event_df, event_peaks, sigma, doy_cdf, n_years)
+     stoch_df) = simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years)
 
     # Outputs
     log("\n[5/5] Computing return periods and saving outputs")
