@@ -7,7 +7,7 @@
 
 ## 1. Pipeline Architecture Comparison
 
-### v1.0 Pipeline (SPC-based, 0.25° grid, 15 stages)
+### v1.0 Pipeline (SPC-based, 15 stages — archived)
 
 ```
 Stage 01  Download Census population data
@@ -17,7 +17,7 @@ Stage 04  Build storm trends / compute β
 Stage 05  Compute spatial neighborhood β per county
 Stage 06  Build raw 0.05° rasters from SPC point reports
 Stage 07  Apply population debiasing (β = 2.37)
-Stage 08  Aggregate debiased rasters to 0.25°
+Stage 08  Aggregate debiased rasters
 Stage 09  Build daily climatology (366 files)
 Stage 10  Event catalog + CDF fitting + spatial correlation
 Stage 11  Spatially-pooled CDF rebuild (150 km)
@@ -30,21 +30,22 @@ Stage 15  Render all figures
 ### v2.0 Pipeline (MESH-based, 0.05° grid, 15 stages)
 
 ```
-Stage 01  Download MYRORSS MESH data (1998–2011) from AWS S3
-Stage 02  Download operational MRMS MESH data (2012–present)
-Stage 03  Download SPC hail reports (validation/calibration only)
-Stage 04  Build 0.05° daily MESH rasters (aggregate from ~1 km native)
-Stage 05  Apply MESH bias correction (MESH75 recalibration + environmental filter)
-Stage 06  Validate corrected MESH against SPC reports (calibration report)
-Stage 07  Build daily climatology (366 files at 0.05°)
-Stage 08  Event identification (synoptic grouping) + build event catalog
-Stage 09  CDF fitting: lognormal + GPD with regional ξ pooling + MRL diagnostics
-Stage 10  Spatially-pooled CDF rebuild (150 km kernel)
-Stage 11  Occurrence probability rasters (8 thresholds)
-Stage 12  CONUS mask + topographic correction (DEM overlay)
-Stage 13  Stochastic catalog: 50,000-yr, calibrated σ, spatial translate enabled
-Stage 14  Vulnerability curves (MDR by construction class) [placeholder]
-Stage 15  Render figures + validation report
+Stage 01   Download MYRORSS MESH data (1998–2011) from AWS S3, aggregate to 0.05°
+Stage 02   Download operational MRMS MESH data (2020–present), aggregate to 0.05°
+Stage 03   Download SPC hail reports (validation/calibration only)
+Stage 04a  Download ERA5 monthly isotherm heights for SHI computation
+Stage 04b  Fill 2012–2019 gap: compute MESH75 from GridRad 3D NEXRAD reflectivity
+Stage 05   Unified bias correction: MESH75 recalibration + GridRad cross-calibration + env filter
+Stage 06   Validate corrected MESH against SPC reports (calibration report)
+Stage 07   Build daily climatology (366 files at 0.05°)
+Stage 08   Event identification (synoptic grouping) + build event catalog
+Stage 09   CDF fitting: lognormal + GPD with regional ξ pooling + MRL diagnostics
+Stage 10   Spatially-pooled CDF rebuild (150 km kernel)
+Stage 11   Occurrence probability rasters (8 thresholds)
+Stage 12   CONUS mask + topographic correction (DEM overlay)
+Stage 13   Stochastic catalog: 50,000-yr, calibrated σ, spatial translate enabled
+Stage 14   Vulnerability curves (MDR by construction class) [placeholder]
+Stage 15   Render figures + validation report
 ```
 
 ---
@@ -68,7 +69,7 @@ Stage 15  Render figures + validation report
 | v1.0 Script | v2.0 Script | Key Changes |
 |---|---|---|
 | `03_download_spc.py` | `03_download_spc.py` | Same logic; now labeled as validation/calibration source |
-| `09_build_hail_climo.py` | `07_build_hail_climo.py` | Re-numbered; reads 0.05° MESH rasters instead of 0.25° SPC |
+| `09_build_hail_climo.py` | `07_build_hail_climo.py` | Re-numbered; reads 0.05° corrected MESH rasters |
 | `10_hail_catmodel_pipeline.py` | `08_build_event_catalog.py` | Event identification only; CDF moved to stage 09 |
 | `11_build_smooth_cdf.py` | `10_build_smooth_cdf.py` | Re-numbered; operates on 0.05° grid |
 | `12_build_occurrence_probs.py` | `11_build_occurrence_probs.py` | Re-numbered |
@@ -92,14 +93,12 @@ Stage 15  Render figures + validation report
 
 ## 3. Grid Specification Change
 
-### v1.0 Grid
+### v1.0 Grid (archived)
 
 | Parameter | Value |
 |---|---|
-| Resolution | 0.25° (~28 km) |
-| Extent | lon [−125, −66], lat [24, 50] |
-| Dimensions | 236 cols × 104 rows = 24,544 cells |
-| Active cells | ~8,362 (34% of CONUS-masked domain) |
+| Resolution | SPC-report-based, variable |
+| Active cells | ~8,362 |
 
 ### v2.0 Grid
 
@@ -304,7 +303,7 @@ For each co-located SPC report + corrected MESH observation:
 
 | Parameter | v1.0 Value | v2.0 Value | Source |
 |---|---|---|---|
-| Grid resolution | 0.25° | 0.05° | Section 10 of literature review |
+| Grid resolution | v1.0 SPC-based | 0.05° | Section 10 of literature review |
 | Primary data source | SPC reports | MRMS/MYRORSS MESH | Wendt & Jirak 2021; Ortega et al. 2022 |
 | Record period | 2004–2025 (22 yr) | 1998–present (~28 yr) | MYRORSS + operational MRMS |
 | MESH calibration | N/A | MESH75 (Murillo & Homeyer 2019) | Murillo et al. 2021 |

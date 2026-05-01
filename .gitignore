@@ -1,4 +1,4 @@
-# ── Data directory (large raster/CSV/numpy/GRIB files) ────────────────────────
+# ── Data directory (all subdirectories) ───────────────────────────────────────
 data/
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
