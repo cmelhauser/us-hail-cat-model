@@ -81,10 +81,30 @@ python run_pipeline.py --only 06
 Output: `data/historical/validation/` (CSVs, summary, figures)
 
 ### Stages 07–15
-*Scripts being updated for v2.0. Run order:*
 ```bash
 python run_pipeline.py --from 07
 ```
+
+Or individually:
+```bash
+python run_pipeline.py --only 07    # Daily climatology (~10 min)
+python run_pipeline.py --only 08    # Event catalog (~15 min)
+python run_pipeline.py --only 09    # CDF fitting with regional GPD (~30 min)
+python run_pipeline.py --only 10    # Spatially-pooled CDF rebuild (~30 min)
+python run_pipeline.py --only 11    # Occurrence probabilities (~10 min)
+python run_pipeline.py --only 12    # CONUS mask + topography (~10 min)
+python run_pipeline.py --only 13    # 50,000-yr stochastic catalog (~3 hrs)
+python run_pipeline.py --only 14    # Vulnerability curves (~5 min)
+python run_pipeline.py --only 15    # All figures (~45 min)
+```
+
+**Stage 12 note:** For topographic correction, optionally provide a DEM at
+`data/analysis/topography/elevation_0.05deg.tif`. Without it, a uniform
+correction factor of 1.0 is used.
+
+**Stage 13 note:** Produces empirical RP maps that should be compared against
+the analytical RP maps from stages 09–10. Divergence at long return periods
+flags cells where the GPD tail may be misspecified.
 
 ## Validation
 

@@ -61,7 +61,61 @@
 - **Output:** `data/historical/validation/` (CSVs, summary, figures)
 
 ### Stages 07–15
-*To be documented as scripts are updated for v2.0.*
+
+### Stage 07 — Daily Climatology
+- **Input:** `data/historical/mesh_0.05deg_corrected/`
+- **Output:** `data/historical/mesh_0.05deg_climo/climo_DOY.tif` (366 files)
+- **Method:** Per-DOY mean of corrected MESH75 across all years (including zeros)
+- **Extras:** `annual_mean_mesh75.tif`, `annual_hail_days.tif`, seasonal figure
+
+### Stage 08 — Event Catalog
+- **Input:** `data/historical/mesh_0.05deg_corrected/`
+- **Output:** `data/historical/events/event_catalog.csv` + `event_peaks.npz`
+- **Grouping:** ≤1-day gap, 83 km overlap (15 cells at 0.05°), 5-day cap
+- **Threshold:** 25.4 mm (1.0 inch)
+- **Storage:** Sparse npz — per-event `(rows, cols, vals)` arrays. Compressed ~100× vs dense.
+
+### Stage 09 — CDF Fitting (Regional GPD)
+- **Input:** `data/historical/mesh_0.05deg_corrected/` (annual max computation)
+- **Output:** `data/analysis/cdf/cdf_parameters.npz`, `rp_*yr_hail.tif`, `region_map.tif`, MRL plots
+- **Regions:** K-means clustering on (mean_hail, p_occ, lat, lon), default 6
+- **GPD:** Regional ξ from pooled L-moments, cell-specific σ from conditional mean
+- **RPs:** 10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000 years
+- **Physical cap:** 300 mm (~12 inches)
+
+### Stage 10 — Spatially-Pooled CDF
+- **Pool:** 150 km radius, exp(-d/75km) decay kernel
+- **Method:** Weighted lognormal + GPD using regional ξ from stage 09
+- **Output:** `data/analysis/cdf/rp_*yr_hail_smooth.tif`, `p_occurrence_smooth.tif`
+
+### Stage 11 — Occurrence Probabilities
+- **Thresholds:** 0.25, 0.50, 1.00, 1.50, 2.00, 3.00, 4.00, 5.00 inches
+- **Method:** (years with annual max ≥ threshold) / total years
+- **Output:** `data/analysis/occurrence/p_occ_*in.tif` (8 files)
+
+### Stage 12 — CONUS Mask + Topography
+- **Mask:** regionmask US states polygon
+- **Topo:** 5% hail size increase per km elevation (first-order approximation)
+- **Output:** `data/analysis/conus_mask/conus_mask.tif`, `data/analysis/topography/topo_correction.tif`
+
+### Stage 13 — Stochastic Catalog
+- **Simulation:** 50,000 years, Poisson event count, DOY-weighted resampling
+- **Perturbation:** σ calibrated from empirical monthly CV (not fixed 0.15)
+- **Translation:** Enabled, ±3 cells (~16.5 km)
+- **RP maps:** Empirical from ranked annual maxima, same 11 return periods as stage 09
+- **PET:** Occurrence (OEP) + aggregate (AEP) tables
+- **Output:** `data/stochastic/catalog/` (Parquet), `data/stochastic/maps/`, `data/stochastic/pet/`
+- **Filename:** `rp_*yr_stochastic.tif`
+
+### Stage 14 — Vulnerability (Placeholder)
+- **Model:** MDR(h) = Φ((ln(h) − μ_v) / σ_v)
+- **Classes:** 3-tab asphalt (aged), architectural shingle, Class 4 IR, metal standing seam, masonry BUR
+- **Output:** `data/analysis/vulnerability/mdr_curves.csv`, `mdr_parameters.npz`
+
+### Stage 15 — Figures
+- **Historical:** `docs/figures/historical/` — analytical RP maps, event counts, seasonal distribution
+- **Stochastic:** `docs/figures/stochastic/` — stochastic RP maps, OEP curves
+- **Analysis:** `docs/figures/analysis/` — analytical vs stochastic comparison, vulnerability curves
 
 ## MESH75 Recalibration Constants
 

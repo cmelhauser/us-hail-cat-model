@@ -63,33 +63,68 @@ Quantile mapping arrays for GridRad→MYRORSS cross-calibration.
 ### calibration/calibration_diagnostics.csv
 Per-percentile GridRad vs MYRORSS comparison.
 
-### cdf/
-CDF parameter files (produced by stages 09–10). *Schema TBD after script update.*
+### cdf/cdf_parameters.npz
+CDF fit parameters for all cells (produced by stage 09).
+- **Arrays:** p_occ, lognorm_mu, lognorm_sigma, gpd_xi, gpd_sigma, gpd_threshold, fit_type, region_map, region_xi, grid_shape
+- **fit_type values:** 0=nodata, 1=lognorm only, 2=lognorm+GPD(regional)
 
-### occurrence/
-Annual occurrence probability rasters (stage 11). *Schema TBD.*
+### cdf/rp_XXXXXyr_hail.tif (11 files, analytical)
+Analytical return period maps from CDF inversion (stage 09).
+- **RPs:** 00010, 00025, 00050, 00100, 00200, 00250, 00500, 01000, 05000, 10000, 50000
+- **Format:** Single-band float32 GeoTIFF, mm, 520×1180, EPSG:4326
 
-### topography/
-DEM and derived hail survival correction grids (stage 12). *Schema TBD.*
+### cdf/rp_XXXXXyr_hail_smooth.tif (11 files, spatially-pooled)
+Smoothed RP maps from 150 km kernel pooling (stage 10). Same format.
 
-### vulnerability/
-MDR curve parameters by construction class (stage 14). *Schema TBD.*
+### cdf/region_map.tif
+Regional cluster assignments for GPD ξ pooling. Integer values 0–N.
 
-### conus_mask/
-CONUS land mask raster (stage 12). *Schema TBD.*
+### cdf/mrl_diagnostics/mrl_region_*.png
+Mean Residual Life plots per region for GPD threshold validation.
+
+### cdf/fitting_report.csv
+Per-region fitting statistics: n_cells, ξ, threshold, pooled exceedances, fit counts.
+
+### occurrence/p_occ_XpXXin.tif (8 files)
+Annual occurrence probability rasters (stage 11).
+- **Thresholds:** 0p25, 0p50, 1p00, 1p50, 2p00, 3p00, 4p00, 5p00 (inches)
+- **Format:** Single-band float32, 0.0–1.0, nodata = -1.0
+
+### topography/elevation_0.05deg.tif
+DEM resampled to 0.05° (user-provided; stage 12 uses if present).
+
+### topography/topo_correction.tif
+Elevation-based hail survival correction factor (1.0–1.20). Stage 12.
+
+### vulnerability/mdr_curves.csv
+MDR lookup table: 201 hail sizes (0–200 mm) × 5 construction classes.
+
+### vulnerability/mdr_parameters.npz
+MDR curve parameters: class_names, mu_v, sigma_v arrays.
+
+### conus_mask/conus_mask.tif
+Binary CONUS land mask from regionmask. 1.0 = CONUS, 0.0 = outside.
 
 ---
 
 ## data/stochastic/
 
-### catalog/
-50,000-year stochastic event catalog (stage 13). Parquet format. *Schema TBD.*
+### catalog/stochastic_event_summary.parquet
+One row per stochastic event across the 50,000-year simulation.
+- **Columns:** sim_year, event_idx, template_id, doy, scale_factor, peak_hail_mm, n_cells
 
-### maps/
-Stochastic return period and occurrence probability GeoTIFFs. *Schema TBD.*
+### maps/rp_XXXXXyr_stochastic.tif (11 files, empirical)
+Empirical return period maps from ranked stochastic annual maxima (stage 13).
+- **RPs:** 00010–50000 (same levels as analytical)
+- **Format:** Single-band float32 GeoTIFF, mm, 520×1180, EPSG:4326
 
-### pet/
-Probable Exceedance Tables (occurrence + aggregate). *Schema TBD.*
+### pet/pet_occurrence.csv
+Occurrence Exceedance Probability table.
+- **Columns:** return_period_yr, peak_hail_mm, peak_hail_in, occ_n_cells
+
+### pet/pet_aggregate.csv
+Aggregate Exceedance Probability table.
+- **Columns:** return_period_yr, agg_n_cells, agg_n_events
 
 ---
 

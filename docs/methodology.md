@@ -54,20 +54,60 @@ Output: `data/historical/events/`
 
 Per-cell frequency-severity distributions use a zero-inflated two-component model:
 - **Body:** Lognormal distribution (fitted via L-moments or MLE)
-- **Tail:** GPD fitted via regional L-moment pooling — shared shape parameter ξ per climatological region, cell-specific scale σ
+- **Tail:** GPD fitted via regional L-moment pooling — shared shape parameter ξ per climatological region (K-means, default 6 regions), cell-specific scale σ
 - **GPD threshold:** Validated per region using Mean Residual Life (MRL) diagnostics
-- **Spatial pooling:** 150 km Gaussian kernel for final return period maps
+- **Spatial pooling:** 150 km Gaussian kernel (decay 75 km) for smooth return period maps
+- **Return periods:** 10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000 years
+
+Two independent RP products are computed and cross-checked:
+- **Analytical RPs** (stages 09–10): CDF extrapolation. Well-constrained up to ~200 yr; increasingly uncertain beyond.
+- **Stochastic RPs** (stage 13): empirical from the 50,000-year simulation. Stable at all return periods. Divergence between the two flags cells where the GPD tail may be misspecified.
 
 Output: `data/analysis/cdf/`
 
-## 8. Stochastic Catalog (Stage 13)
+## 8. Occurrence Probabilities (Stage 11)
 
-50,000-year event-resampling with seasonal DOY weighting. Intensity perturbation σ calibrated from empirical inter-annual event intensity variance. Spatial translation enabled using observed event centroid variance distribution. Produces occurrence and aggregate Probable Exceedance Tables (PETs).
+Annual probability of exceeding 8 hail size thresholds (0.25", 0.50", 1.00", 1.50", 2.00", 3.00", 4.00", 5.00") at each cell, computed directly from the annual maximum series.
 
-Output: `data/stochastic/`
+Output: `data/analysis/occurrence/`
 
-## 9. Vulnerability (Stage 14, placeholder)
+## 9. CONUS Mask + Topographic Correction (Stage 12)
 
-Lognormal MDR curves: MDR(h) = Φ((ln(h) − μ_v) / σ_v). Parameters from published literature (Brown et al. 2015; IBHS) for 3–5 construction classes. Production calibration requires proprietary claims data.
+CONUS land mask built from regionmask US states polygon. All RP and occurrence rasters are masked to CONUS extent. A first-order topographic correction adjusts hail size by elevation (5% per km, based on shorter melt path at higher elevation). Full treatment requires ERA5 melting layer heights.
+
+Output: `data/analysis/conus_mask/`, `data/analysis/topography/`
+
+## 10. Stochastic Catalog (Stage 13)
+
+50,000-year event-resampling with:
+- Poisson annual event count (λ from historical rate)
+- Seasonal DOY weighting (Gaussian KDE, σ=10 days)
+- Intensity perturbation: σ **calibrated from empirical inter-annual monthly CV** of peak intensity (replaces fixed σ=0.15 from v1.0)
+- Spatial translation: **enabled**, ±3 cells (~16.5 km)
+- Sparse event reconstruction from compressed npz format
+
+Each stochastic event is a perturbed copy of a real historical event — preserves actual footprint geometry while varying intensity and location. Cannot generate novel footprint shapes absent from the 28-year record.
+
+Produces empirical return period maps and Probable Exceedance Tables (occurrence OEP + aggregate AEP).
+
+Output: `data/stochastic/catalog/` (Parquet), `data/stochastic/maps/`, `data/stochastic/pet/`
+
+## 11. Vulnerability (Stage 14, placeholder)
+
+Lognormal MDR curves: MDR(h) = Φ((ln(h) − μ_v) / σ_v) for 5 construction classes:
+1. 3-tab asphalt shingle (aged) — most vulnerable
+2. Architectural/laminated shingle
+3. Class 4 impact-resistant
+4. Metal standing seam
+5. Masonry built-up roof
+
+Parameters from published literature (Brown et al. 2015; IBHS impact testing). Production calibration requires proprietary claims data.
 
 Output: `data/analysis/vulnerability/`
+
+## 12. Figures (Stage 15)
+
+All figures rendered to three directories:
+- `docs/figures/historical/` — analytical RP maps, climatology, event catalog summaries
+- `docs/figures/stochastic/` — stochastic RP maps, OEP curves
+- `docs/figures/analysis/` — analytical vs stochastic RP comparison, validation diagnostics, vulnerability curves
