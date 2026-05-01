@@ -120,18 +120,76 @@ These should remain tracked in future work:
 
 ---
 
-## 7. Future Work Priorities
+## 7. Work Log — 2026-05-01
 
-Priority order:
+First full pipeline run started via Codex (commit `38a6879`, Python 3.9.6
+`.venv`, branch `v2.1`). While the run executed, the following were added as
+new files (no modifications to any running scripts):
 
-1. Run the full pipeline.
-2. Review validation and tail diagnostics.
-3. Build a post-run validation dashboard.
-4. Add non-stationarity diagnostics.
-5. Improve spatial dependence.
-6. Add exposure integration.
-7. Add claims-calibrated vulnerability if data become available.
-8. Consider a v3.0 generative storm swath model.
+### Completed ✅
+
+**Project metadata:**
+- `LICENSE` (MIT + data-source licence notes)
+- `CHANGELOG.md` (v1.0 → v2.0 → v2.1 history)
+- `CITATION.cff` (machine-readable academic citation)
+- `CONTRIBUTING.md` (dev workflow, methodology-change policy)
+- `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1)
+- `SECURITY.md` (pickle-file and download-integrity caveats)
+- `pyproject.toml` (project metadata, ruff/mypy/pytest/coverage config)
+- `.pre-commit-config.yaml` (ruff, mypy, pre-commit-hooks, detect-secrets)
+- `environment.yml` (conda env: Python 3.11 + all geo deps)
+- `Dockerfile` + `.dockerignore` (reproducible container, micromamba/jammy)
+
+**GitHub infrastructure:**
+- `.github/workflows/tests.yml` (CI: lint + type-check + unit tests 3.10/3.11/3.12 + coverage)
+- `.github/ISSUE_TEMPLATE/bug.md`
+- `.github/ISSUE_TEMPLATE/methodology.md`
+- `.github/ISSUE_TEMPLATE/feature.md`
+- `.github/PULL_REQUEST_TEMPLATE.md`
+
+**Documentation:**
+- `docs/README.md` (index with three reading paths and per-document summaries)
+- `docs/uncertainty.md` (six-category uncertainty budget + bootstrap CI sketch)
+- `SKILL.md` (repo root; dense AI/developer orientation file)
+
+**Code helpers (draft, not yet wired into stage scripts):**
+- `scripts/_config.py` (single source of truth for grid constants + paths + EVT defaults)
+- `scripts/_logging.py` (`get_logger()` factory to replace 15× print-based `log()`)
+
+**File organisation:**
+- `REVIEW_PRE_RUN.md` renamed to `REVIEW_PRE_RUN.md` (sits alongside `REVIEW_2026-05-01.md`)
+- All references to `REVIEW_PRE_RUN.md` updated across docs
+
+### Outstanding after run completes ⏳
+
+In priority order:
+
+1. **`_config.py` import refactor** — replace inline `NROWS = 520` etc. in each stage script.
+2. **`_logging.py` migration** — replace print-based `log()` in each stage script.
+3. **Run manifest** — implement in `run_pipeline.py` (code snippet in `REVIEW_2026-05-01.md §B.9`).
+4. **Integration smoke test** — `tests/integration/test_smoke_synthetic.py`.
+5. **Regression / golden-output tests** — requires first-run outputs.
+6. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`.
+7. **`requirements.txt` header fix** — update from v2.0/Python 3.9 to v2.1/Python 3.10.
+8. **Python 3.10+ `.venv`** — rebuild environment at next convenient point.
+9. **Validate README completeness** — confirm §5 (Vulnerability) and all docs listed.
+10. **`docs/sensitivity.md`** — hyperparameter sweep plan.
+11. **`docs/benchmarks.md`** — published RP comparison framework.
+
+---
+
+## 8. Future Work Priorities
+
+1. Complete first full pipeline run; review Stage 15 figures and tail diagnostics.
+2. Apply `_config.py` and `_logging.py` refactors stage-by-stage.
+3. Add bootstrap CI outputs to Stage 09.
+4. Build integration and regression tests.
+5. Build a post-run validation dashboard.
+6. Add non-stationarity diagnostics (Mann-Kendall).
+7. Improve spatial dependence documentation (extremogram).
+8. Add exposure integration.
+9. Add claims-calibrated vulnerability if data become available.
+10. Consider a v3.0 generative storm swath model.
 
 ---
 
