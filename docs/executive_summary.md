@@ -1,6 +1,6 @@
 # Hail Catastrophe Model — Executive Summary
 
-**Version:** 2.0  |  **Date:** 2026-04-30  |  **Status:** Stages 01–06 complete; stages 07–15 in progress
+**Version:** 2.0  |  **Date:** 2026-05-01  |  **Status:** All 15 stages written; pipeline ready for execution
 
 ---
 
@@ -40,6 +40,8 @@ data/stochastic/    ← 50,000-yr catalog, return period maps, EP tables
 | CDF model | Zero-inflated lognormal + GPD tail (regional ξ pooling) |
 | Event grouping | ≤1-day gap, 83 km overlap, 5-day cap |
 | Stochastic catalog | 50,000 years, calibrated σ, spatial translation |
+| Return periods | 10–50,000 yr (analytical CDF + empirical stochastic) |
+| Vulnerability | 5 construction classes (placeholder, literature-based) |
 
 ## Known Limitations
 

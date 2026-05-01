@@ -82,7 +82,15 @@ us-hail-cat-model/
 │   ├── 04b_fill_gridrad_gap.py
 │   ├── 05_apply_mesh_bias_correction.py
 │   ├── 06_validate_mesh_vs_spc.py
-│   ├── 07–15 (stages 07–15)
+│   ├── 07_build_hail_climo.py
+│   ├── 08_build_event_catalog.py
+│   ├── 09_fit_cdf_regional.py
+│   ├── 10_build_smooth_cdf.py
+│   ├── 11_build_occurrence_probs.py
+│   ├── 12_apply_conus_mask.py
+│   ├── 13_generate_stochastic_catalog.py
+│   ├── 14_build_vulnerability.py
+│   ├── 15_render_figures.py
 │   └── archive/v1/                   # Archived v1.0 scripts
 ├── data/                             # Gitignored — see below
 ├── docs/
