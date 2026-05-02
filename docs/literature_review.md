@@ -8,6 +8,8 @@
 
 This literature review documents the scientific basis for the v2.1 hail catastrophe model methodology. It covers report bias, radar-based hail climatology, MESH correction, environmental filtering, extreme-value theory, spatial extremes, stochastic event simulation, topography, vulnerability, and non-stationarity.
 
+The review is intentionally applied rather than exhaustive. Each citation is tied to a model decision: whether a data source is used as hazard input or validation, why a calibration step exists, why a statistical model is defensible, and which assumptions require disclosure.
+
 ---
 
 ## 2. SPC Report Bias
@@ -30,6 +32,12 @@ These studies documented difficulties in measuring large hail and differences be
 
 **Model implication:** MESH validation against SPC should be interpreted cautiously.
 
+### Reporting-threshold changes and observational non-stationarity
+
+The 2010 U.S. severe-hail threshold change from 0.75 inch to 1.00 inch is visible in report climatologies and complicates trend interpretation. Long report records are therefore not automatically homogeneous, even before accounting for population, communication, and spotter-network changes.
+
+**Model implication:** Long SPC time series can support context, but they should not be used directly to impose non-stationary hail-size trends in v2.1.
+
 ---
 
 ## 3. Radar-Based Hail Products
@@ -46,7 +54,7 @@ Smith et al. describe the operational MRMS system.
 
 **Model implication:** MRMS provides recent public, spatially continuous radar hail products.
 
-### Ortega et al. (2022)
+### Williams, Ortega, Smith, and coauthors (2022)
 
 MYRORSS provides historical radar reanalysis for the contiguous United States.
 
@@ -63,6 +71,12 @@ This work compares operational MRMS MESH hail climatology with Storm Data.
 This GridRad-based hail climatology supports using GridRad to extend radar hail records.
 
 **Model implication:** GridRad can fill temporal gaps but requires calibration.
+
+### Source-transition literature synthesis
+
+MYRORSS, GridRad, and MRMS are all radar-derived, but they are not a single observing system. They differ in retrieval algorithm, temporal sampling, vertical representation, processing version, and operational quality control. The model therefore treats source transitions as an explicit algorithmic uncertainty rather than a minor engineering detail.
+
+**Model implication:** Stage 05 calibration and Stage 06 source diagnostics are required before pooled tail fitting.
 
 ---
 
@@ -86,6 +100,10 @@ This paper provides a probabilistic forecasting calibration framework.
 
 **Model implication:** Conditional calibration and probabilistic filtering should be evaluated with reliability and Brier-style metrics.
 
+### Calibration design implication
+
+Radar hail calibration should be judged by both marginal distribution alignment and conditional behavior. A globally calibrated source can still be biased by season, region, terrain, or freezing-level regime. v2.1 therefore supports conditional calibration while retaining deterministic quantile mapping as a transparent fallback.
+
 ---
 
 ## 5. Extreme Value Theory
@@ -108,6 +126,12 @@ This paper reviews threshold selection and uncertainty for peaks-over-threshold 
 
 **Model implication:** v2.1 automated threshold diagnostics are methodologically justified.
 
+### Pickands, Balkema, and de Haan theorem
+
+The peaks-over-threshold approach rests on the result that exceedances over a sufficiently high threshold converge to the generalized Pareto family for broad classes of parent distributions.
+
+**Model implication:** The GPD tail is theoretically defensible, but only above a sufficiently high threshold. Threshold diagnostics are not optional.
+
 ---
 
 ## 6. Spatial Extremes
@@ -123,6 +147,12 @@ This work reviews statistical modeling of spatial extremes.
 This work supports max-stable spatial extreme modeling.
 
 **Model implication:** Max-stable models are future v3.0 candidates, not v2.1 scope.
+
+### Spatial smoothing vs spatial extremes
+
+Distance-weighted smoothing improves noisy marginal return-level maps, but it does not define a joint tail model. Spatial dependence in hail is event-driven: the same storm footprint produces dependence across cells. v2.1 addresses this primarily through sparse stochastic event templates rather than a formal max-stable process.
+
+**Model implication:** Analytical maps should be compared with event-based stochastic maps before interpretation.
 
 ---
 
@@ -140,6 +170,12 @@ Commercial models generally use event catalogs, perturbations, spatial dependenc
 
 **Model implication:** v2.1 implements public-data hazard components but not full production loss modeling.
 
+### Event-count dispersion
+
+Severe convective events are temporally clustered by synoptic regime. A Poisson annual-count model is transparent and reproducible, but it can understate variance if the historical count distribution is overdispersed.
+
+**Model implication:** Stage 13 should eventually test the annual event-count index of dispersion and consider a negative-binomial alternative.
+
 ---
 
 ## 8. Topography
@@ -155,6 +191,12 @@ Li and coauthors discuss the role of elevated terrain and Gulf moisture in sever
 This work describes elevated mixed-layer climatology over CONUS and northern Mexico using ERA5.
 
 **Model implication:** Terrain-linked severe storm environments support including topographic context.
+
+### Rasmussen and Heymsfield (1987)
+
+This hail microphysics work documents melting and shedding processes relevant to hail survival below the freezing level.
+
+**Model implication:** Stage 12 terrain correction should remain bounded and disclosed as a first-order approximation, not a complete melting model.
 
 ---
 
@@ -172,6 +214,12 @@ IBHS testing supports different vulnerability by roof material and impact resist
 
 **Model implication:** Complete loss modeling requires detailed exposure and vulnerability calibration.
 
+### Vulnerability calibration implication
+
+Hail-size hazard alone is insufficient for insured loss estimation. Claims-calibrated vulnerability must account for construction, roof material, age, impact resistance, repair-cost inflation, deductible structure, and reporting thresholds.
+
+**Model implication:** Stage 14 curves are integration-test priors, not production damage functions.
+
 ---
 
 ## 10. Climate Non-Stationarity
@@ -179,6 +227,8 @@ IBHS testing supports different vulnerability by roof material and impact resist
 The v2.1 model remains stationary because the radar record is short relative to long-return-period estimation. Recommended diagnostics include Mann-Kendall trend tests and rolling 10-year summaries.
 
 **Model implication:** Do not force trend into the tail model without stronger evidence and a longer homogeneous record.
+
+Stationarity is a pragmatic modeling assumption, not a claim that the hail climate is constant. The immediate scientific control is disclosure: return-period products should state the record window and the stationary assumption explicitly.
 
 ---
 
@@ -216,7 +266,9 @@ Murillo, E.M., C.R. Homeyer, and J.T. Allen, 2021: A 23-year severe hail climato
 
 Ortega, K.L., 2018: Evaluating multi-radar, multi-sensor products for surface hailfall estimation. *Electronic Journal of Severe Storms Meteorology*, 13(1), 1–36.
 
-Ortega, K.L., et al., 2022: Comprehensive radar data for the contiguous United States: Multi-Year Reanalysis of Remotely Sensed Storms. *Bulletin of the American Meteorological Society*, 103, E732–E749.
+Pickands, J., 1975: Statistical inference using extreme order statistics. *Annals of Statistics*, 3(1), 119–131.
+
+Rasmussen, R.M. and A.J. Heymsfield, 1987: Melting and shedding of graupel and hail. *Journal of the Atmospheric Sciences*, 44, 2754–2763.
 
 Scarrott, C. and A. MacDonald, 2012: A review of extreme value threshold estimation and uncertainty quantification. *REVSTAT*, 10(1), 33–60.
 
@@ -225,3 +277,5 @@ Smith, T.M., et al., 2016: Multi-Radar Multi-Sensor severe weather and aviation 
 Wendt, N.A. and I.L. Jirak, 2021: An hourly climatology of operational MRMS MESH-diagnosed severe and significant hail with comparisons to Storm Data hail reports. *Weather and Forecasting*, 36, 645–659.
 
 Witt, A., et al., 1998: An enhanced hail detection algorithm for the WSR-88D. *Weather and Forecasting*, 13, 286–303.
+
+Williams, S.S., K.L. Ortega, T.M. Smith, A.E. Reinhart, and coauthors, 2022: Comprehensive radar data for the contiguous United States: Multi-Year Reanalysis of Remotely Sensed Storms. *Bulletin of the American Meteorological Society*, 103, E838–E854.

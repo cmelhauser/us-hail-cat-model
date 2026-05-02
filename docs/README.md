@@ -17,21 +17,25 @@ Use the reading paths below to orient yourself quickly.
 3. [`methodology.md`](methodology.md) — full scientific methodology with equations and citations
 4. [`literature_review.md`](literature_review.md) — supporting literature across all model components
 5. [`uncertainty.md`](uncertainty.md) — uncertainty budget: measurement, algorithmic, sampling, model, stochastic
+6. [`sensitivity.md`](sensitivity.md) — hyperparameter sweep plan; run after first pipeline execution
+7. [`benchmarks.md`](benchmarks.md) — published RP comparison framework; post-run validation targets
+8. [`vulnerability_derivation.md`](vulnerability_derivation.md) — MDR curve sources, limitations, calibration path
+9. [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) — draft PNAS-style article on AI-assisted model construction
 
 **Engineer / developer running the pipeline:**
-6. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands
-7. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
-8. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
-9. [`REVIEW_PRE_RUN.md`](../REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
+7. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands
+8. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
+9. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
+10. [`REVIEW_PRE_RUN.md`](../REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
 
 **AI agent or future developer:**
-10. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
-11. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
+11. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
+12. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
 
 **Version history and migration:**
-12. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap
-13. [`UPGRADE_NOTES.md`](../UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
-14. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
+13. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap
+14. [`UPGRADE_NOTES.md`](../UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
+15. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
 
 ---
 
@@ -44,6 +48,10 @@ Use the reading paths below to orient yourself quickly.
 | [`methodology.md`](methodology.md) | Scientific | Full methodology: MESH75, EVT, stochastic simulation, vulnerability |
 | [`literature_review.md`](literature_review.md) | Scientific | Annotated bibliography covering all model components |
 | [`uncertainty.md`](uncertainty.md) | Scientific | Uncertainty budget across six categories; companion to methodology |
+| [`sensitivity.md`](sensitivity.md) | Scientific | Hyperparameter sensitivity sweep plan: stages 08, 09, 10, 12, 13 |
+| [`benchmarks.md`](benchmarks.md) | Scientific | Published RP comparison framework; post-run validation targets |
+| [`vulnerability_derivation.md`](vulnerability_derivation.md) | Scientific | MDR curve derivation, placeholder limitations, calibration roadmap |
+| [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) | Manuscript | Draft PNAS-style article on AI-assisted catastrophe model development |
 | [`technical_documentation.md`](technical_documentation.md) | Engineering | Per-stage implementation: inputs, outputs, algorithms, CLI |
 | [`data_dictionary.md`](data_dictionary.md) | Engineering | All output files: paths, schemas, units, nodata conventions |
 | [`reproduce.md`](reproduce.md) | Engineering | Step-by-step instructions to reproduce the model from scratch |

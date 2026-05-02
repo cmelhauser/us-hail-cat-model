@@ -7,6 +7,8 @@
 > Auto-detection note: Claude Code reads `CLAUDE.md`; Codex reads `AGENTS.md`.
 > This file (`SKILL.md`) is not auto-injected but will be found in any
 > directory listing. Reference it explicitly in your system prompt if needed.
+>
+> Last updated: 2026-05-02 (post full-repo scan).
 
 ---
 
@@ -21,7 +23,7 @@ stochastic event catalog.
 - **Output:** gridded hail hazard — hazard only, not loss
 - **Grid:** 0.05°, 520 rows × 1180 columns, CONUS
 - **Record:** MYRORSS 1998–2011 · GridRad 2012–2019 · MRMS 2020–present
-- **Pipeline:** 15 stages, all written and tested; first full run started 2026-05-01
+- **Pipeline:** 15 stages, all written and tested; first full run started 2026-05-01 via Codex
 - **Python:** 3.10+ (current run environment: 3.9.6 via `.venv` — upgrade at next rebuild)
 
 ---
@@ -39,8 +41,17 @@ Violating any of these requires explicit user sign-off and a version bump.
 | 5 | **0.05° grid is fixed in v2.1.** No other resolution. Any change = version bump + full rerun. |
 | 6 | **Never commit data files.** `.tif`, `.npy`, `.npz`, `.nc`, `.grib2`, `.parquet`, `.pkl` are gitignored. |
 | 7 | **Update tests and docs** whenever methodology or output schemas change. |
-| 8 | **Grid constants come from `scripts/_config.py`.** Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` in stage scripts. *(Migration in progress — new scripts must import; existing scripts being refactored post-run.)* |
-| 9 | **Preserve source-coverage metadata.** Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv` for that distinction. |
+| 8 | **Grid constants come from `scripts/_config.py`.** Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` in stage scripts. *(Refactor pending — 13 scripts still have inline constants. Apply post-run.)* |
+| 9 | **Preserve source-coverage metadata.** Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
+
+---
+
+## ⚠️ Known Issues / Discrepancies (fix during next refactor)
+
+| Issue | Location | Detail |
+|-------|----------|--------|
+| `MAX_CENTROID_KM_DAY` mismatch | `scripts/08_build_event_catalog.py` vs `scripts/_config.py` | Script has `100.0`; `_config.py` has `150.0`. Decide canonical value before importing. |
+| `RP_YEARS` duplicated | `09_fit_cdf_regional.py`, `10_build_smooth_cdf.py`, `13_generate_stochastic_catalog.py`, `15_render_figures.py` | All four define `RP_YEARS` inline; should import from `_config`. |
 
 ---
 
@@ -49,8 +60,9 @@ Violating any of these requires explicit user sign-off and a version bump.
 ```
 us-hail-cat-model/
 ├── SKILL.md                    ← you are here
+├── HANDOFF.md                  ← session handoff doc (read first in a new chat)
 ├── REVIEW_PRE_RUN.md           ← pre-execution audit (read before any run)
-├── REVIEW_2026-05-01.md        ← post-v2.1 comprehensive review (frozen)
+├── REVIEW_2026-05-01.md        ← comprehensive post-v2.1 review (frozen)
 ├── RUN_NOTES.md                ← first-run context and commands
 ├── CHANGELOG.md                ← version history
 ├── CITATION.cff                ← academic citation
@@ -71,7 +83,7 @@ us-hail-cat-model/
 │   ├── 05_apply_mesh_bias_correction.py  ← HIGH RISK: fallback must work
 │   ├── 06_validate_mesh_vs_spc.py
 │   ├── 07_build_hail_climo.py
-│   ├── 08_build_event_catalog.py         ← HIGH RISK: sparse output
+│   ├── 08_build_event_catalog.py         ← HIGH RISK: sparse output; MAX_CENTROID_KM_DAY mismatch
 │   ├── 09_fit_cdf_regional.py            ← HIGH RISK: threshold diagnostics
 │   ├── 10_build_smooth_cdf.py
 │   ├── 11_build_occurrence_probs.py
@@ -80,10 +92,12 @@ us-hail-cat-model/
 │   ├── 14_build_vulnerability.py         ← PLACEHOLDER: not claims-calibrated
 │   └── 15_render_figures.py
 │
-├── tests/                      ← pytest suite; one test file per stage
-│   ├── README.md
-│   ├── conftest.py
-│   └── test_*.py
+├── tests/                      ← 28 pytest files; one per stage + conftest
+│   ├── conftest.py             ← load_stage() helper + load_script fixture
+│   ├── test_01_*.py … test_15_*.py
+│   ├── test_stage*.py          ← deeper unit tests for high-risk stages
+│   ├── test_run_pipeline.py
+│   └── (integration/ dir not yet created)
 │
 ├── docs/
 │   ├── README.md               ← documentation index (start here)
@@ -140,6 +154,8 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --skip-ml         # force deterministic fallback in Stage 05
 --retrain-models  # retrain optional ML artifacts in Stage 05
 ```
+
+---
 
 ## Stage 01 Data Provenance
 
@@ -199,32 +215,39 @@ Then review `REVIEW_PRE_RUN.md` (the permanent audit artifact).
 | `DECAY_KM` | 75 km | Stage 10 exponential decay |
 | `N_REGIONS_DEFAULT` | 6 | K-means EVT regions |
 | `TRANSLATE_CELLS` | ±3 | Stage 13 spatial translation |
+| `MAX_CENTROID_KM_DAY` | 150.0 | Stage 08 merge check (**see known issues**) |
 
 ---
 
-## Current Status (as of 2026-05-01)
+## Current Status (as of 2026-05-02 scan)
 
 | Area | Status |
 |---|---|
 | All 15 stage scripts | ✅ Written and syntax-checked |
-| Tests | ✅ Unit tests for all stages |
+| Tests (unit) | ✅ 28 test files, all stages covered |
+| Tests (integration) | ✅ `tests/integration/test_smoke_synthetic.py` written |
+| Tests (no-dup-constants) | ✅ `tests/test_no_duplicated_constants.py` written |
 | First full pipeline run | ⏳ In progress (started 2026-05-01, via Codex) |
 | Project metadata | ✅ LICENSE, CHANGELOG, CITATION, CONTRIBUTING, COC, SECURITY |
 | Python project config | ✅ pyproject.toml, .pre-commit-config.yaml |
-| CI/CD | ✅ .github/workflows/tests.yml (unit + integration + coverage) |
+| CI/CD | ✅ .github/workflows/tests.yml |
 | Docker | ✅ Dockerfile + environment.yml + .dockerignore |
-| GitHub infra | ✅ Issue templates (bug, methodology, feature), PR template |
-| docs/README.md | ✅ Documentation index with reading paths |
+| GitHub infra | ✅ Issue templates, PR template |
+| docs/README.md | ✅ Documentation index |
 | docs/uncertainty.md | ✅ Six-category uncertainty budget |
-| scripts/_config.py | ✅ Written; stage scripts not yet migrated to import from it |
-| scripts/_logging.py | ✅ Written; stage scripts not yet migrated away from print-log |
-| Stage 01 source manifest | ✅ Implemented in `manifest_stage01_myrorss.csv` |
+| docs/sensitivity.md | ✅ Written (hyperparameter sweep plan, stages 08/09/10/12/13) |
+| docs/benchmarks.md | ✅ Written (published RP comparison framework) |
+| docs/FAQ.md | ✅ Written |
+| docs/vulnerability_derivation.md | ✅ Written (MDR sources, limitations, calibration path) |
+| scripts/_config.py | ✅ Written; **0/15 stage scripts import from it** |
+| scripts/_logging.py | ✅ Written; **0/15 stage scripts import from it** |
+| scripts/_io.py | ❌ Not yet written |
+| Stage 01 source manifest | ✅ Implemented |
+| Pipeline run manifest | ⏳ In progress |
 | Bootstrap CIs on RP maps | ⏳ Pending first-run outputs |
-| Pipeline run manifest | ⏳ Not yet implemented in `run_pipeline.py` |
-| Integration smoke test | ⏳ Not yet written |
 | Regression / golden tests | ⏳ Pending first-run outputs |
-| docs/sensitivity.md | ⏳ Planned |
-| docs/benchmarks.md | ⏳ Planned |
+| MAX_CENTROID_KM_DAY mismatch | ⚠️ Stage 08 = 100.0, _config = 150.0 |
+| σ_perturb doc accuracy | ✅ Methodology and uncertainty docs now match the monthly CV implementation |
 
 ---
 
@@ -232,19 +255,13 @@ Then review `REVIEW_PRE_RUN.md` (the permanent audit artifact).
 
 In priority order:
 
-1. **Review Stage 15 output figures** — analytical vs stochastic RP comparison,
-   MRL plots, threshold selection diagnostics.
-2. **Check `threshold_selection.csv`** for each region — confirm threshold
-   stability before interpreting RP maps.
-3. **Apply `_config.py` import refactor** to each stage script (replace inline
-   `NROWS = 520` etc. with `from _config import NROWS, NCOLS, ...`).
-4. **Apply `_logging.py` migration** to each stage script (replace `log()`
-   print helper with `get_logger()`).
-5. **Implement run manifest** in `run_pipeline.py` (code snippet in `REVIEW_2026-05-01.md §B.9`).
-6. **Write integration smoke test** (`tests/integration/test_smoke_synthetic.py`).
-7. **Write regression test** against first-run golden outputs.
-8. **Add bootstrap CIs to Stage 09** (sketch in `docs/uncertainty.md §3.1`).
-9. **Update `requirements.txt` header** and upgrade `.venv` to Python 3.10+.
+1. **Decide `MAX_CENTROID_KM_DAY` canonical value** (100.0 or 150.0) before the _config refactor.
+2. **Apply `_config.py` import refactor** to 13 stage scripts (01, 02, 04b, 05, 06, 07, 08, 09, 10, 11, 12, 13, 15). Scripts 03, 04a, 14 have no grid constants and need no refactor.
+3. **Apply `_logging.py` migration** to all 15 stage scripts.
+4. **Write `scripts/_io.py`** with shared `write_geotiff` (+ provenance tags), `haversine`, `latlon_to_grid`.
+5. **Write regression tests** against first-run golden outputs.
+6. **Add bootstrap CIs to Stage 09** (sketch in `docs/uncertainty.md §3.1`).
+7. **Upgrade `.venv` to Python 3.10+** (current = 3.9.6, EOL Oct 2025).
 
 ---
 
@@ -261,6 +278,7 @@ In priority order:
 | What the current project state is | `docs/project_memory.md` |
 | What the full review found | `REVIEW_2026-05-01.md` |
 | What was checked before running | `REVIEW_PRE_RUN.md` |
+| Session handoff | `HANDOFF.md` |
 | How to contribute | `CONTRIBUTING.md` |
 | Version history | `CHANGELOG.md` |
 

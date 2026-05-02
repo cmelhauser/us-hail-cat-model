@@ -252,18 +252,34 @@ overestimate them at local minima (e.g., mountain gaps).
 
 ### 5.1 σ_perturb calibration
 
-Stage 13 perturbs each synthetic event's intensity by a log-normal factor with
-standard deviation σ_perturb. This parameter is calibrated from the empirical
-inter-annual variance in peak MESH75 across active cells:
+Stage 13 perturbs each synthetic event's intensity by a log-normal factor. The
+global perturbation parameter is calibrated from historical event peaks using
+monthly coefficient of variation during the main hail season:
 
 ```math
-\hat{\sigma}_{\text{perturb}} = \sqrt{\mathrm{Var}\!\left[\ln(\text{annual peak MESH75})\right]}
+\mathrm{CV}_m =
+\frac{\mathrm{sd}(\text{event peak MESH75 in month }m)}
+     {\mathrm{mean}(\text{event peak MESH75 in month }m)}
 ```
 
-where the variance is computed over all active cells pooled together
-(global, not regional). The assumption that hail intensity variability is
-spatially uniform is likely violated: Tornado Alley shows higher inter-annual
-variance than the Southeast.
+```math
+\hat{\sigma}_{\text{perturb}} =
+\mathrm{clip}\left(\mathrm{median}(\mathrm{CV}_m), 0.10, 0.40\right),
+\quad m \in \{\mathrm{Mar}, \ldots, \mathrm{Sep}\}
+```
+
+Months with fewer than 10 positive events are excluded. During simulation, the
+implementation uses a percentile-aware event standard deviation:
+
+```math
+\sigma_{\mathrm{event}} =
+\mathrm{clip}(0.10 + 0.15p, 0.10, \max(0.25, \hat{\sigma}_{\text{perturb}}))
+```
+
+where `p` is the historical template's rank percentile by peak hail size. The
+assumption that hail intensity variability is spatially uniform is likely
+violated: Tornado Alley and the High Plains may have different variance
+structure than the Southeast or Northeast.
 
 **Current treatment:** Global σ_perturb applied uniformly to all events.
 

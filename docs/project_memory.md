@@ -1,6 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.1**
+**Last updated: 2026-05-02 (post full-repo scan)**
 
 ---
 
@@ -19,31 +20,18 @@
 
 ---
 
-## 2. Current State
+## 2. Current State (as of 2026-05-02)
 
-The project has been upgraded from v2.0 to v2.1. This was not a full redesign. It was a hardening update focused on defensibility, testability, and run-readiness.
+Branch `v2.1` is synced with `main` at commit `e4413dc`. Working tree clean.
 
-The v2.1 project now includes:
+First full pipeline run started 2026-05-01 via Codex. Still in progress as of 2026-05-02.
 
-- updated methodology;
-- updated technical documentation;
-- updated data dictionary;
-- updated reproduction guide;
-- updated README;
-- migration notes;
-- literature review;
-- plain-language explainer;
-- pre-run review document;
-- AI instructions for future work.
+**Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written and committed. Stage scripts have not yet been refactored to import from `_config.py` or `_logging.py` — that is the top priority for the next session.
 
-The critical code and methodology emphasis is that sparse event storage must remain authoritative, especially for Stage 13.
+**Known discrepancies (fix during next refactor):**
 
-Stage 01 also now preserves MYRORSS source provenance. It reads both plain
-`.netcdf` and gzipped `.netcdf.gz` MYRORSS archive objects and writes
-`data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`. The manifest is
-the authoritative distinction between missing source days and days where source
-files existed but produced no hail pixels; all-zero GeoTIFFs alone do not carry
-that distinction.
+1. `MAX_CENTROID_KM_DAY`: stage 08 script has `100.0`; `_config.py` has `150.0`. Canonical value must be decided before applying the import refactor.
+2. σ_perturb documentation: `docs/methodology.md §13` and `docs/uncertainty.md §5.1` now match the implementation in `calibrate_sigma()`: monthly CV (coefficient of variation) for months March–September, median across eligible months, clipped to [0.10, 0.40].
 
 ---
 
@@ -65,21 +53,19 @@ This avoids dense event cubes and enables efficient stochastic simulation.
 
 ### Fallback-safe modeling
 
-Optional ML components may improve calibration or filtering, but deterministic fallback must always work.
+Optional ML components may improve calibration or filtering, but deterministic fallback must always work. `--skip-ml` must produce a complete, valid output.
 
 ### Dual tail review
 
 Analytical return-period maps and stochastic return-period maps should be compared. Large divergence is a model-risk signal.
 
-### Documentation and tests are part of the model
-
-Any future methodology change must update tests and documentation.
-
 ### Source coverage is explicit
 
-Do not infer MYRORSS source availability from GeoTIFF values or file size. Use
-the Stage 01 manifest statuses (`missing_source`, `no_hail_pixels`, `ok`, and
-read-error variants).
+Do not infer MYRORSS source availability from GeoTIFF values or file size. Use the Stage 01 manifest statuses (`missing_source`, `no_hail_pixels`, `ok`, and read-error variants). The manifest file is `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`.
+
+### Documentation and tests are part of the model
+
+Any future methodology change must update tests and documentation in the same commit.
 
 ---
 
@@ -87,144 +73,157 @@ read-error variants).
 
 ### Stage 05
 
-Handles source calibration and environmental filtering. It must run with or without optional model artifacts.
+Handles source calibration and environmental filtering. Must run with or without optional ML artifacts (`--skip-ml`).
 
 ### Stage 08
 
-Builds the historical event catalog. It must preserve physical merge constraints and sparse storage.
+Builds the historical event catalog. Must preserve physical merge constraints (centroid displacement ≤ 150 km/day per _config — **verify the 100 vs 150 discrepancy before the next refactor**) and sparse storage.
 
 ### Stage 09
 
-Fits frequency-severity distributions. It must emit threshold diagnostics.
+Fits frequency-severity distributions. Must emit threshold diagnostics to `threshold_selection.csv`.
 
 ### Stage 12
 
-Applies topographic correction and CONUS mask. It must keep correction factors bounded.
+Applies topographic correction and CONUS mask. Must keep correction factors bounded (1.0–1.25 with ERA5 FL; 1.0–1.20 fallback).
 
 ### Stage 13
 
-Generates the stochastic catalog. It must remain sparse-safe and must not reconstruct all events as dense grids.
+Generates the stochastic catalog. Must remain sparse-safe. Must not reconstruct any event as a dense grid at any point in the loop.
 
 ---
 
-## 5. Current v2.1 Upgrade Themes
+## 5. v2.1 Upgrade Themes
 
-- Conditional GridRad calibration with fallback.
-- Probabilistic environmental filtering with fallback.
-- Centroid and intensity checks for event grouping.
+- Conditional GridRad calibration with quantile-mapping fallback.
+- Probabilistic environmental filtering with hard-threshold safety floor.
+- Centroid displacement and intensity jump checks for event grouping.
 - Automated GPD threshold diagnostics.
-- Sparse stochastic translation and scaling.
-- Topographic correction using elevation relative to freezing level when available.
-- Expanded validation and testing.
-- Documentation synchronized to implementation.
-- Stage 01 source manifest and plain/gz NetCDF archive handling.
+- Sparse-safe stochastic translation and scaling.
+- Freezing-level-aware topographic correction (bounded).
+- Stage 01 source manifest distinguishing missing-source days from true no-hail days.
+- Expanded pytest suite with stage-level unit tests.
+- Full documentation synchronized to implementation.
+- Project infrastructure: CI, Docker, pyproject.toml, pre-commit, issue templates.
 
 ---
 
 ## 6. Known Scientific Limitations
 
-These should remain tracked in future work:
-
-1. Long return periods remain extrapolative.
-2. Spatial dependence is simplified.
-3. Climate non-stationarity is not embedded.
-4. GridRad gap-fill uncertainty remains.
-5. Vulnerability is placeholder only.
-6. SPC validation is biased and incomplete.
+1. Long return periods remain extrapolative (>~500 yr exceed the observed record).
+2. Spatial dependence is simplified; inter-event correlation is not modeled.
+3. Climate non-stationarity is not embedded in the hazard fit.
+4. GridRad gap-fill uncertainty at the 2011 and 2020 source transitions.
+5. Vulnerability is placeholder only; not claims-calibrated.
+6. SPC validation is spatially biased and incomplete (rural underreporting).
 
 ---
 
-## 7. Work Log — 2026-05-01
+## 7. Work Log
 
-First full pipeline run started via Codex (commit `38a6879`, Python 3.9.6
-`.venv`, branch `v2.1`). While the run executed, the following were added as
-new files (no modifications to any running scripts):
+### 2026-05-01 ✅ Completed
 
-### Completed ✅
+First full pipeline run executed via Codex (Python 3.9.6, branch `v2.1`).
+All items below were added as new files while the run executed — no running scripts were modified.
+Committed and merged to `main` at `e582d5d`.
 
 **Project metadata:**
-- `LICENSE` (MIT + data-source licence notes)
-- `CHANGELOG.md` (v1.0 → v2.0 → v2.1 history)
-- `CITATION.cff` (machine-readable academic citation)
-- `CONTRIBUTING.md` (dev workflow, methodology-change policy)
-- `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1)
-- `SECURITY.md` (pickle-file and download-integrity caveats)
-- `pyproject.toml` (project metadata, ruff/mypy/pytest/coverage config)
-- `.pre-commit-config.yaml` (ruff, mypy, pre-commit-hooks, detect-secrets)
-- `environment.yml` (conda env: Python 3.11 + all geo deps)
-- `Dockerfile` + `.dockerignore` (reproducible container, micromamba/jammy)
+- `LICENSE`, `CHANGELOG.md`, `CITATION.cff`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
 
-**GitHub infrastructure:**
-- `.github/workflows/tests.yml` (CI: lint + type-check + unit tests 3.10/3.11/3.12 + coverage)
-- `.github/ISSUE_TEMPLATE/bug.md`
-- `.github/ISSUE_TEMPLATE/methodology.md`
-- `.github/ISSUE_TEMPLATE/feature.md`
-- `.github/PULL_REQUEST_TEMPLATE.md`
+**Python/CI infrastructure:**
+- `pyproject.toml` (requires-python ≥3.10, ruff, mypy, pytest, coverage)
+- `.pre-commit-config.yaml` (ruff, mypy, pre-commit-hooks, detect-secrets)
+- `environment.yml` (conda: Python 3.11 + all geo deps)
+- `Dockerfile` + `.dockerignore` (micromamba/jammy, health check)
+- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12 matrix, ruff, mypy, pytest, codecov)
+- `.github/ISSUE_TEMPLATE/{bug,methodology,feature}.md`, `.github/PULL_REQUEST_TEMPLATE.md`
 
 **Documentation:**
-- `docs/README.md` (index with three reading paths and per-document summaries)
-- `docs/uncertainty.md` (six-category uncertainty budget + bootstrap CI sketch)
-- `SKILL.md` (repo root; dense AI/developer orientation file)
+- `docs/README.md` (documentation index with reading paths)
+- `docs/uncertainty.md` (six-category uncertainty budget)
+- `docs/PR_v1_to_v2.1.md` (full PR description for the v1.0 → v2.1 arc)
+- `SKILL.md` (repo-root AI/developer orientation)
 
-**Code helpers (draft, not yet wired into stage scripts):**
-- `scripts/_config.py` (single source of truth for grid constants + paths + EVT defaults)
-- `scripts/_logging.py` (`get_logger()` factory to replace 15× print-based `log()`)
+**Code helpers (on disk; stage scripts not yet migrated):**
+- `scripts/_config.py` — single source of truth for all grid constants, paths, EVT defaults
+- `scripts/_logging.py` — `get_logger()` factory replacing 15× print-based `log()` helpers
 
-**File organisation:**
-- `REVIEW_PRE_RUN.md` renamed to `REVIEW_PRE_RUN.md` (sits alongside `REVIEW_2026-05-01.md`)
-- All references to `REVIEW_PRE_RUN.md` updated across docs
+**Refactoring:**
+- `README.md` — full professional rewrite
+- `PRE_RUN_REVIEW.md` renamed → `REVIEW_PRE_RUN.md`; all cross-references updated
 
-### Outstanding after run completes ⏳
+### 2026-05-01 — Stage 01 Manifest ✅
 
-In priority order:
+Stage 01 updated to produce `manifest_stage01_myrorss.csv`. Reads both plain `.netcdf` and gzipped `.netcdf.gz` MYRORSS archive objects. Manifest committed at `e4413dc`, merged to `main`.
 
-1. **`_config.py` import refactor** — replace inline `NROWS = 520` etc. in each stage script.
-2. **`_logging.py` migration** — replace print-based `log()` in each stage script.
-3. **Run manifest** — implement in `run_pipeline.py` (code snippet in `REVIEW_2026-05-01.md §B.9`).
-4. **Integration smoke test** — `tests/integration/test_smoke_synthetic.py`.
-5. **Regression / golden-output tests** — requires first-run outputs.
-6. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`.
-7. **`requirements.txt` header fix** — update from v2.0/Python 3.9 to v2.1/Python 3.10.
-8. **Python 3.10+ `.venv`** — rebuild environment at next convenient point.
-9. **Validate README completeness** — confirm §5 (Vulnerability) and all docs listed.
-10. **`docs/sensitivity.md`** — hyperparameter sweep plan.
-11. **`docs/benchmarks.md`** — published RP comparison framework.
+### 2026-05-02 — Full Repo Scan ✅
 
----
+Complete grep scan of all 15 stage scripts confirming:
+- 13 scripts still have inline grid constants (01, 02, 04b, 05, 06, 07, 08, 09, 10, 11, 12, 13, 15); scripts 03, 04a, 14 do not need refactor
+- 0 scripts import from `_config.py`
+- 0 scripts import from `_logging.py`; all 15 still define print-based `log()`
+- 4 scripts have inline `RP_YEARS` (09, 10, 13, 15)
+- 2 scripts have inline `DAMAGE_THRESH_MM` (08, 13)
+- 1 script has inline `MAX_HAIL_MM` (13)
+- Discrepancy: stage 08 `MAX_CENTROID_KM_DAY = 100.0` vs `_config.py` `150.0`
+- 28 test files exist; no `tests/integration/` directory
+- Missing docs: sensitivity.md, benchmarks.md, FAQ.md, vulnerability_derivation.md
 
-## 8. Future Work Priorities
-
-1. Complete first full pipeline run; review Stage 15 figures and tail diagnostics.
-2. Apply `_config.py` and `_logging.py` refactors stage-by-stage.
-3. Add bootstrap CI outputs to Stage 09.
-4. Build integration and regression tests.
-5. Build a post-run validation dashboard.
-6. Add non-stationarity diagnostics (Mann-Kendall).
-7. Improve spatial dependence documentation (extremogram).
-8. Add exposure integration.
-9. Add claims-calibrated vulnerability if data become available.
-10. Consider a v3.0 generative storm swath model.
+Updated: HANDOFF.md, SKILL.md, docs/project_memory.md, docs/ai_instructions.md
 
 ---
 
-## 8. Compact Context for Future AI Agents
+## 8. Immediate Priorities (next session)
+
+In order:
+
+1. **Decide canonical `MAX_CENTROID_KM_DAY`** (100.0 or 150.0)
+2. **`_config.py` import refactor** — replace inline constants in 13 stage scripts + fix `MAX_CENTROID_KM_DAY` discrepancy
+3. **`_logging.py` migration** — replace print-based `log()` in all 15 stage scripts
+4. **`scripts/_io.py`** — shared `write_geotiff` (+ provenance tags), `haversine`, `latlon_to_grid`
+5. **Integration smoke test** — `tests/integration/test_smoke_synthetic.py`
+6. **`tests/test_no_duplicated_constants.py`**
+7. **Missing docs** — sensitivity.md, benchmarks.md, FAQ.md, vulnerability_derivation.md
+8. **Review Stage 15 figures** once Codex run completes
+9. **Regression tests** — freeze golden outputs after first run
+10. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`
+11. **Keep `docs/methodology.md §13` and `docs/uncertainty.md §5.1` aligned** if σ_perturb calibration changes
+12. **Rebuild `.venv` to Python 3.10+** — current venv is Python 3.9.6 (EOL Oct 2025)
+
+---
+
+## 9. Future Work (v2.2+)
+
+1. Add bootstrap CI outputs to Stage 09 (confidence bounds on RP maps).
+2. Build post-run validation dashboard.
+3. Add non-stationarity diagnostics (Mann-Kendall trend test on annual MESH maxima).
+4. Improve spatial dependence documentation (extremogram, tail dependence).
+5. Add exposure integration.
+6. Add claims-calibrated vulnerability if data become available.
+7. Consider a v3.0 generative storm swath model.
+
+---
+
+## 10. Compact Context for AI Agents
 
 ```text
 Project: CONUS Hail Cat Model v2.1.
-Radar-first hail hazard model on 0.05° CONUS grid.
-Pipeline has 15 stages.
-SPC reports are validation only.
-Stage 08 stores sparse event arrays.
-Stage 13 must remain sparse-safe and must not build dense event cubes.
-v2.1 adds fallback-safe calibration/filtering, event merge checks, threshold diagnostics, topographic correction, expanded tests, and full documentation.
-Hazard only; vulnerability is placeholder and not claims-calibrated.
+Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
+15-stage Python pipeline. Run via run_pipeline.py.
+SPC reports are validation only — never a hazard input.
+Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
+Stage 05 must always work with --skip-ml (no ML artifacts required).
+Stage 01 produces a source manifest — use it to distinguish missing-source days from no-hail days.
+scripts/_config.py = single source of truth for all grid constants (NOT YET imported by stage scripts).
+scripts/_logging.py = get_logger() factory (NOT YET wired into stage scripts).
+KNOWN DISCREPANCY: stage 08 MAX_CENTROID_KM_DAY=100.0 vs _config.py value of 150.0. Resolve before refactor.
+KNOWN DOC GAP: methodology.md §13 says "inter-annual variance"; actual code uses monthly CV (Mar-Sep), median, clipped [0.10,0.40].
+Git commits must be run from the user's terminal — sandbox cannot unlink .git/index.lock.
 ```
 
 ---
 
-## 9. Pre-Run Commands
-
-Before full run:
+## 11. Pre-Run Commands
 
 ```bash
 python -m py_compile run_pipeline.py scripts/*.py

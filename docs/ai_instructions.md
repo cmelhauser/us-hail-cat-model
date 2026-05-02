@@ -1,12 +1,13 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.1**
+**Last updated: 2026-05-02 (post full-repo scan)**
 
 ---
 
 ## 1. Purpose
 
-This document gives future AI agents and developers explicit instructions for working on the CONUS Hail Catastrophe Model. It exists to prevent accidental regressions, memory blowups, documentation drift, and methodology changes that break the model’s defensibility.
+This document gives future AI agents and developers explicit instructions for working on the CONUS Hail Catastrophe Model. It exists to prevent accidental regressions, memory blowups, documentation drift, and methodology changes that break the model's defensibility.
 
 ---
 
@@ -25,6 +26,7 @@ When changing the project:
 9. Use a run manifest for full runs.
 10. Clearly distinguish hazard from loss.
 11. Use the Stage 01 MYRORSS manifest to distinguish missing source days from available-source no-hail days.
+12. Import grid constants from `scripts/_config.py` rather than redefining them inline.
 
 ---
 
@@ -43,6 +45,7 @@ Do not:
 9. Change output file names without updating the data dictionary.
 10. Assume missing SPC reports mean radar false alarms.
 11. Infer MYRORSS source availability from GeoTIFF file size or all-zero raster values.
+12. Run `git commit`, `git push`, `git checkout`, or `git merge` from the sandbox bash tool — the sandbox cannot unlink `.git/index.lock`.
 
 ---
 
@@ -68,6 +71,8 @@ Must preserve:
 - duration cap;
 - centroid and intensity checks;
 - sparse `event_peaks.npz`.
+
+**⚠️ Discrepancy to fix:** `MAX_CENTROID_KM_DAY` is `100.0` in the script but `150.0` in `_config.py`. Confirm the canonical value with the user before applying the `_config.py` import refactor.
 
 ### Stage 09 — CDF fitting
 
@@ -97,6 +102,8 @@ rows, cols, vals
 
 Must not reconstruct all event templates into dense grids.
 
+**σ_perturb calibration:** The actual `calibrate_sigma()` method computes monthly CV (coefficient of variation) for events in months March–September, takes the median of those monthly CVs, and clips to [0.10, 0.40]. This is more conservative than a global inter-annual variance estimator. `docs/methodology.md §13` and `docs/uncertainty.md §5.1` now reflect this.
+
 ### Stage 15 — Figures
 
 Must render diagnostics that expose model risk, including analytical vs stochastic comparison.
@@ -122,7 +129,9 @@ Tests should cover:
 - sparse stochastic translation and scaling;
 - MDR monotonicity;
 - figure smoke tests;
-- run_pipeline stage selection and dry run.
+- run_pipeline stage selection and dry run;
+- **no duplicated grid constants across stage scripts** (test to be written);
+- **integration smoke: full pipeline on synthetic 5×5 grid** (test dir to be created).
 
 ---
 
@@ -135,7 +144,7 @@ When changing code, update:
 - `docs/technical_documentation.md` for implementation behavior;
 - `docs/data_dictionary.md` for outputs and schemas;
 - `docs/reproduce.md` for run commands;
-- `docs/REVIEW_PRE_RUN.md` if the change affects run readiness.
+- `REVIEW_PRE_RUN.md` if the change affects run readiness.
 
 If a new output is added, it must appear in the data dictionary.
 
@@ -172,63 +181,81 @@ When asked to review the project:
 5. Check docs and tests remain synchronized.
 6. Identify scientific limitations separately from implementation bugs.
 7. Avoid overengineering v2.1 into a v3.0 redesign unless explicitly requested.
+8. **Check for inline grid constants** — these should all be imported from `_config.py` post-refactor.
 
 ---
 
-## 9. New Files Added 2026-05-01 (While Pipeline Was Running)
+## 9. Confirmed State After 2026-05-02 Scan
 
-The following files were created on 2026-05-01 while the first full pipeline
-run executed. They are additive (no changes to existing scripts or outputs).
+### Files created 2026-05-01 (while pipeline was running)
 
-### Project metadata
-- `LICENSE` — MIT, with data-source licence notes (NOAA, NCAR RDA, Copernicus, SPC)
-- `CHANGELOG.md` — versioned history: v1.0 → v2.0 → v2.1
-- `CITATION.cff` — machine-readable academic citation (Murillo & Homeyer 2021 as primary reference)
-- `CONTRIBUTING.md` — dev workflow, branch naming, methodology-change policy
-- `CODE_OF_CONDUCT.md` — Contributor Covenant 2.1
-- `SECURITY.md` — vulnerability reporting; pickle-file and download-integrity caveats
-- `pyproject.toml` — project metadata, ruff/mypy/pytest/coverage config, `[dev]` extras
-- `.pre-commit-config.yaml` — ruff, mypy, pre-commit-hooks, detect-secrets, yamllint
-- `environment.yml` — conda environment (Python 3.11, all geo deps) for Docker
+**Project metadata:**
+- `LICENSE`, `CHANGELOG.md`, `CITATION.cff`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
 
-### GitHub infrastructure
-- `.github/workflows/tests.yml` — CI: lint + type-check + unit tests (3.10/3.11/3.12) + dry-run + coverage
-- `.github/ISSUE_TEMPLATE/bug.md`
-- `.github/ISSUE_TEMPLATE/methodology.md`
-- `.github/ISSUE_TEMPLATE/feature.md`
-- `.github/PULL_REQUEST_TEMPLATE.md`
-- `Dockerfile` — reproducible container (micromamba/jammy base)
-- `.dockerignore`
+**Python/CI infrastructure:**
+- `pyproject.toml`, `.pre-commit-config.yaml`, `environment.yml`
+- `Dockerfile`, `.dockerignore`
+- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, ruff, mypy, pytest, codecov)
+- `.github/ISSUE_TEMPLATE/{bug,methodology,feature}.md`, `.github/PULL_REQUEST_TEMPLATE.md`
 
-### Documentation
-- `docs/README.md` — documentation index with three reading paths
-- `docs/uncertainty.md` — six-category uncertainty budget with quantitative ranges
-  and implementation sketch for bootstrap CIs (v2.2 priority)
+**Documentation:**
+- `docs/README.md` (documentation index with reading paths)
+- `docs/uncertainty.md` (six-category uncertainty budget)
 
-### Code (draft, not yet wired into stage scripts)
-- `scripts/_config.py` — single source of truth for grid constants, repo paths,
-  physical constants, EVT/RP/stochastic defaults. Stage scripts still inline-define
-  NROWS/NCOLS/etc. — migration to import from `_config` is the next post-run task.
-- `scripts/_logging.py` — `get_logger(stage_name, log_dir)` helper to replace
-  the 15 per-stage `log()` print functions. Migration instructions in docstring.
-- `scripts/01_download_myrorss.py` — reads both `.netcdf` and `.netcdf.gz`
-  MYRORSS archive objects and writes
-  `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` for source
-  coverage QA.
+**Code helpers (on disk; not yet wired into stage scripts):**
+- `scripts/_config.py` — single source of truth for grid constants, paths, physical constants, EVT/RP/stochastic defaults
+- `scripts/_logging.py` — `get_logger()` factory
 
-### Key outstanding items (see REVIEW_2026-05-01.md for full list)
-- `requirements.txt` header still says v2.0 / Python 3.9 — fix at next env rebuild
-- Stage scripts still inline grid constants — apply `_config.py` import refactor
-  stage-by-stage after the run completes
-- Stage scripts still use print-based `log()` — apply `_logging.py` refactor post-run
-- Run manifest not yet implemented in `run_pipeline.py`
-- Integration smoke test not yet written
-- Bootstrap CIs on RP estimates not yet implemented (awaiting first-run outputs)
+### Confirmed outstanding items (from 2026-05-02 grep scan)
+
+**Code refactors (do post-run, not during a running pipeline):**
+- `_config.py` import refactor: **0 of 15** scripts import from `_config`. Scripts needing refactor: 01, 02, 04b, 05, 06, 07, 08, 09, 10, 11, 12, 13, 15. Scripts 03, 04a, 14 have no grid constants.
+- `_logging.py` migration: **0 of 15** scripts import from `_logging`. All 15 define print-based `def log(msg)`.
+- Additional inline duplication: `RP_YEARS` in 09/10/13/15; `DAMAGE_THRESH_MM` in 08/13; `MAX_HAIL_MM` in 13.
+- `scripts/_io.py` not yet created (shared helpers: `write_geotiff`, `haversine`, `latlon_to_grid`).
+
+**Tests not yet written:**
+- `tests/integration/test_smoke_synthetic.py` — end-to-end smoke on tiny synthetic data
+- `tests/test_no_duplicated_constants.py` — enforce _config.py import discipline
+- Property-based tests for Stage 13 invariants (hypothesis)
+- Performance regression test for Stage 13
+
+**Docs not yet written:**
+- `docs/sensitivity.md` — hyperparameter sweep plan (REVIEW §B.5)
+- `docs/benchmarks.md` — published RP comparison framework (REVIEW §B.6)
+- `docs/FAQ.md` (REVIEW §B.7)
+- `docs/vulnerability_derivation.md` (REVIEW §E.7)
+- Notation glossary `docs/methodology.md §0` (REVIEW §E.11)
+
+**Science / methodology gaps to close:**
+- `docs/methodology.md §13`: keep σ_perturb description aligned with actual code (monthly CV, not inter-annual variance)
+- Stage 08 `MAX_CENTROID_KM_DAY` discrepancy: 100.0 in script vs 150.0 in `_config.py`
+- Topographic correction coefficient (0.25) uncited
+- GPD threshold scoring weight rationale not documented
+- Source-homogeneity KS test (Stage 05, post-run)
+- Event independence diagnostic (Stage 08, post-run)
+
+**Deferred (needs first-run outputs):**
+- Regression / golden-output tests
+- Bootstrap CIs on Stage 09 RP estimates
 
 ---
 
 ## 10. Compact Project Context
 
 ```text
-CONUS Hail Cat Model v2.1 is a radar-first hail hazard model on a 0.05° CONUS grid. It uses MYRORSS, GridRad, MRMS, ERA5, and SPC validation. It has a 15-stage pipeline. Stage 01 reads both plain and gzipped MYRORSS NetCDF objects and writes a source manifest so missing-source days are distinct from no-hail days. Stage 08 creates sparse event arrays. Stage 13 must remain sparse-safe. The model produces hazard, not loss. Vulnerability is placeholder. v2.1 adds fallback-safe calibration/filtering, event merge checks, threshold diagnostics, bounded topography, expanded tests, and complete documentation. On 2026-05-01 the first full pipeline run began.
+CONUS Hail Cat Model v2.1 is a radar-first hail hazard model on a 0.05° CONUS grid.
+It uses MYRORSS, GridRad, MRMS, ERA5, and SPC validation.
+15-stage Python pipeline. Run via run_pipeline.py.
+SPC reports are validation only — never a hazard input.
+Stage 08 builds a sparse event catalog (event_peaks.npz: rows/cols/vals per event).
+Stage 13 must remain sparse-safe — no dense event cubes.
+Stage 05 must work with --skip-ml.
+Stage 01 produces manifest_stage01_myrorss.csv — use it for source QA.
+scripts/_config.py = single source of truth for constants (NOT YET imported by stage scripts).
+scripts/_logging.py = get_logger() factory (NOT YET wired in).
+OPEN BUG: stage 08 MAX_CENTROID_KM_DAY=100.0 vs _config.py=150.0.
+OPEN DOC WATCH: methodology.md §13 and uncertainty.md §5.1 document monthly CV Mar–Sep for σ_perturb; keep them aligned with code if Stage 13 changes.
+First full run started 2026-05-01 via Codex.
+Git commits must be run from the user's terminal, not the sandbox.
 ```
