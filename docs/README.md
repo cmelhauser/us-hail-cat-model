@@ -35,8 +35,9 @@ Use the reading paths below to orient yourself quickly.
 
 **Version history and migration:**
 13. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap
-14. [`UPGRADE_NOTES.md`](../UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
-15. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
+14. [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
+15. [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) — upstream PR narrative for the v1.0→v2.0→v2.1 arc
+16. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
 
 ---
 
@@ -61,7 +62,8 @@ Use the reading paths below to orient yourself quickly.
 | [`ai_instructions.md`](ai_instructions.md) | Governance | Operating constraints for AI-assisted development |
 | [`project_memory.md`](project_memory.md) | Governance | Current project state: what's done, known issues, next priorities |
 | [`migration_plan.md`](migration_plan.md) | Governance | Version roadmap and migration guidance |
-| [`UPGRADE_NOTES.md`](../UPGRADE_NOTES.md) | Governance | v2.0→v2.1 patch notes |
+| [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) | Governance | v2.0→v2.1 patch notes |
+| [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) | Governance | Reviewer-facing PR narrative for the upstream merge |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Governance | Full version history |
 
 ---

@@ -43,6 +43,8 @@ run-readiness.
 - `docs/executive_summary.md` — 5-minute overview for non-technical readers.
 - `docs/explainer.md` — plain-language explanation of model methodology.
 - `docs/UPGRADE_NOTES.md` — v2.0→v2.1 migration notes.
+- `docs/PR_v1_to_v2.1.md` — reviewer-facing upstream PR narrative for
+  the v1.0→v2.0→v2.1 arc.
 - `REVIEW_PRE_RUN.md` — pre-execution audit artifact.
 - `run_pipeline.py`: `--from N`, `--only N`, `--skip`, `--dry-run`,
   `--validate`, `--skip-ml`, `--retrain-models` CLI.
