@@ -47,6 +47,8 @@ from conftest import load_stage
 s08 = load_stage("08_build_event_catalog.py")
 s13 = load_stage("13_generate_stochastic_catalog.py")
 
+pytestmark = pytest.mark.integration
+
 NROWS = s08.NROWS   # 520
 NCOLS = s08.NCOLS   # 1180
 
