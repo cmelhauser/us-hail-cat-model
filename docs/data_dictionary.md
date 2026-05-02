@@ -33,6 +33,27 @@ Raw daily maximum MESH raster before Stage 05 correction.
 | Units | mm |
 | Source | MYRORSS, GridRad-derived MESH75, or operational MRMS |
 | Meaning | daily maximum estimated hail size per grid cell |
+| Important caveat | `0.0` means no MESH signal in the raster cell; use the Stage 01 manifest to distinguish missing MYRORSS source days from available-source no-hail days |
+
+### `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`
+
+Per-day Stage 01 source-coverage and output manifest. This file is generated
+alongside MYRORSS GeoTIFFs and is the authoritative way to distinguish source
+availability from no-hail raster values.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `date` | ISO date | MYRORSS day, `YYYY-MM-DD` |
+| `output_path` | string | Relative path to the daily GeoTIFF |
+| `source_files` | integer | Total MYRORSS NetCDF objects found for the day |
+| `plain_netcdf_files` | integer | Source objects ending in `.netcdf` |
+| `gz_netcdf_files` | integer | Source objects ending in `.netcdf.gz` |
+| `source_valid_pixels` | integer or blank | Valid native CONUS hail pixels read from source files; blank for skipped existing rasters |
+| `active_cells_0p05` | integer | Output 0.05° cells with MESH > 0 |
+| `max_mesh_mm` | float | Daily maximum MESH in millimeters |
+| `status` | string | `missing_source`, `no_hail_pixels`, `ok`, `ok_with_read_errors`, `no_hail_pixels_with_read_errors`, or `error` |
+| `skipped` | integer | `1` when the GeoTIFF already existed and was not rebuilt in this pass, else `0` |
+| `read_errors` | integer or blank | Count of source files that failed to read; blank for skipped existing rasters |
 
 ### `data/historical/mesh_0.05deg/gridrad_days.txt`
 

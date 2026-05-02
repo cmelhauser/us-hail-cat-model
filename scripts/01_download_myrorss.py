@@ -7,17 +7,18 @@ AWS S3 for the period April 1998 – December 2011.
 
 For each day:
   1. Lists all ~296 MESH timestep files (5-min cadence) from S3
-  2. Streams and decompresses each gzipped NetCDF
+  2. Streams each plain or gzipped NetCDF
   3. Parses sparse-grid data (pixel_x, pixel_y, MESH values in mm)
   4. Accumulates the daily maximum MESH per native 0.01° pixel
   5. Aggregates to 0.05° via block-maximum (5×5 cells)
   6. Saves a single-band float32 GeoTIFF (MESH in mm)
+  7. Records source/file/output status in a daily manifest
 
 This avoids storing ~1.5 million small files. One output file per day.
 
 Data Source
 -----------
-  AWS S3: s3://noaa-oar-myrorss-pds/YYYY/MM/DD/MESH/00.25/YYYYMMDD-HHMMSS.netcdf.gz
+  AWS S3: s3://noaa-oar-myrorss-pds/YYYY/MM/DD/MESH/00.25/YYYYMMDD-HHMMSS.netcdf[.gz]
   No AWS account required (public bucket, unsigned requests).
   Reference: Ortega et al. (2022), Bull. Amer. Meteor. Soc., 103, E732–E749.
 
@@ -36,6 +37,10 @@ Output
   Single-band float32 GeoTIFF. Value = daily max MESH in mm.
   NoData = 0.0 (no MESH signal). CRS = EPSG:4326. LZW compressed.
 
+  data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv
+  One row per day distinguishing missing source files from available source
+  files that produced no hail pixels.
+
 Usage
 -----
   python scripts/01_download_myrorss.py                  # full run (1998–2011)
@@ -51,6 +56,7 @@ Runtime
 """
 
 import argparse
+import csv
 import gzip
 import io
 import sys
@@ -64,6 +70,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_ROOT = REPO_ROOT / "data"
 OUT_DIR   = DATA_ROOT / "historical" / "mesh_0.05deg"
+MANIFEST_FILE = OUT_DIR / "manifest_stage01_myrorss.csv"
 LOG_DIR   = REPO_ROOT / "logs"
 LOG_FILE  = LOG_DIR / "01_download_myrorss.log"
 
@@ -104,6 +111,20 @@ END_DATE   = date(2011, 12, 31)  # MYRORSS ends December 2011
 MYRORSS_NODATA = -99900.0
 OUT_NODATA     = 0.0
 
+MANIFEST_FIELDS = [
+    "date",
+    "output_path",
+    "source_files",
+    "plain_netcdf_files",
+    "gz_netcdf_files",
+    "source_valid_pixels",
+    "active_cells_0p05",
+    "max_mesh_mm",
+    "status",
+    "skipped",
+    "read_errors",
+]
+
 
 def log(msg):
     line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
@@ -132,9 +153,24 @@ def list_mesh_keys(s3, day: date) -> list:
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".netcdf.gz"):
-                keys.append(obj["Key"])
-    return keys
+            key = obj["Key"]
+            if key.endswith(".netcdf") or key.endswith(".netcdf.gz"):
+                keys.append(key)
+    return sorted(keys)
+
+
+def summarize_key_formats(keys: list) -> tuple:
+    """Return counts of plain and gzipped NetCDF keys."""
+    gz_count = sum(1 for key in keys if key.endswith(".netcdf.gz"))
+    plain_count = sum(1 for key in keys if key.endswith(".netcdf"))
+    return plain_count, gz_count
+
+
+def decode_netcdf_object(key: str, payload: bytes) -> bytes:
+    """Return NetCDF bytes for either plain .netcdf or gzipped .netcdf.gz objects."""
+    if key.endswith(".gz"):
+        return gzip.decompress(payload)
+    return payload
 
 
 def parse_sparse_mesh(nc_bytes: bytes, daily_max: np.ndarray) -> int:
@@ -255,28 +291,116 @@ def write_geotiff(data: np.ndarray, out_path: Path):
         dst.write(data.astype(np.float32), 1)
 
 
+def summarize_output_raster(path: Path) -> tuple:
+    """Return active 0.05° cells and max MESH from an output GeoTIFF."""
+    import rasterio
+
+    with rasterio.open(path) as src:
+        data = src.read(1)
+    finite = np.isfinite(data)
+    if not np.any(finite):
+        return 0, 0.0
+    active_cells = int(np.count_nonzero(data[finite] > 0))
+    max_mesh = float(np.nanmax(data))
+    return active_cells, round(max_mesh, 1)
+
+
+def classify_day(source_files: int, active_cells: int, read_errors: int = 0) -> str:
+    """Classify source availability separately from hail/no-hail signal."""
+    if source_files == 0:
+        return "missing_source"
+    if read_errors >= source_files:
+        return "error"
+    if read_errors > 0:
+        return "ok_with_read_errors" if active_cells > 0 else "no_hail_pixels_with_read_errors"
+    if active_cells == 0:
+        return "no_hail_pixels"
+    return "ok"
+
+
+def manifest_row(day: date, out_path: Path, keys: list, source_pixels,
+                 active_cells: int, max_mesh_mm: float, status: str,
+                 skipped: bool = False, read_errors=0) -> dict:
+    """Build one Stage 01 manifest row."""
+    plain_count, gz_count = summarize_key_formats(keys)
+    return {
+        "date": day.isoformat(),
+        "output_path": str(out_path.relative_to(REPO_ROOT)),
+        "source_files": len(keys),
+        "plain_netcdf_files": plain_count,
+        "gz_netcdf_files": gz_count,
+        "source_valid_pixels": "" if source_pixels is None else source_pixels,
+        "active_cells_0p05": active_cells,
+        "max_mesh_mm": max_mesh_mm,
+        "status": status,
+        "skipped": int(skipped),
+        "read_errors": "" if read_errors is None else read_errors,
+    }
+
+
+def upsert_manifest_row(row: dict):
+    """Write or replace a manifest row by date."""
+    MANIFEST_FILE.parent.mkdir(parents=True, exist_ok=True)
+    rows = {}
+    if MANIFEST_FILE.exists():
+        with open(MANIFEST_FILE, newline="") as f:
+            for existing in csv.DictReader(f):
+                rows[existing["date"]] = existing
+    rows[row["date"]] = {field: row.get(field, "") for field in MANIFEST_FIELDS}
+
+    tmp_path = MANIFEST_FILE.with_suffix(".csv.tmp")
+    with open(tmp_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS)
+        writer.writeheader()
+        for key in sorted(rows):
+            writer.writerow(rows[key])
+    tmp_path.replace(MANIFEST_FILE)
+
+
 def process_day(s3, day: date, dry_run: bool = False) -> dict:
     """
     Download all MESH timesteps for one day, compute daily max,
     aggregate to 0.05°, and write GeoTIFF.
 
-    Returns dict with stats: {files, pixels, max_mesh_mm, skipped, error}.
+    Returns dict with stats: {files, pixels, active_cells, max_mesh_mm, skipped, error}.
     """
     out_path = OUT_DIR / f"{day.year}" / f"mesh_{day.strftime('%Y%m%d')}.tif"
-
-    if out_path.exists():
-        return {"skipped": True}
 
     keys = list_mesh_keys(s3, day)
 
     if dry_run:
         return {"files": len(keys), "dry_run": True}
 
+    if out_path.exists():
+        active_cells, max_mesh_mm = summarize_output_raster(out_path)
+        status = classify_day(len(keys), active_cells)
+        upsert_manifest_row(manifest_row(
+            day, out_path, keys, None, active_cells, max_mesh_mm,
+            status, skipped=True, read_errors=None,
+        ))
+        return {
+            "skipped": True,
+            "files": len(keys),
+            "active_cells": active_cells,
+            "max_mesh_mm": max_mesh_mm,
+            "status": status,
+        }
+
     if not keys:
         # No MESH data for this day — write an all-zero file
         data = np.zeros((OUT_NROWS, OUT_NCOLS), dtype=np.float32)
         write_geotiff(data, out_path)
-        return {"files": 0, "pixels": 0, "max_mesh_mm": 0.0}
+        status = classify_day(0, 0)
+        upsert_manifest_row(manifest_row(
+            day, out_path, keys, 0, 0, 0.0, status, read_errors=0,
+        ))
+        return {
+            "files": 0,
+            "pixels": 0,
+            "active_cells": 0,
+            "max_mesh_mm": 0.0,
+            "status": status,
+        }
 
     # Accumulate daily max at native resolution
     daily_max = np.zeros((CONUS_NROWS, CONUS_NCOLS), dtype=np.float32)
@@ -286,8 +410,8 @@ def process_day(s3, day: date, dry_run: bool = False) -> dict:
     for key in keys:
         try:
             resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
-            gz_data = resp["Body"].read()
-            nc_data = gzip.decompress(gz_data)
+            raw_data = resp["Body"].read()
+            nc_data = decode_netcdf_object(key, raw_data)
             n_pixels = parse_sparse_mesh(nc_data, daily_max)
             total_pixels += n_pixels
         except Exception as e:
@@ -304,11 +428,20 @@ def process_day(s3, day: date, dry_run: bool = False) -> dict:
     write_geotiff(out_data, out_path)
 
     peak = float(daily_max.max())
+    active_cells = int(np.count_nonzero(out_data > 0))
+    max_mesh_mm = round(peak, 1)
+    status = classify_day(len(keys), active_cells, errors)
+    upsert_manifest_row(manifest_row(
+        day, out_path, keys, total_pixels, active_cells, max_mesh_mm,
+        status, read_errors=errors,
+    ))
     return {
         "files":       len(keys),
         "pixels":      total_pixels,
-        "max_mesh_mm": round(peak, 1),
+        "active_cells": active_cells,
+        "max_mesh_mm": max_mesh_mm,
         "errors":      errors,
+        "status":      status,
     }
 
 

@@ -58,7 +58,9 @@ Optional ML artifacts may improve calibration or filtering, but the model must r
 
 ### 3.1 MYRORSS
 
-MYRORSS provides historical radar-derived MESH from April 1998 through December 2011. Stage 01 downloads sparse native MYRORSS files, accumulates daily maximum MESH at native resolution, subsets the CONUS domain, aggregates to 0.05°, and writes daily GeoTIFF files.
+MYRORSS provides historical radar-derived MESH from April 1998 through December 2011. Stage 01 downloads sparse native MYRORSS files, including both plain `.netcdf` and gzipped `.netcdf.gz` archive objects, accumulates daily maximum MESH at native resolution, subsets the CONUS domain, aggregates to 0.05°, and writes daily GeoTIFF files.
+
+Stage 01 also writes a source-coverage manifest. This is important because a daily GeoTIFF with all-zero values can represent two different conditions: no MYRORSS source files existed for that day, or source files existed but contained no valid hail pixels over CONUS. The manifest records this distinction using statuses such as `missing_source`, `no_hail_pixels`, and `ok`; downstream scientific QA should use the manifest rather than inferring source availability from raster values alone.
 
 ### 3.2 Operational MRMS
 

@@ -78,3 +78,6 @@ docs/figures/
   which retain the conventional inch notation, e.g. `p_occ_1p00in.tif`).
 - Return periods: 10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000 years.
 - NoData value: **−1.0** for float32 rasters, **−9999** for integer rasters.
+- Stage 01 uses `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`
+  to distinguish missing MYRORSS source days from available-source no-hail days;
+  all-zero GeoTIFFs alone are not sufficient for that distinction.

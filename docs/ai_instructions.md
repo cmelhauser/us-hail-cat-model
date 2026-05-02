@@ -24,6 +24,7 @@ When changing the project:
 8. Keep logs and outputs interpretable for technical review.
 9. Use a run manifest for full runs.
 10. Clearly distinguish hazard from loss.
+11. Use the Stage 01 MYRORSS manifest to distinguish missing source days from available-source no-hail days.
 
 ---
 
@@ -41,6 +42,7 @@ Do not:
 8. Replace deterministic logic with black-box-only logic.
 9. Change output file names without updating the data dictionary.
 10. Assume missing SPC reports mean radar false alarms.
+11. Infer MYRORSS source availability from GeoTIFF file size or all-zero raster values.
 
 ---
 
@@ -209,6 +211,10 @@ run executed. They are additive (no changes to existing scripts or outputs).
   NROWS/NCOLS/etc. — migration to import from `_config` is the next post-run task.
 - `scripts/_logging.py` — `get_logger(stage_name, log_dir)` helper to replace
   the 15 per-stage `log()` print functions. Migration instructions in docstring.
+- `scripts/01_download_myrorss.py` — reads both `.netcdf` and `.netcdf.gz`
+  MYRORSS archive objects and writes
+  `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` for source
+  coverage QA.
 
 ### Key outstanding items (see REVIEW_2026-05-01.md for full list)
 - `requirements.txt` header still says v2.0 / Python 3.9 — fix at next env rebuild
@@ -224,5 +230,5 @@ run executed. They are additive (no changes to existing scripts or outputs).
 ## 10. Compact Project Context
 
 ```text
-CONUS Hail Cat Model v2.1 is a radar-first hail hazard model on a 0.05° CONUS grid. It uses MYRORSS, GridRad, MRMS, ERA5, and SPC validation. It has a 15-stage pipeline. Stage 08 creates sparse event arrays. Stage 13 must remain sparse-safe. The model produces hazard, not loss. Vulnerability is placeholder. v2.1 adds fallback-safe calibration/filtering, event merge checks, threshold diagnostics, bounded topography, expanded tests, and complete documentation. On 2026-05-01 the first full pipeline run began. While it ran, project metadata (LICENSE, CHANGELOG, CITATION, pyproject.toml, Dockerfile, CI workflow, issue templates), docs (README index, uncertainty budget), and code helpers (_config.py, _logging.py) were added as new files without modifying any running scripts.
+CONUS Hail Cat Model v2.1 is a radar-first hail hazard model on a 0.05° CONUS grid. It uses MYRORSS, GridRad, MRMS, ERA5, and SPC validation. It has a 15-stage pipeline. Stage 01 reads both plain and gzipped MYRORSS NetCDF objects and writes a source manifest so missing-source days are distinct from no-hail days. Stage 08 creates sparse event arrays. Stage 13 must remain sparse-safe. The model produces hazard, not loss. Vulnerability is placeholder. v2.1 adds fallback-safe calibration/filtering, event merge checks, threshold diagnostics, bounded topography, expanded tests, and complete documentation. On 2026-05-01 the first full pipeline run began.
 ```
