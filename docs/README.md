@@ -21,6 +21,7 @@ Use the reading paths below to orient yourself quickly.
 7. [`benchmarks.md`](benchmarks.md) — published RP comparison framework; post-run validation targets
 8. [`vulnerability_derivation.md`](vulnerability_derivation.md) — MDR curve sources, limitations, calibration path
 9. [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) — draft PNAS-style article on AI-assisted model construction
+10. [`pnas_publication_readiness.md`](pnas_publication_readiness.md) — novelty assessment, evidence gaps, and submission-readiness checklist
 
 **Engineer / developer running the pipeline:**
 7. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands
@@ -52,6 +53,7 @@ Use the reading paths below to orient yourself quickly.
 | [`benchmarks.md`](benchmarks.md) | Scientific | Published RP comparison framework; post-run validation targets |
 | [`vulnerability_derivation.md`](vulnerability_derivation.md) | Scientific | MDR curve derivation, placeholder limitations, calibration roadmap |
 | [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) | Manuscript | Draft PNAS-style article on AI-assisted catastrophe model development |
+| [`pnas_publication_readiness.md`](pnas_publication_readiness.md) | Manuscript | PNAS novelty assessment, reviewer risks, evidence plan, go/no-go criteria |
 | [`technical_documentation.md`](technical_documentation.md) | Engineering | Per-stage implementation: inputs, outputs, algorithms, CLI |
 | [`data_dictionary.md`](data_dictionary.md) | Engineering | All output files: paths, schemas, units, nodata conventions |
 | [`reproduce.md`](reproduce.md) | Engineering | Step-by-step instructions to reproduce the model from scratch |

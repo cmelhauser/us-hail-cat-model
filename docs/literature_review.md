@@ -232,7 +232,71 @@ Stationarity is a pragmatic modeling assumption, not a claim that the hail clima
 
 ---
 
-## 11. References
+## 11. AI-Assisted Scientific Software and Research Agents
+
+The PNAS-style article attached to this repository makes a second claim beyond hail modeling: that human-directed frontier AI agents can accelerate the construction of transparent scientific infrastructure. That claim sits in a fast-moving literature on language models as scientific assistants, tool-using agents, multi-agent research systems, and autonomous experimenters.
+
+### Boiko et al. (2023)
+
+Boiko and coauthors introduced Coscientist, a GPT-4-driven system that used documentation search, code execution, and experimental automation to plan and execute chemistry workflows.
+
+**Model implication:** The relevant comparison is not casual chatbot use. The stronger precedent is tool-using AI embedded in a supervised scientific workflow.
+
+### Lu et al. (2024)
+
+The AI Scientist framework proposed an end-to-end autonomous scientific discovery loop including idea generation, code execution, experiment running, visualization, paper writing, and simulated review.
+
+**Model implication:** The hail project should position itself differently: not as autonomous discovery, but as human-directed scientific infrastructure construction with explicit provenance, tests, and review.
+
+### Swanson et al. (2025)
+
+The Virtual Lab study demonstrated a multi-agent AI-human collaboration for interdisciplinary biological research, including an LLM principal-investigator agent, specialized scientist agents, human feedback, and downstream experimental validation.
+
+**Model implication:** A publishable AI-process claim needs concrete artifacts and validation, not merely a statement that AI helped. The hail manuscript should include a table linking AI-assisted interventions to code changes, tests, documentation, and scientific risk reduction.
+
+### AI authorship and disclosure policy
+
+Journal policy and research-integrity discussions increasingly converge on three controls: AI use must be disclosed, AI systems should not be listed as authors, and human authors remain responsible for verification. PNAS-family instructions require disclosure of generative-AI use for manuscript preparation and emphasize data, code, and methods availability.
+
+**Model implication:** The PNAS article must include a detailed AI-use disclosure in Materials and Methods, verify exact model names before submission, and preserve enough development evidence for reviewers to evaluate the process.
+
+### Reproducible computational science
+
+The AI contribution is strongest when connected to reproducibility. A repository with durable stage outputs, manifests, tests, CI, logs, and versioned releases is more scientifically valuable than an informal transcript of AI use. Code and data availability guidance from PNAS-family journals and FORCE11-style software citation principles supports archiving the exact repository state used for the article.
+
+**Model implication:** Before submission, the code release should receive a DOI and the manuscript should cite both the software release and public input datasets.
+
+---
+
+## 12. Novelty Relative to Prior Literature
+
+### Hail science novelty
+
+The project is not novel merely because it uses MESH. The MESH algorithm, MYRORSS, MRMS climatologies, GridRad MESH climatology, and MESH correction literature are established. The scientific novelty is the integration of those ingredients into a transparent US catastrophe-hazard pipeline that produces daily corrected rasters, coverage manifests, sparse historical events, analytical return-period maps, and stochastic catalog diagnostics from public data.
+
+**Model implication:** The manuscript should claim integration, reproducibility, provenance, and hazard-model construction, not invention of the underlying radar hail estimator.
+
+### Catastrophe-model novelty
+
+Commercial catastrophe models routinely include stochastic event sets, vulnerability, exposure, and financial modules, but their internal data and algorithms are often proprietary. Academic hail work often focuses on climatology, radar retrieval, reports, environments, or claims subproblems rather than a full reproducible hazard pipeline.
+
+**Model implication:** The strongest contribution is a public, auditable hazard-side catastrophe model scaffold. The paper should clearly state that exposure, claims-calibrated vulnerability, and financial loss are outside v2.1 scope.
+
+### AI-process novelty
+
+The AI-agent literature demonstrates autonomous and semi-autonomous research systems, but many examples are benchmark-focused, narrow-domain laboratory systems, or demonstrations of agent capability. This repository documents AI assistance in a production-style scientific codebase: branch management, CI repair, warning cleanup, source-manifest design, data-format bug discovery, map QA, long-run monitoring, and manuscript preparation.
+
+**Model implication:** The manuscript can be novel if it reports the development process with enough specificity to be evaluated: what AI did, what humans decided, what tests passed, what defects were found, and where AI outputs were rejected or corrected.
+
+### PNAS readiness implication
+
+The project is plausible for PNAS only if the final manuscript connects the domain result to a broad scientific question. A narrow framing such as "we built a hail model with AI" is likely too incremental for a general journal. A stronger framing is: "human-directed frontier AI agents can help produce transparent, auditable scientific infrastructure for societally important hazards, demonstrated through a public radar-first US hail catastrophe model."
+
+The claim should remain conditional until the full pipeline finishes. Final maps must pass geographic sanity checks, source-transition diagnostics, validation against SPC reports, tail-stability review, stochastic-vs-analytical comparison, and uncertainty disclosure.
+
+---
+
+## 13. References
 
 Allen, J.T. and M.L. Tippett, 2015: The characteristics of United States hail reports: 1955–2014. *Electronic Journal of Severe Storms Meteorology*, 10(3), 1–31.
 
@@ -243,6 +307,8 @@ Andrews, M.S., et al., 2024: Climatology of the elevated mixed layer over the co
 Blair, S.F., et al., 2011: A radar-based assessment of the detectability of giant hail. *Electronic Journal of Severe Storms Meteorology*, 6(7), 1–30.
 
 Blair, S.F., et al., 2017: High-resolution hail observations: implications for NWS warning operations. *Weather and Forecasting*, 32, 1101–1119.
+
+Boiko, D.A., R. MacKnight, B. Kline, and G. Gomes, 2023: Autonomous chemical research with large language models. *Nature*, 624, 570–578.
 
 Brown, T.M., et al., 2015: Evaluating hail damage using property insurance claims data. *Weather, Climate, and Society*, 7(3), 197–210.
 
@@ -257,6 +323,8 @@ Gneiting, T., A.E. Raftery, A.H. Westveld III, and T. Goldman, 2005: Calibrated 
 Hosking, J.R.M. and J.R. Wallis, 1997: *Regional Frequency Analysis: An Approach Based on L-Moments.* Cambridge University Press.
 
 Li, F., D.R. Chavas, K.A. Reed, N. Rosenbloom, and D.T. Dawson, 2021: The role of elevated terrain and the Gulf of Mexico in the production of severe local storm environments over North America. *Journal of Climate*, 34, 7799–7819.
+
+Lu, C., C. Lu, R.T. Lange, J. Foerster, J. Clune, and D. Ha, 2024: The AI Scientist: Towards fully automated open-ended scientific discovery. *arXiv:2408.06292*.
 
 Miralles, O., A.C. Davison, and T. Schmid, 2023: Bayesian modeling of insurance claims for hail damage. *arXiv:2308.04926*.
 
@@ -273,6 +341,8 @@ Rasmussen, R.M. and A.J. Heymsfield, 1987: Melting and shedding of graupel and h
 Scarrott, C. and A. MacDonald, 2012: A review of extreme value threshold estimation and uncertainty quantification. *REVSTAT*, 10(1), 33–60.
 
 Smith, T.M., et al., 2016: Multi-Radar Multi-Sensor severe weather and aviation products: initial operating capabilities. *Bulletin of the American Meteorological Society*, 97, 1617–1630.
+
+Swanson, K., W. Wu, N.L. Bulaong, J.E. Pak, and coauthors, 2025: The Virtual Lab of AI agents designs new SARS-CoV-2 nanobodies. *Nature*, 646, 716–723.
 
 Wendt, N.A. and I.L. Jirak, 2021: An hourly climatology of operational MRMS MESH-diagnosed severe and significant hail with comparisons to Storm Data hail reports. *Weather and Forecasting*, 36, 645–659.
 
