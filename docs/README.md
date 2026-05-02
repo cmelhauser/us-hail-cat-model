@@ -27,7 +27,7 @@ Use the reading paths below to orient yourself quickly.
 7. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands
 8. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
 9. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
-10. [`REVIEW_PRE_RUN.md`](../REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
+10. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
 
 **AI agent or future developer:**
 11. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
@@ -58,7 +58,7 @@ Use the reading paths below to orient yourself quickly.
 | [`technical_documentation.md`](technical_documentation.md) | Engineering | Per-stage implementation: inputs, outputs, algorithms, CLI |
 | [`data_dictionary.md`](data_dictionary.md) | Engineering | All output files: paths, schemas, units, nodata conventions |
 | [`reproduce.md`](reproduce.md) | Engineering | Step-by-step instructions to reproduce the model from scratch |
-| [`REVIEW_PRE_RUN.md`](../REVIEW_PRE_RUN.md) | Audit | Checklist completed before each full pipeline execution |
+| [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) | Audit | Checklist completed before each full pipeline execution |
 | [`ai_instructions.md`](ai_instructions.md) | Governance | Operating constraints for AI-assisted development |
 | [`project_memory.md`](project_memory.md) | Governance | Current project state: what's done, known issues, next priorities |
 | [`migration_plan.md`](migration_plan.md) | Governance | Version roadmap and migration guidance |

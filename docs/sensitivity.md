@@ -1,7 +1,7 @@
 # Sensitivity Analysis Plan — CONUS Hail Catastrophe Model v2.1
 
 **Status:** Framework document — sweeps to be executed after first full run produces baseline outputs.
-**Related:** `docs/methodology.md`, `docs/uncertainty.md`, `REVIEW_2026-05-01.md §B.5`
+**Related:** `docs/methodology.md`, `docs/uncertainty.md`, `docs/REVIEW_2026-05-01.md §B.5`
 
 ---
 

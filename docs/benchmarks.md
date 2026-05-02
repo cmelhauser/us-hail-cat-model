@@ -2,7 +2,7 @@
 
 **CONUS Hail Catastrophe Model v2.1**
 **Status:** Framework document — comparisons to be executed after first full run produces RP maps.
-**Related:** `docs/methodology.md`, `docs/uncertainty.md`, `docs/sensitivity.md`, `REVIEW_2026-05-01.md §B.6`
+**Related:** `docs/methodology.md`, `docs/uncertainty.md`, `docs/sensitivity.md`, `docs/REVIEW_2026-05-01.md §B.6`
 
 ---
 

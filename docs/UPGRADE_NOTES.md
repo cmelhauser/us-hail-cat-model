@@ -78,7 +78,7 @@ python run_pipeline.py --dry-run
 pytest -q tests -m "not integration and not regression and not slow"
 ```
 
-4. For a deterministic full run, use the staged run plan in `RUN_NOTES.md` with
+4. For a deterministic full run, use the staged run plan in `docs/RUN_NOTES.md` with
    `--skip-ml`.
 5. For Stage 01, monitor both the log and manifest status counts.
 6. After each stage, validate outputs before starting the next expensive stage.

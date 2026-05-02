@@ -177,7 +177,7 @@ def test_damage_threshold_stage13_matches_config():
 # 5. MAX_CENTROID_KM_DAY discrepancy — tracked as xfail
 #
 # Stage 08 defines MAX_CENTROID_KM_DAY = 100.0 while _config.py has 150.0.
-# This is a known bug (see SKILL.md ⚠️, HANDOFF.md §Known Issues).
+# This is a known bug (see SKILL.md ⚠️, docs/HANDOFF.md §Known Issues).
 # The canonical value must be decided before the _config import refactor.
 # When the discrepancy is resolved, this test should be updated to a normal
 # (non-xfail) assertion.
@@ -188,7 +188,7 @@ def test_damage_threshold_stage13_matches_config():
     reason=(
         "KNOWN BUG: stage 08 MAX_CENTROID_KM_DAY=100.0 vs _config.py=150.0. "
         "Resolve canonical value before _config import refactor. "
-        "See SKILL.md ⚠️ Known Issues and HANDOFF.md."
+        "See SKILL.md ⚠️ Known Issues and docs/HANDOFF.md."
     ),
 )
 def test_max_centroid_km_day_stage08_matches_config():

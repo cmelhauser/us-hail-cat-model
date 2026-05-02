@@ -144,7 +144,7 @@ When changing code, update:
 - `docs/technical_documentation.md` for implementation behavior;
 - `docs/data_dictionary.md` for outputs and schemas;
 - `docs/reproduce.md` for run commands;
-- `REVIEW_PRE_RUN.md` if the change affects run readiness.
+- `docs/REVIEW_PRE_RUN.md` if the change affects run readiness.
 
 If a new output is added, it must appear in the data dictionary.
 

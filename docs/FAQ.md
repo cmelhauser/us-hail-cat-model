@@ -1,6 +1,6 @@
 # FAQ — CONUS Hail Catastrophe Model v2.1
 
-**Related:** `docs/methodology.md`, `docs/technical_documentation.md`, `docs/uncertainty.md`, `REVIEW_2026-05-01.md §B.7`
+**Related:** `docs/methodology.md`, `docs/technical_documentation.md`, `docs/uncertainty.md`, `docs/REVIEW_2026-05-01.md §B.7`
 
 ---
 
@@ -140,7 +140,7 @@ Stage 12 applies:
 ```
 factor = 1.0 + α × (elevation_km / freezing_level_km)
 ```
-with α = 0.25, clipped to [1.0, 1.25] when ERA5 freezing level is available, [1.0, 1.20] otherwise. The coefficient 0.25 is empirically motivated by Front Range hail climatology but does not have a direct literature citation in v2.1 — see `REVIEW_2026-05-01.md §E.8`. Sensitivity sweeps are defined in `docs/sensitivity.md §4`.
+with α = 0.25, clipped to [1.0, 1.25] when ERA5 freezing level is available, [1.0, 1.20] otherwise. The coefficient 0.25 is empirically motivated by Front Range hail climatology but does not have a direct literature citation in v2.1 — see `docs/REVIEW_2026-05-01.md §E.8`. Sensitivity sweeps are defined in `docs/sensitivity.md §4`.
 
 ---
 

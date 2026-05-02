@@ -150,7 +150,7 @@ Committed and merged to `main` at `e582d5d`.
 
 **Refactoring:**
 - `README.md` — full professional rewrite
-- `PRE_RUN_REVIEW.md` renamed → `REVIEW_PRE_RUN.md`; all cross-references updated
+- `PRE_RUN_REVIEW.md` renamed → `docs/REVIEW_PRE_RUN.md`; all cross-references updated
 
 ### 2026-05-01 — Stage 01 Manifest ✅
 
@@ -169,7 +169,7 @@ Complete grep scan of all 15 stage scripts confirming:
 - 28 test files exist; no `tests/integration/` directory
 - Missing docs: sensitivity.md, benchmarks.md, FAQ.md, vulnerability_derivation.md
 
-Updated: HANDOFF.md, SKILL.md, docs/project_memory.md, docs/ai_instructions.md
+Updated: docs/HANDOFF.md, SKILL.md, docs/project_memory.md, docs/ai_instructions.md
 
 ---
 

@@ -220,7 +220,7 @@ Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) 
 | `docs/uncertainty.md` | Six-category uncertainty budget |
 | `docs/executive_summary.md` | Non-technical overview |
 | `docs/explainer.md` | Plain-language model explanation |
-| `REVIEW_PRE_RUN.md` | Pre-execution audit checklist |
+| `docs/REVIEW_PRE_RUN.md` | Pre-execution audit checklist |
 | `CONTRIBUTING.md` | Development workflow and methodology-change policy |
 
 ---

@@ -102,8 +102,8 @@ Start with:
 - `docs/technical_documentation.md`
 - `docs/data_dictionary.md`
 - `docs/reproduce.md`
-- `RUN_NOTES.md`
-- `REVIEW_PRE_RUN.md`
+- `docs/RUN_NOTES.md`
+- `docs/REVIEW_PRE_RUN.md`
 
 Then review implementation stages under `scripts/` and tests under `tests/`.
 
@@ -131,7 +131,7 @@ Known non-blocking issue:
 
 The full model run is in progress. Stage 01 is producing MYRORSS daily TIFFs and
 updating the manifest. Later stages should run only after Stage 01 completion
-and validation, following `RUN_NOTES.md`.
+and validation, following `docs/RUN_NOTES.md`.
 
 The PR is therefore best understood as a repository, methodology, and pipeline
 readiness merge. Final hazard results, return-period figures, and manuscript

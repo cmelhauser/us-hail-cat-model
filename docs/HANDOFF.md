@@ -187,8 +187,8 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 | `docs/uncertainty.md` | Six-category uncertainty budget |
 | `docs/ai_instructions.md` | AI operating instructions |
 | `docs/project_memory.md` | Canonical project state (this file's parent) |
-| `REVIEW_PRE_RUN.md` | Pre-execution audit checklist |
-| `REVIEW_2026-05-01.md` | Comprehensive post-v2.1 review, action plan with ✅/⏳ status |
+| `docs/REVIEW_PRE_RUN.md` | Pre-execution audit checklist |
+| `docs/REVIEW_2026-05-01.md` | Comprehensive post-v2.1 review, action plan with ✅/⏳ status |
 
 ---
 

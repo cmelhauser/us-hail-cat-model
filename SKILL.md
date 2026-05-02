@@ -60,10 +60,10 @@ Violating any of these requires explicit user sign-off and a version bump.
 ```
 us-hail-cat-model/
 ├── SKILL.md                    ← you are here
-├── HANDOFF.md                  ← session handoff doc (read first in a new chat)
-├── REVIEW_PRE_RUN.md           ← pre-execution audit (read before any run)
-├── REVIEW_2026-05-01.md        ← comprehensive post-v2.1 review (frozen)
-├── RUN_NOTES.md                ← first-run context and commands
+├── docs/HANDOFF.md                  ← session handoff doc (read first in a new chat)
+├── docs/REVIEW_PRE_RUN.md           ← pre-execution audit (read before any run)
+├── docs/REVIEW_2026-05-01.md        ← comprehensive post-v2.1 review (frozen)
+├── docs/RUN_NOTES.md                ← first-run context and commands
 ├── CHANGELOG.md                ← version history
 ├── CITATION.cff                ← academic citation
 ├── CONTRIBUTING.md             ← dev workflow and PR standards
@@ -193,7 +193,7 @@ OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
 python run_pipeline.py --dry-run
 ```
 
-Then review `REVIEW_PRE_RUN.md` (the permanent audit artifact).
+Then review `docs/REVIEW_PRE_RUN.md` (the permanent audit artifact).
 
 ---
 
@@ -276,9 +276,9 @@ In priority order:
 | What uncertainties to disclose | `docs/uncertainty.md` |
 | What the AI agent rules are | `docs/ai_instructions.md` |
 | What the current project state is | `docs/project_memory.md` |
-| What the full review found | `REVIEW_2026-05-01.md` |
-| What was checked before running | `REVIEW_PRE_RUN.md` |
-| Session handoff | `HANDOFF.md` |
+| What the full review found | `docs/REVIEW_2026-05-01.md` |
+| What was checked before running | `docs/REVIEW_PRE_RUN.md` |
+| Session handoff | `docs/HANDOFF.md` |
 | How to contribute | `CONTRIBUTING.md` |
 | Version history | `CHANGELOG.md` |
 
