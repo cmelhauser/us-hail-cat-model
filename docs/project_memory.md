@@ -38,6 +38,13 @@ The v2.1 project now includes:
 
 The critical code and methodology emphasis is that sparse event storage must remain authoritative, especially for Stage 13.
 
+Stage 01 also now preserves MYRORSS source provenance. It reads both plain
+`.netcdf` and gzipped `.netcdf.gz` MYRORSS archive objects and writes
+`data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`. The manifest is
+the authoritative distinction between missing source days and days where source
+files existed but produced no hail pixels; all-zero GeoTIFFs alone do not carry
+that distinction.
+
 ---
 
 ## 3. Core Design Principles
@@ -67,6 +74,12 @@ Analytical return-period maps and stochastic return-period maps should be compar
 ### Documentation and tests are part of the model
 
 Any future methodology change must update tests and documentation.
+
+### Source coverage is explicit
+
+Do not infer MYRORSS source availability from GeoTIFF values or file size. Use
+the Stage 01 manifest statuses (`missing_source`, `no_hail_pixels`, `ok`, and
+read-error variants).
 
 ---
 
@@ -104,6 +117,7 @@ Generates the stochastic catalog. It must remain sparse-safe and must not recons
 - Topographic correction using elevation relative to freezing level when available.
 - Expanded validation and testing.
 - Documentation synchronized to implementation.
+- Stage 01 source manifest and plain/gz NetCDF archive handling.
 
 ---
 

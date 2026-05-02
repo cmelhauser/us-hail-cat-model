@@ -159,9 +159,12 @@ The following are tracked but not blockers for v2.1:
 
 ### Stage 01
 
-- Confirm MYRORSS file count.
+- Confirm MYRORSS file count, including both `.netcdf` and `.netcdf.gz` source objects.
 - Check output shape and CRS.
 - Watch for partial files incorrectly skipped as complete.
+- Review `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` so
+  `missing_source` days are not confused with available-source `no_hail_pixels`
+  days.
 
 ### Stage 02
 

@@ -25,18 +25,33 @@ Any change to these constants is a model-version change and requires regeneratio
 ## 2. Stage 01 — MYRORSS Download and Raster Build
 
 **Script:** `scripts/01_download_myrorss.py`  
-**Input:** MYRORSS sparse NetCDF files on public AWS S3.  
-**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif`
+**Input:** MYRORSS sparse NetCDF files on public AWS S3 (`.netcdf` and `.netcdf.gz`).<br>
+**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif`<br>
+**Manifest:** `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`
 
 ### Technical behavior
 
 1. List all MYRORSS MESH files for each day.
-2. Download and decompress gzipped NetCDF files.
+2. Download plain NetCDF files directly and decompress gzipped NetCDF files.
 3. Parse sparse pixel arrays.
 4. Accumulate daily maximum MESH at native resolution.
 5. Subset to CONUS.
 6. Aggregate to 0.05° using block maximum.
 7. Write a single-band GeoTIFF.
+8. Write or update a per-day manifest row.
+
+The daily GeoTIFF value `0.0` means no MESH signal in that raster cell. It does
+not, by itself, distinguish a true no-hail day from a missing-source day. The
+manifest preserves that distinction with these statuses:
+
+| Status | Meaning |
+|---|---|
+| `missing_source` | No MYRORSS NetCDF objects were available for the day. |
+| `no_hail_pixels` | Source files existed, but no valid CONUS hail pixels were found. |
+| `ok` | Source files existed and produced at least one active 0.05° cell. |
+| `ok_with_read_errors` | Some source files failed to read, but active cells were produced. |
+| `no_hail_pixels_with_read_errors` | Some source files failed and no active cells were produced. |
+| `error` | All source files failed to read. |
 
 ### Validation
 
@@ -46,6 +61,7 @@ Any change to these constants is a model-version change and requires regeneratio
 - CRS is EPSG:4326.
 - Shape is 520 × 1180.
 - Values are finite and non-negative.
+- Manifest has one row per processed or skipped day and records source file counts.
 
 ---
 

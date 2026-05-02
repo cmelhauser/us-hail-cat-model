@@ -31,6 +31,7 @@ Version 2.1 is a **hardening release**, not a redesign. The 15-stage pipeline an
 The model produces:
 
 - Corrected daily MESH75 rasters (1998–present)
+- Stage 01 source-coverage manifest distinguishing missing source days from true no-hail days
 - A sparse historical event catalog
 - Regional extreme-value return-period maps (10–50,000 years)
 - A 50,000-year stochastic event catalog
@@ -62,21 +63,21 @@ Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correc
 
 | Stage | Script | Description |
 |------:|--------|-------------|
-| 01 | `01_ingest_myrorss.py` | MYRORSS MESH ingestion (1998–2011) |
-| 02 | `02_ingest_mrms.py` | MRMS MESH ingestion (2020–present) |
-| 03 | `03_ingest_spc.py` | SPC storm reports — validation only |
-| 04a | `04a_download_era5.py` | ERA5 isotherm download |
-| 04b | `04b_ingest_gridrad.py` | GridRad-Severe ingestion (2012–2019) |
-| 05 | `05_calibrate_sources.py` | Cross-source bias correction and filtering |
-| 06 | `06_validate_spc.py` | SPC validation and detection-rate diagnostics |
-| 07 | `07_compute_climatology.py` | Long-term hail frequency climatology |
+| 01 | `01_download_myrorss.py` | MYRORSS MESH ingestion (1998–2011) |
+| 02 | `02_download_mrms_mesh.py` | MRMS MESH ingestion (2020–present) |
+| 03 | `03_download_spc.py` | SPC storm reports — validation only |
+| 04a | `04a_download_era5_isotherms.py` | ERA5 isotherm download |
+| 04b | `04b_fill_gridrad_gap.py` | GridRad-Severe ingestion (2012–2019) |
+| 05 | `05_apply_mesh_bias_correction.py` | Cross-source bias correction and filtering |
+| 06 | `06_validate_mesh_vs_spc.py` | SPC validation and detection-rate diagnostics |
+| 07 | `07_build_hail_climo.py` | Long-term hail frequency climatology |
 | 08 | `08_build_event_catalog.py` | Sparse historical event catalog |
 | 09 | `09_fit_cdf_regional.py` | Regional GPD EVT fitting via L-moments |
-| 10 | `10_smooth_cdf.py` | Spatial smoothing of tail parameters |
-| 11 | `11_compute_occurrence.py` | Exceedance probability rasters |
-| 12 | `12_apply_mask_topo.py` | CONUS mask and topographic correction |
+| 10 | `10_build_smooth_cdf.py` | Spatial smoothing of tail parameters |
+| 11 | `11_build_occurrence_probs.py` | Exceedance probability rasters |
+| 12 | `12_apply_conus_mask.py` | CONUS mask and topographic correction |
 | 13 | `13_generate_stochastic_catalog.py` | 50,000-year stochastic simulation |
-| 14 | `14_apply_vulnerability.py` | Placeholder vulnerability curves |
+| 14 | `14_build_vulnerability.py` | Placeholder vulnerability curves |
 | 15 | `15_render_figures.py` | Return-period maps and diagnostics |
 
 The pipeline is orchestrated by `run_pipeline.py`:
@@ -178,7 +179,9 @@ python run_pipeline.py --validate
 
 | Output | Location | Description |
 |--------|----------|-------------|
-| Corrected MESH rasters | `data/historical/corrected_mesh/` | Daily MESH75 grids |
+| Raw daily MESH rasters | `data/historical/mesh_0.05deg/` | Stage 01/02/04b daily GeoTIFFs before correction |
+| Stage 01 source manifest | `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` | Per-day MYRORSS source counts and `missing_source` / `no_hail_pixels` / `ok` status |
+| Corrected MESH rasters | `data/historical/mesh_0.05deg_corrected/` | Daily MESH75 grids |
 | Event catalog | `data/historical/events/` | Sparse `.npz` per event |
 | EVT parameters | `data/analysis/cdf/` | GPD ξ, σ, threshold per cell |
 | Return-period maps | `data/analysis/cdf/` | Analytical RP rasters |

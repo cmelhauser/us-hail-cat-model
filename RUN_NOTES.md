@@ -50,3 +50,9 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 - Generated rasters, logs, and rendered figures are intentionally ignored by git.
 - Stage 13 stochastic maps are CONUS-masked during output and Stage 15 also masks at render time.
 
+## Stage 01 Restart Note
+
+- Initial Stage 01 run was stopped on 2026-05-01 after discovering many early MYRORSS objects are stored as plain `.netcdf`, not `.netcdf.gz`.
+- Patched `scripts/01_download_myrorss.py` to ingest both formats and removed 597 generated zero rasters from 1998-04-24 through 1999-12-31 that had plain NetCDF source files.
+- A direct April 1998 canary rerun rebuilt three formerly zero days from 888 source files; full Stage 01 should be restarted with `.venv/bin/python run_pipeline.py --only 01`.
+- Added `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` so Stage 01 records source availability separately from output raster values. Status values distinguish `missing_source` from `no_hail_pixels` and `ok`.

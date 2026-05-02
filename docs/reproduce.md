@@ -82,6 +82,23 @@ python run_pipeline.py --only 14
 python run_pipeline.py --only 15
 ```
 
+After Stage 01, inspect the MYRORSS source manifest before continuing:
+
+```bash
+python - <<'PY'
+import csv
+from collections import Counter
+
+with open("data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv", newline="") as f:
+    counts = Counter(row["status"] for row in csv.DictReader(f))
+print(counts)
+PY
+```
+
+The manifest distinguishes `missing_source` days from `no_hail_pixels` days.
+Both can produce all-zero daily GeoTIFFs, so do not infer source availability
+from raster file size or raster values alone.
+
 Run from a stage:
 
 ```bash

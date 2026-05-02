@@ -33,6 +33,9 @@ run-readiness.
   1.0–1.25 with ERA5 FL; 1.0–1.20 fallback).
 - **Stage 13**: Fully sparse-safe stochastic simulation. No dense
   `(n_events, 520, 1180)` arrays anywhere in the catalog generation loop.
+- **Stage 01**: MYRORSS source-coverage manifest
+  (`manifest_stage01_myrorss.csv`) distinguishing missing source days from
+  available-source no-hail days.
 - Expanded pytest suite with stage-level unit tests for all 15 stages.
 - `docs/ai_instructions.md` — operating instructions for AI-assisted development.
 - `docs/project_memory.md` — canonical project state snapshot.
@@ -53,6 +56,8 @@ run-readiness.
 - **Stage 13**: Sparse event storage (`event_peaks.npz`) is now authoritative;
   dense event reconstruction is prohibited.
 - All documentation synchronized to v2.1.
+- **Stage 01**: MYRORSS ingestion accepts both plain `.netcdf` and gzipped
+  `.netcdf.gz` archive objects.
 
 ### Fixed
 

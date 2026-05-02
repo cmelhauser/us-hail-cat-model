@@ -40,6 +40,7 @@ Violating any of these requires explicit user sign-off and a version bump.
 | 6 | **Never commit data files.** `.tif`, `.npy`, `.npz`, `.nc`, `.grib2`, `.parquet`, `.pkl` are gitignored. |
 | 7 | **Update tests and docs** whenever methodology or output schemas change. |
 | 8 | **Grid constants come from `scripts/_config.py`.** Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` in stage scripts. *(Migration in progress — new scripts must import; existing scripts being refactored post-run.)* |
+| 9 | **Preserve source-coverage metadata.** Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv` for that distinction. |
 
 ---
 
@@ -140,6 +141,30 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --retrain-models  # retrain optional ML artifacts in Stage 05
 ```
 
+## Stage 01 Data Provenance
+
+Stage 01 reads MYRORSS MESH timesteps from public S3. Early archive days may be
+stored as plain `.netcdf`; later days are often `.netcdf.gz`. The downloader
+must accept both forms and write one daily GeoTIFF at
+`data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif`.
+
+Daily GeoTIFF rasters use `0.0` for no MESH signal, so the raster by itself does
+not say whether the day had no source files or had source files with no hail
+pixels. The authoritative distinction is the Stage 01 manifest:
+
+`data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`
+
+Manifest statuses:
+
+| Status | Meaning |
+|---|---|
+| `missing_source` | No MYRORSS NetCDF objects were available for that day. |
+| `no_hail_pixels` | Source files existed, but no valid CONUS hail pixels were found. |
+| `ok` | Source files existed and produced at least one active 0.05° cell. |
+| `ok_with_read_errors` | Some source files failed to read, but the day still produced active cells. |
+| `no_hail_pixels_with_read_errors` | Some source files failed and no active cells were produced. |
+| `error` | All source files failed to read. |
+
 ---
 
 ## Pre-Run Checklist
@@ -193,8 +218,9 @@ Then review `REVIEW_PRE_RUN.md` (the permanent audit artifact).
 | docs/uncertainty.md | ✅ Six-category uncertainty budget |
 | scripts/_config.py | ✅ Written; stage scripts not yet migrated to import from it |
 | scripts/_logging.py | ✅ Written; stage scripts not yet migrated away from print-log |
+| Stage 01 source manifest | ✅ Implemented in `manifest_stage01_myrorss.csv` |
 | Bootstrap CIs on RP maps | ⏳ Pending first-run outputs |
-| Run manifest | ⏳ Not yet implemented in run_pipeline.py |
+| Pipeline run manifest | ⏳ Not yet implemented in `run_pipeline.py` |
 | Integration smoke test | ⏳ Not yet written |
 | Regression / golden tests | ⏳ Pending first-run outputs |
 | docs/sensitivity.md | ⏳ Planned |
