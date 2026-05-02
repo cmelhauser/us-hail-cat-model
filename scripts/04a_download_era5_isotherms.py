@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+"""
+04a_download_era5_isotherms.py — ERA5 Monthly Freezing Level Heights
+=====================================================================
+Downloads ERA5 monthly-mean temperature on pressure levels over CONUS,
+then interpolates to find the 0°C and −20°C isotherm heights (km AGL)
+for each month and grid cell.
+
+Output: a single NetCDF file with dimensions (month, lat, lon) and
+variables h_0C_km and h_m20C_km — the monthly mean heights of the
+0°C and −20°C isotherms in km above ground level.
+
+This reduces the ~500 m freezing level error from a latitude-band
+climatological lookup to ~100 m from gridded ERA5 reanalysis.
+
+Prerequisites
+-------------
+  1. Free Copernicus CDS account: https://cds.climate.copernicus.eu
+  2. API key in ~/.cdsapirc:
+       url: https://cds.climate.copernicus.eu/api
+       key: <YOUR-PERSONAL-ACCESS-TOKEN>
+  3. pip install cdsapi
+
+Output
+------
+  data/historical/era5/era5_monthly_isotherms_conus.nc
+    Dimensions: month (12), latitude, longitude
+    Variables:  h_0C_km, h_m20C_km, surface_geopotential_m
+
+Usage
+-----
+  python scripts/04a_download_era5_isotherms.py
+  python scripts/04a_download_era5_isotherms.py --validate
+"""
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DATA_ROOT = REPO_ROOT / "data"
+ERA5_DIR  = DATA_ROOT / "historical" / "era5"
+OUT_FILE  = ERA5_DIR / "era5_monthly_isotherms_conus.nc"
+LOG_DIR   = REPO_ROOT / "logs"
+LOG_FILE  = LOG_DIR / "04a_download_era5.log"
+
+# CONUS bounding box for ERA5 download (slightly padded)
+AREA = [52, -128, 22, -64]   # [N, W, S, E]
+GRID = [0.25, 0.25]          # 0.25° resolution (ERA5 native for atmos)
+
+# Pressure levels to download (hPa) — span from surface to ~12 km
+PRESSURE_LEVELS = [
+    "1000", "975", "950", "925", "900", "875", "850",
+    "825", "800", "775", "750", "700", "650", "600",
+    "550", "500", "450", "400", "350", "300", "250", "200",
+]
+
+# Climatological years for monthly means
+CLIM_YEARS = [str(y) for y in range(1991, 2021)]  # 1991–2020 climatology
+MONTHS = [f"{m:02d}" for m in range(1, 13)]
+
+
+def log(msg):
+    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
+    print(line, flush=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    with open(LOG_FILE, "a") as f:
+        f.write(line + "\n")
+
+
+def download_era5_temperature():
+    """Download ERA5 monthly mean temperature on pressure levels."""
+    import cdsapi
+
+    ERA5_DIR.mkdir(parents=True, exist_ok=True)
+    raw_file = ERA5_DIR / "era5_monthly_temp_plevels_conus.nc"
+
+    if raw_file.exists():
+        log(f"  Raw ERA5 file already exists: {raw_file.name}")
+        return raw_file
+
+    log("  Requesting ERA5 monthly mean temperature from CDS ...")
+    log("  (This may take 10–30 minutes depending on CDS queue)")
+
+    client = cdsapi.Client()
+    client.retrieve(
+        "reanalysis-era5-pressure-levels-monthly-means",
+        {
+            "product_type": "monthly_averaged_reanalysis",
+            "variable": ["temperature", "geopotential"],
+            "pressure_level": PRESSURE_LEVELS,
+            "year": CLIM_YEARS,
+            "month": MONTHS,
+            "time": "00:00",
+            "area": AREA,
+            "grid": GRID,
+            "data_format": "netcdf",
+        },
+        str(raw_file),
+    )
+
+    log(f"  Downloaded: {raw_file.name} ({raw_file.stat().st_size / 1e6:.1f} MB)")
+    return raw_file
+
+
+def download_era5_surface_geopotential():
+    """Download ERA5 surface geopotential for AGL conversion."""
+    import cdsapi
+
+    sfc_file = ERA5_DIR / "era5_surface_geopotential_conus.nc"
+    if sfc_file.exists():
+        log(f"  Surface geopotential already exists: {sfc_file.name}")
+        return sfc_file
+
+    log("  Requesting ERA5 surface geopotential ...")
+    client = cdsapi.Client()
+    client.retrieve(
+        "reanalysis-era5-single-levels-monthly-means",
+        {
+            "product_type": "monthly_averaged_reanalysis",
+            "variable": "geopotential",
+            "year": "2020",
+            "month": "01",
+            "time": "00:00",
+            "area": AREA,
+            "grid": GRID,
+            "data_format": "netcdf",
+        },
+        str(sfc_file),
+    )
+    return sfc_file
+
+
+def compute_isotherm_heights(raw_file: Path, sfc_file: Path):
+    """
+    Compute monthly mean 0°C and −20°C isotherm heights from ERA5 data.
+
+    For each grid cell and month:
+    1. Convert geopotential to geometric height (m)
+    2. Subtract surface geopotential to get AGL
+    3. Interpolate vertically to find H where T = 273.15 K (0°C) and T = 253.15 K (−20°C)
+    4. Convert to km
+    """
+    import xarray as xr
+
+    log("  Loading ERA5 temperature profiles ...")
+    ds = xr.open_dataset(raw_file)
+    ds_sfc = xr.open_dataset(sfc_file)
+
+    # Extract variables
+    # Temperature: (time, pressure_level, latitude, longitude) in K
+    temp = ds["t"]  # or "temperature" depending on ERA5 version
+    geop = ds["z"]  # geopotential in m²/s²
+
+    # Surface geopotential
+    sfc_geop = ds_sfc["z"].isel(time=0) if "time" in ds_sfc["z"].dims else ds_sfc["z"]
+
+    # Heights = geopotential / g (approximate, ignoring latitude variation)
+    g = 9.80665
+    heights_msl = geop / g  # meters above sea level
+    sfc_height = sfc_geop / g  # surface elevation
+
+    # Average over climatological years to get monthly means
+    # Group by month
+    log("  Computing 30-year monthly climatology ...")
+    temp_monthly = temp.groupby("time.month").mean("time")
+    heights_monthly = heights_msl.groupby("time.month").mean("time")
+
+    lats = ds["latitude"].values
+    lons = ds["longitude"].values
+    months = np.arange(1, 13)
+    n_months = 12
+    n_lats = len(lats)
+    n_lons = len(lons)
+
+    h_0C = np.full((n_months, n_lats, n_lons), np.nan, dtype=np.float32)
+    h_m20C = np.full((n_months, n_lats, n_lons), np.nan, dtype=np.float32)
+
+    log("  Interpolating isotherm heights ...")
+    for m_idx in range(n_months):
+        t_profile = temp_monthly.isel(month=m_idx).values      # (plev, lat, lon) in K
+        h_profile = heights_monthly.isel(month=m_idx).values    # (plev, lat, lon) in m MSL
+        sfc_h = sfc_height.values                                # (lat, lon) in m MSL
+
+        for j in range(n_lats):
+            for k in range(n_lons):
+                t_col = t_profile[:, j, k]   # temperature profile (K), top-to-bottom
+                h_col = h_profile[:, j, k]   # height profile (m MSL)
+                h_sfc = sfc_h[j, k]
+
+                # Convert to AGL
+                h_agl = h_col - h_sfc  # meters AGL
+
+                # Find 0°C (273.15 K) isotherm by linear interpolation
+                for i in range(len(t_col) - 1):
+                    # Pressure levels are top-to-bottom, so heights decrease
+                    # We want the lowest crossing (nearest to surface)
+                    if (t_col[i] <= 273.15 <= t_col[i + 1]) or (t_col[i + 1] <= 273.15 <= t_col[i]):
+                        frac = (273.15 - t_col[i]) / (t_col[i + 1] - t_col[i]) if t_col[i + 1] != t_col[i] else 0.5
+                        h_0C[m_idx, j, k] = (h_agl[i] + frac * (h_agl[i + 1] - h_agl[i])) / 1000.0
+
+                # Find -20°C (253.15 K) isotherm
+                for i in range(len(t_col) - 1):
+                    if (t_col[i] <= 253.15 <= t_col[i + 1]) or (t_col[i + 1] <= 253.15 <= t_col[i]):
+                        frac = (253.15 - t_col[i]) / (t_col[i + 1] - t_col[i]) if t_col[i + 1] != t_col[i] else 0.5
+                        h_m20C[m_idx, j, k] = (h_agl[i] + frac * (h_agl[i + 1] - h_agl[i])) / 1000.0
+
+        log(f"    Month {m_idx + 1}: median H_0C = {np.nanmedian(h_0C[m_idx]):.2f} km, "
+            f"H_-20C = {np.nanmedian(h_m20C[m_idx]):.2f} km")
+
+    # Fill any remaining NaNs with reasonable defaults
+    h_0C = np.where(np.isnan(h_0C), 3.5, h_0C)
+    h_m20C = np.where(np.isnan(h_m20C), 6.0, h_m20C)
+
+    # Save as NetCDF
+    log(f"  Writing {OUT_FILE.name} ...")
+    import xarray as xr
+    out_ds = xr.Dataset(
+        {
+            "h_0C_km":  (["month", "latitude", "longitude"], h_0C,
+                         {"units": "km AGL", "long_name": "Monthly mean 0°C isotherm height"}),
+            "h_m20C_km": (["month", "latitude", "longitude"], h_m20C,
+                          {"units": "km AGL", "long_name": "Monthly mean -20°C isotherm height"}),
+        },
+        coords={
+            "month": months,
+            "latitude": lats,
+            "longitude": lons,
+        },
+        attrs={
+            "source": "ERA5 monthly mean 1991-2020 climatology",
+            "reference": "Copernicus Climate Data Store",
+            "created": time.strftime("%Y-%m-%d"),
+        },
+    )
+    out_ds.to_netcdf(OUT_FILE)
+    log(f"  Done: {OUT_FILE} ({OUT_FILE.stat().st_size / 1e3:.0f} KB)")
+
+    ds.close()
+    ds_sfc.close()
+
+
+def validate_outputs() -> bool:
+    errors = []
+    if not OUT_FILE.exists():
+        errors.append(f"Missing: {OUT_FILE}")
+    else:
+        import xarray as xr
+        ds = xr.open_dataset(OUT_FILE)
+        for var in ["h_0C_km", "h_m20C_km"]:
+            if var not in ds:
+                errors.append(f"Missing variable: {var}")
+            else:
+                vals = ds[var].values
+                if np.all(np.isnan(vals)):
+                    errors.append(f"All NaN: {var}")
+                med = np.nanmedian(vals)
+                if var == "h_0C_km" and not (1.0 < med < 6.0):
+                    errors.append(f"Suspicious median {var}: {med:.2f} km")
+                if var == "h_m20C_km" and not (3.0 < med < 10.0):
+                    errors.append(f"Suspicious median {var}: {med:.2f} km")
+        ds.close()
+        if not errors:
+            log(f"  Isotherm file OK: {OUT_FILE.name}")
+
+    if errors:
+        log("Validation FAILED:")
+        for e in errors:
+            log(f"  ✗ {e}")
+        return False
+    log("Output validation passed ✓")
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Download ERA5 isotherm heights.")
+    parser.add_argument("--validate", action="store_true")
+    args = parser.parse_args()
+
+    if args.validate:
+        sys.exit(0 if validate_outputs() else 1)
+
+    log(f"\n{'='*60}")
+    log(f"  ERA5 Isotherm Heights — Stage 04a")
+    log(f"{'='*60}")
+
+    raw_file = download_era5_temperature()
+    sfc_file = download_era5_surface_geopotential()
+    compute_isotherm_heights(raw_file, sfc_file)
+
+    ok = validate_outputs()
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

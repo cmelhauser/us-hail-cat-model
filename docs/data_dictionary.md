@@ -1,238 +1,400 @@
-# Hail Catastrophe Model — Data Dictionary
+# Data Dictionary
 
-**Date:** 2026-03-16
+**CONUS Hail Catastrophe Model v2.1**
 
 ---
 
-## Raster Files — Common Properties
+## 1. General Conventions
 
-All GeoTIFF rasters share:
-- **CRS:** EPSG:4326 (WGS84 geographic)
-- **Nodata:** -9999.0 (float32 outputs) or none (uint16 outputs)
-- **Compression:** LZW
-
-### 0.25° Grid
-
-| Property | Value |
+| Convention | Value |
 |---|---|
-| Cols × Rows | 236 × 104 |
-| Cell size | 0.25° × 0.25° (~28 km at 37°N) |
-| Lon extent | −125.00 to −66.25 |
-| Lat extent | 24.00 to 50.00 |
-| Origin (upper-left) | (−125.00, 50.00) |
+| CRS | EPSG:4326 |
+| Grid | 520 rows × 1180 columns |
+| Resolution | 0.05° |
+| Raster dtype | float32 unless otherwise noted |
+| Hail units | millimeters unless filename or column explicitly says inches |
+| Hazard NoData | 0.0 |
+| Probability NoData | usually -1.0 outside domain or 0.0 when masked |
+| Compression | LZW tiled GeoTIFF |
+| Coordinate orientation | row 0 north, column 0 west |
 
 ---
 
-## Daily Storm Rasters
+## 2. Raw and Corrected Raster Data
 
-**Path:** `data/hail_0.25deg/YYYY/hail_YYYYMMDD.tif`
+### `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif`
 
-Only written for days with at least one SPC hail report. Missing dates = no hail.
+Raw daily maximum MESH raster before Stage 05 correction.
 
-| Band | Content | Unit | Notes |
-|---|---|---|---|
-| 1 | Hail report count, 0.00–0.24" | integer count | Pea-size or smaller |
-| 2 | Hail report count, 0.25–0.49" | integer count | |
-| 3 | Hail report count, 0.50–0.74" | integer count | |
-| 4 | Hail report count, 0.75–0.99" | integer count | Penny-size |
-| 5 | Hail report count, 1.00–1.24" | integer count | Quarter-size — damage threshold |
-| 6–8 | Hail report count, 1.25–1.99" | integer count | |
-| 9 | Hail report count, 2.00–2.24" | integer count | Golf ball |
-| 10–12 | Hail report count, 2.25–2.99" | integer count | |
-| 13 | Hail report count, 3.00–3.24" | integer count | Baseball |
-| 14–16 | Hail report count, 3.25–3.99" | integer count | |
-| 17 | Hail report count, 4.00–4.24" | integer count | Softball |
-| 18–29 | Hail report count, 4.25–7.24" | integer count | Grapefruit (Band 29 = 7.00–7.24") |
-
-**Band tag:** `size_range = 'LO-HI hundredths_of_inches'`
-**Dtype:** uint16
-**Value range:** 0 to ~5 (rarely more than 2 per cell per day at 0.25°)
-
----
-
----
-
-## Daily Climatology Files
-
-**Path:** `data/hail_0.25deg_climo/climo_MMDD.tif`
-
-366 files total (including Feb 29). Naming: `climo_0101.tif` through `climo_1231.tif`.
-
-| Band | Content | Unit |
-|---|---|---|
-| 1 | Summed hail count, 0.00–0.24" | integer count |
-| 2 | Summed hail count, 0.25–0.49" | integer count |
-| … | … | … |
-| 29 | Summed hail count, 7.00–7.24" | integer count |
-
-**Dtype:** uint16
-**Dataset tags:** `calendar_day`, `n_applicable_years`, `n_years_with_data`, `years_in_period`
-**Band tags:** `bin_lo_hundredths`, `bin_hi_hundredths`, `bin_mid_inches`, `description`
-
-**Leap day:** `climo_0229.tif` uses only leap years: 2004, 2008, 2012, 2016, 2020, 2024 (6 years).
-
----
-
-## Cat Model Files (`data/hail_0.25deg/`)
-
-### `char_hail_daily.nc`
-
-**Format:** NetCDF4 via xarray
-**Dimensions:** `time` (4720) × `lat` (104) × `lon` (236)
-**Variable:** `char_hail` — float32, units inches
-**Coordinate `time`:** Python datetime objects, storm days only (days with ≥1 SPC report)
-**Value:** 0.0 = no hail; positive = max hail size in inches (bin midpoint of highest active band)
-
-### `event_catalog.csv`
-
-| Column | Type | Description |
-|---|---|---|
-| `event_id` | int | Sequential event identifier (0-indexed) |
-| `start_date` | datetime | First day of event |
-| `end_date` | datetime | Last day of event |
-| `duration_days` | int | Number of days (1 = single-day event) |
-| `n_active_cells` | int | Cells with peak hail ≥ 1.0" |
-| `footprint_area_km2` | float | n_active_cells × (0.25 × 111)² km² |
-| `peak_hail_max_in` | float | Maximum hail size across all cells in event (inches) |
-| `peak_hail_mean_in` | float | Mean hail size across active cells (inches) |
-
-### `event_peak_array.npy`
-
-**Shape:** (2928, 104, 236)
-**Dtype:** float32
-**Units:** inches
-**Value:** Peak hail size at each cell for each event. 0.0 = no hail at that cell in that event.
-**Memory:** ~274 MB
-
-### Return Period Rasters (`rp_Tyr_hail.tif`)
-
-Available for T = 10, 25, 50, 100, 200, 250, 500 years.
-
-| Property | Value |
+| Attribute | Value |
 |---|---|
-| Band | 1 |
-| Dtype | float32 |
-| Unit | inches |
-| Nodata | -9999.0 |
-| Method | Zero-inflated lognormal + GPD tail, inverted via brentq |
+| Type | single-band GeoTIFF |
+| Shape | 520 × 1180 |
+| Units | mm |
+| Source | MYRORSS, GridRad-derived MESH75, or operational MRMS |
+| Meaning | daily maximum estimated hail size per grid cell |
+| Important caveat | `0.0` means no MESH signal in the raster cell; use the Stage 01 manifest to distinguish missing MYRORSS source days from available-source no-hail days |
 
-### `p_occurrence.tif`
+### `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`
 
-Annual probability of at least one hail event ≥ 1.0" at the cell.
-Range: 0.0 to 1.0. Nodata: -9999.0.
+Per-day Stage 01 source-coverage and output manifest. This file is generated
+alongside MYRORSS GeoTIFFs and is the authoritative way to distinguish source
+availability from no-hail raster values.
 
-### `bin_midpoints.json`
+| Column | Type | Meaning |
+|---|---|---|
+| `date` | ISO date | MYRORSS day, `YYYY-MM-DD` |
+| `output_path` | string | Relative path to the daily GeoTIFF |
+| `source_files` | integer | Total MYRORSS NetCDF objects found for the day |
+| `plain_netcdf_files` | integer | Source objects ending in `.netcdf` |
+| `gz_netcdf_files` | integer | Source objects ending in `.netcdf.gz` |
+| `source_valid_pixels` | integer or blank | Valid native CONUS hail pixels read from source files; blank for skipped existing rasters |
+| `active_cells_0p05` | integer | Output 0.05° cells with MESH > 0 |
+| `max_mesh_mm` | float | Daily maximum MESH in millimeters |
+| `status` | string | `missing_source`, `no_hail_pixels`, `ok`, `ok_with_read_errors`, `no_hail_pixels_with_read_errors`, or `error` |
+| `skipped` | integer | `1` when the GeoTIFF already existed and was not rebuilt in this pass, else `0` |
+| `read_errors` | integer or blank | Count of source files that failed to read; blank for skipped existing rasters |
 
-Audit trail for bin definitions:
+### `data/historical/mesh_0.05deg/gridrad_days.txt`
 
-```json
-{
-  "source": "data/hail_0.25deg/2004/hail_20040301.tif",
-  "n_bands": 29,
-  "band_descriptions": [null, null, ...],
-  "bin_midpoints_in": [0.12, 0.37, 0.62, ...],
-  "note": "Bin N (1-indexed): lo=(N-1)*25, hi=lo+24 hundredths of inches"
-}
+List of dates whose daily raster was generated from GridRad or GridRad-Severe.
+
+| Attribute | Value |
+|---|---|
+| Type | plain text |
+| Format | one `YYYYMMDD` date per line |
+| Used by | Stage 05 source-specific calibration |
+
+### `data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif`
+
+Bias-corrected and filtered MESH75 raster.
+
+| Attribute | Value |
+|---|---|
+| Created by | Stage 05 |
+| Units | mm MESH75 |
+| Meaning | homogenized daily hail-size estimate |
+| v2.1 behavior | may include optional conditional calibration and probability-weighted filtering |
+
+---
+
+## 3. Climatology Outputs
+
+### `data/historical/mesh_0.05deg_climo/climo_DOY.tif`
+
+Daily climatology raster for each day of year.
+
+| Attribute | Value |
+|---|---|
+| Files | `climo_001.tif` through `climo_366.tif` |
+| Units | mm |
+| Zeros included | yes |
+| Purpose | seasonal diagnostics and stochastic seasonal weighting |
+
+### `annual_mean_mesh75.tif`
+
+Annual mean corrected MESH75 activity summary.
+
+### `annual_hail_days.tif`
+
+Mean annual number of hail-active days per grid cell.
+
+---
+
+## 4. Event Outputs
+
+### `data/historical/events/event_catalog.csv`
+
+Historical hail event catalog.
+
+| Column | Description |
+|---|---|
+| `event_id` | integer event identifier |
+| `start_date` | first event date |
+| `end_date` | last event date |
+| `duration_days` | event duration |
+| `n_active_cells` | number of cells ≥ 25.4 mm |
+| `footprint_area_km2` | approximate event footprint area |
+| `peak_hail_mm` | maximum event hail size |
+| `peak_hail_in` | maximum hail size in inches |
+| `mean_hail_mm` | mean hail size over active cells |
+| `centroid_lat` | intensity-weighted centroid latitude |
+| `centroid_lon` | intensity-weighted centroid longitude |
+| `doy` | start-date day of year |
+| `centroid_speed_km_day` | optional v2.1 merge diagnostic |
+| `max_intensity_jump_ratio` | optional v2.1 merge diagnostic |
+| `merge_quality_flag` | optional v2.1 quality flag |
+
+### `data/historical/events/event_peaks.npz`
+
+Sparse event peak arrays.
+
+| Array | Description |
+|---|---|
+| `rows_<event_id>` | row indices of active cells |
+| `cols_<event_id>` | column indices of active cells |
+| `vals_<event_id>` | peak hail values in mm |
+| `event_ids` | integer event IDs |
+| `n_events` | number of events |
+| `grid_shape` | `[520, 1180]` |
+
+Important: this sparse format is the authoritative event representation.
+
+---
+
+## 5. SPC Validation Outputs
+
+### `data/historical/validation/mesh_vs_spc_pairs.csv`
+
+Co-located SPC and corrected MESH75 pairs.
+
+Columns:
+
+```text
+date, lat, lon, spc_size_in, mesh75_mm, mesh75_in, grid_row, grid_col, hour
 ```
 
-### `lambda_km.json`
+### `calibration_report.csv`
 
-Spatial correlation parameters:
+Size-bin calibration statistics.
 
-```json
-{
-  "lambda_km": 200.0,
-  "method": "literature_informed_option_b",
-  "candidates_tested": [100.0, 150.0, 200.0],
-  "var_ratios_agg": {"100.0": 0.0494, "150.0": 0.0792, "200.0": 0.1194},
-  "var_ratios_fp":  {"100.0": 0.0485, "150.0": 0.0729, "200.0": 0.1065},
-  "best_fit_lambda_km": 200.0,
-  "chosen_lambda_km": 200.0,
-  "n_sim_years": 2000,
-  "n_corr_cells": 800
-}
+### `spatial_bias_1deg.csv`
+
+Mean and median MESH/SPC ratio by 1° cells.
+
+### `validation_summary.txt`
+
+Human-readable validation summary.
+
+### Recommended v2.1 additions
+
+```text
+source_bias_summary.csv
+top_event_validation.csv
 ```
 
-### `cholesky_L.npy`
+---
 
-Shape: (800, 800), dtype float64. Cholesky factor for the spatial correlation matrix at λ=200 km. **Retained for diagnostics only** — the stochastic catalog (step 14) and per-cell maps (step 15) use event-resampling, not copula simulation.
+## 6. ERA5 Outputs
 
-### `corr_cell_idx.npy`
+### `data/historical/era5/era5_monthly_isotherms_conus.nc`
 
-Shape: (800,)
-Dtype: int64
-Values: Flattened cell indices into the 104×236 grid (row-major order).
-To recover (row, col): `row = idx // 236`, `col = idx % 236`
+| Variable | Units | Description |
+|---|---|---|
+| `h_0C_km` | km AGL | monthly mean 0°C isotherm height |
+| `h_m20C_km` | km AGL | monthly mean −20°C isotherm height |
+
+Optional v2.1 predictors may include CAPE, RH, or shear proxies.
 
 ---
 
-## Build Scripts Reference
+## 7. Calibration Outputs
 
-| Script | Output | Runtime |
-|---|---|---|
-| `scripts/01_download_population.py` | `data/population/county_population.csv` | 2 min |
-| `scripts/02_build_population_trend.py` | `data/population/county_population_trend.csv` | 1 min |
-| `scripts/03_download_spc.py` | `data/spc/` | 5 min |
-| `scripts/04_build_storm_trends.py` | `data/storms/` | 2 min |
-| `scripts/05_build_spatial_beta.py` | `data/storms/county_beta_map.csv` | 1 min |
-| `scripts/06_build_hail_rasters.py` | `data/hail_0.05deg/` | 2 hrs |
-| `scripts/07_build_hail_debias.py` | `data/hail_0.05deg_pop_debias/` | 30 min |
-| `scripts/08_build_hail_agg.py` | `data/hail_0.25deg/` | 30 min |
-| `scripts/09_build_hail_climo.py` | `data/hail_0.25deg_climo/` | 5 min |
-| `scripts/10_hail_catmodel_pipeline.py` | Cat model outputs | 6 min |
-| `scripts/11_build_smooth_cdf.py` | Updated RP rasters | 10 min |
-| `scripts/12_build_occurrence_probs.py` | `data/hail_0.25deg/p_occ_*.tif` | 5 min |
-| `scripts/13_apply_conus_mask.py` | Masked rasters | 5 min |
-| `scripts/14_generate_stochastic_catalog.py` | `data/stochastic/` | 2.5 hrs |
-| `scripts/15_render_figures.py` | `docs/figures/{historical,stochastic,analysis}/` | ~15 min |
+### `data/analysis/calibration/gridrad_quantile_map.npz`
+
+Fallback GridRad quantile mapping.
+
+Arrays:
+
+```text
+percentiles
+gridrad_quantiles
+myrorss_quantiles
+correction_type
+n_gridrad
+n_myrorss
+```
+
+### `gridrad_cqm_model.pkl`
+
+Optional conditional calibration model.
+
+### `hail_filter_model.pkl`
+
+Optional probabilistic hail-realness model.
+
+### `calibration_diagnostics.csv`
+
+Recommended columns:
+
+```text
+source, period, percentile, raw_mm, corrected_mm, reference_mm, ratio, n_samples
+```
+
+### `hail_filter_diagnostics.csv`
+
+Recommended columns:
+
+```text
+model_type, feature_set, auc, brier_score, precision, recall, calibration_slope
+```
 
 ---
 
-## Stochastic Catalog (`data/stochastic/`)
+## 8. CDF Outputs
 
-### `pet_occurrence.csv`
+### `data/analysis/cdf/cdf_parameters.npz`
 
-Occurrence Probable Exceedance Table. Each row represents one return period step derived from 50,000 simulated annual maxima (worst single event per year by intensity).
+Arrays:
 
-| Column | Type | Unit | Description |
-|---|---|---|---|
-| `return_period_yr` | float | years | Return period (e.g., 2, 5, 10, 25, 50, 100, 200, 500, 1000, 10000) |
-| `max_hail_in` | float | inches | Peak hail size of the worst single event |
-| `n_cells` | int | count | Number of 0.25° cells with hail ≥ 1.0" in the worst single event |
+| Array | Description |
+|---|---|
+| `p_occ` | annual hail occurrence probability |
+| `lognorm_mu` | lognormal body μ |
+| `lognorm_sigma` | lognormal body σ |
+| `gpd_xi` | GPD shape parameter |
+| `gpd_sigma` | GPD scale parameter |
+| `gpd_threshold` | GPD threshold in mm |
+| `fit_type` | fit type code |
+| `region_map` | region assignment |
+| `region_xi` | pooled ξ by region |
+| `grid_shape` | `[520, 1180]` |
 
-### `pet_aggregate.csv`
+### `threshold_selection.csv`
 
-Aggregate Probable Exceedance Table. Annual aggregate geographic exposure across all events in a year.
+Recommended columns:
 
-| Column | Type | Unit | Description |
-|---|---|---|---|
-| `return_period_yr` | float | years | Return period |
-| `agg_n_cells` | int | count | Annual sum of cell-events (cells ≥ 1.0" across all events in year) |
-| `agg_events` | int | count | Total number of events in the year |
+```text
+region, candidate_threshold_mm, selected, n_exceedances, xi, sigma, mrl_score, stability_score, gof_score
+```
 
-### `stochastic_event_summary.csv` *(gitignored)*
+### `rp_XXXXXyr_hail.tif`
 
-One row per simulated event.
+Analytical return-period maps.
 
-| Column | Type | Unit | Description |
-|---|---|---|---|
-| `sim_year` | int | — | Simulated year (1 to 50,000) |
-| `template_event_id` | int | — | Historical event used as spatial template |
-| `doy` | int | — | Day of year the event occurs (1–366) |
-| `n_cells` | int | count | Cells with hail ≥ 1.0" (damage threshold) |
-| `max_hail_in` | float | inches | Maximum hail size across all cells in this event |
-| `footprint_km2` | float | km² | Footprint area (n_cells × 770 km²) |
+### `rp_XXXXXyr_hail_smooth.tif`
 
-### Annual Tracker Arrays (`ann_*.npy`)
+Spatially smoothed analytical maps.
 
-Three NumPy arrays, each shape (50000,) float32 — one value per simulated year.
+### `region_map.tif`
 
-| File | Description | Unit |
-|---|---|---|
-| `ann_occ_max_hail.npy` | Annual max hail intensity (worst single event) | inches |
-| `ann_occ_n_cells.npy` | Annual cell count of worst single event | count |
-| `ann_agg_n_cells.npy` | Annual aggregate cell-events (all events summed) | count |
+Regional assignment raster.
 
-### `active_flat_idx.npy`
+### `fitting_report.csv`
 
-Shape: (N_ACT,), dtype int64. Flat indices (row-major into 104×236) of cells with any hail activity in the historical record. Required input for `15_render_figures.py`.
+Regional CDF fitting summary.
+
+### `mrl_diagnostics/mrl_region_*.png`
+
+MRL plots by region.
+
+### `tail_stability_flags.tif`
+
+Recommended diagnostic values:
+
+```text
+0 = no flag
+1 = low exceedance count
+2 = unstable threshold
+3 = extreme xi
+4 = analytical/stochastic divergence
+```
+
+---
+
+## 9. Occurrence Outputs
+
+### `data/analysis/occurrence/p_occ_XpXXin.tif`
+
+Annual exceedance probability rasters for standard hail thresholds.
+
+Thresholds:
+
+```text
+0.25, 0.50, 1.00, 1.50, 2.00, 3.00, 4.00, 5.00 inches
+```
+
+---
+
+## 10. Mask and Topography Outputs
+
+### `data/analysis/conus_mask/conus_mask.tif`
+
+Binary CONUS land mask.
+
+### `data/analysis/topography/elevation_0.05deg.tif`
+
+DEM resampled to the model grid.
+
+### `data/analysis/topography/topo_correction.tif`
+
+Topographic correction factor.
+
+v2.1 preferred bounds:
+
+```text
+1.0 to 1.25
+```
+
+---
+
+## 11. Vulnerability Outputs
+
+### `data/analysis/vulnerability/mdr_curves.csv`
+
+Columns:
+
+```text
+hail_mm, hail_in, 3tab_asphalt_aged, architectural_shingle, class4_ir, metal_standing_seam, masonry_bur
+```
+
+### `mdr_parameters.npz`
+
+Arrays:
+
+```text
+class_names
+mu_v
+sigma_v
+hail_sizes_mm
+```
+
+These are placeholders and not production loss curves.
+
+---
+
+## 12. Stochastic Outputs
+
+### `data/stochastic/catalog/stochastic_event_summary.parquet`
+
+Columns:
+
+```text
+sim_year, event_idx, template_id, doy, scale_factor, peak_hail_mm, n_cells
+```
+
+Recommended v2.1 additions:
+
+```text
+drow, dcol, perturbation_type, template_peak_percentile
+```
+
+### `data/stochastic/maps/rp_XXXXXyr_stochastic.tif`
+
+Empirical return-period maps from the stochastic catalog.
+
+### `data/stochastic/pet/pet_occurrence.csv`
+
+Occurrence exceedance probability table.
+
+### `data/stochastic/pet/pet_aggregate.csv`
+
+Aggregate exceedance probability table.
+
+### `data/stochastic/diagnostics/analytical_stochastic_delta_XXXXXyr.tif`
+
+Recommended delta map:
+
+```text
+RP_stochastic − RP_analytical
+```
+
+---
+
+## 13. Figure Outputs
+
+| Directory | Contents |
+|---|---|
+| `docs/figures/historical/` | analytical maps, climatology, event summaries |
+| `docs/figures/stochastic/` | stochastic maps and EP curves |
+| `docs/figures/analysis/` | validation, tail diagnostics, analytical-vs-stochastic comparisons |

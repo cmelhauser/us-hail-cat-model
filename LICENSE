@@ -1,0 +1,49 @@
+MIT License
+
+Copyright (c) 2024–2026 Christopher Melhauser
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Data Licenses
+
+This model is built on publicly available data from several sources. Users of
+this model's outputs should be aware of the following:
+
+**NOAA MRMS / MYRORSS data** — Public domain (U.S. Government works). Citation
+requested: Lakshmanan et al. (2007), Cintineo et al. (2012), Smith et al.
+(2016).
+
+**NCAR Research Data Archive (GridRad / GridRad-Severe)** — Subject to NCAR RDA
+terms of service. Non-commercial research use is generally permitted; commercial
+use requires a separate agreement. See https://rda.ucar.edu/datasets/ds841.6/
+
+**ERA5 reanalysis (Copernicus Climate Data Store)** — Licensed under the
+Copernicus licence. Free for any purpose (including commercial) with attribution.
+See https://cds.climate.copernicus.eu/disclaimer-privacy
+
+**NOAA Storm Prediction Center (SPC) severe weather reports** — Public domain
+(U.S. Government works). Used for validation only; not a model input. See
+https://www.spc.noaa.gov/climo/reports/
+
+The MIT licence above covers only the code and documentation in this
+repository. Data files and model outputs derived from third-party sources may
+carry additional restrictions; users are responsible for ensuring compliance
+with the relevant data licences.

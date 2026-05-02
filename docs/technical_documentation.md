@@ -1,391 +1,765 @@
-# Hail Catastrophe Model — Technical Documentation
+# Technical Documentation
 
-**Date:** 2026-03-16
-**Author:** theonlymuffinbot
-**Python environment:** `/Users/ai/.openclaw/workspace/btc-env/`
+**CONUS Hail Catastrophe Model v2.1**
 
 ---
 
-## Table of Contents
+## 1. Purpose
 
-1. [Data Sources](#1-data-sources)
-2. [Repository Structure](#2-repository-structure)
-3. [Build Pipeline — Raster Construction](#3-build-pipeline--raster-construction)
-4. [CDF and Return Period Layer](#4-cdf-and-return-period-layer)
-5. [Daily Climatology](#5-daily-climatology)
-6. [Catastrophe Model Pipeline](#6-catastrophe-model-pipeline)
-7. [Spatial Correlation](#7-spatial-correlation)
-8. [Output File Reference](#8-output-file-reference)
-8b. [Stochastic Catalog Outputs](#8b-stochastic-catalog-outputs-datastochastic)
-9. [Key Parameters](#9-key-parameters)
-10. [Known Issues and Flags](#10-known-issues-and-flags)
+This document describes the implementation contract for the v2.1 hail hazard pipeline. It complements `docs/methodology.md`: the methodology document explains the scientific rationale, while this document specifies stage behavior, inputs, outputs, invariants, validation checks, and failure modes.
+
+The pipeline is intentionally file-oriented. Each stage writes durable artifacts that can be inspected independently, rerun, validated, and excluded from git tracking. This design favors reproducibility and auditability over a monolithic in-memory workflow.
 
 ---
 
-## 1. Data Sources
+## 2. Global Grid Contract
 
-### NOAA SPC Hail Reports
-- **Source:** https://www.spc.noaa.gov/climo/reports/
-- **Coverage:** 2004-03-01 → 2026-03-11 (daily)
-- **Format:** CSV per day — `YYMMDD_rpts_hail.csv`
-- **Fields:** Time, County, State, Lat, Lon, Size (hundredths of inches), Comments
-- **Download script:** `scripts/03_download_spc.py`
-- **Local path:** `data/spc/YYYY/`
-- **Total files:** ~13,678 CSVs
+| Parameter | Value |
+|---|---:|
+| CRS | EPSG:4326 |
+| Resolution | 0.05 degree x 0.05 degree |
+| Rows | 520 |
+| Columns | 1180 |
+| Total cells | 613,600 |
+| Row orientation | north-to-south |
+| Column orientation | west-to-east |
+| Raster dtype | float32 unless otherwise stated |
+| Raster compression | LZW tiled GeoTIFF |
+| Standard units | millimeters for hail size |
 
-### Size Bin Encoding
-SPC reports raw hail sizes (in hundredths of inches) are binned into 29 bands:
+### 2.1 Invariants
 
-| Band (1-indexed) | Lo (hundredths) | Hi (hundredths) | Midpoint (inches) | Common name |
-|---|---|---|---|---|
-| 1 | 0 | 24 | 0.12 | Pea |
-| 4 | 75 | 99 | 0.87 | Penny |
-| 5 | 100 | 124 | 1.12 | Quarter |
-| 9 | 200 | 224 | 2.12 | Golf ball |
-| 13 | 300 | 324 | 3.12 | Baseball |
-| 17 | 400 | 424 | 4.12 | Softball |
-| 29 | 700 | 724 | 7.12 | Grapefruit |
+Every gridded hazard output must preserve:
 
-Formula: Band N (1-indexed), `lo = (N-1) × 25`, `hi = lo + 24`, `midpoint = (lo + 12) / 100` inches.
+- shape `(520, 1180)`;
+- EPSG:4326 coordinates;
+- north-to-south row orientation;
+- west-to-east column orientation;
+- finite non-negative hail values unless a stage explicitly uses a mask or nodata value;
+- stable filename conventions.
 
----
+Changing any grid constant is a model-version change and requires regeneration of downstream outputs.
 
-## 2. Repository Structure
+### 2.2 Hail aggregation rule
 
-```
-hail_model/
-├── scripts/
-│   ├── 01_download_population.py
-│   ├── 02_build_population_trend.py
-│   ├── 03_download_spc.py
-│   ├── 04_build_storm_trends.py
-│   ├── 05_build_spatial_beta.py
-│   ├── 06_build_hail_rasters.py
-│   ├── 07_build_hail_debias.py
-│   ├── 08_build_hail_agg.py
-│   ├── 09_build_hail_climo.py
-│   ├── 10_hail_catmodel_pipeline.py
-│   ├── 11_build_smooth_cdf.py
-│   ├── 12_build_occurrence_probs.py
-│   ├── 13_apply_conus_mask.py
-│   ├── 14_generate_stochastic_catalog.py
-│   └── 15_render_figures.py
-├── data/
-│   ├── hail_0.05deg/                 # Raw 0.05° rasters (one tif/day)
-│   │   └── YYYY/hail_YYYYMMDD.tif
-│   ├── hail_0.25deg/                 # Aggregated 0.25° rasters + model outputs
-│   │   └── YYYY/hail_YYYYMMDD.tif
-│   ├── hail_0.25deg_CDF/             # CDF layer (0.25°)
-│   ├── hail_0.25deg_climo/           # Daily climatology (0.25°)
-│   ├── stochastic/                   # Stochastic catalog outputs
-│   ├── population/                   # Census population CSVs
-│   └── storms/                       # County storm count CSVs
-└── docs/
-    ├── executive_summary.md
-    ├── technical_documentation.md
-    ├── data_dictionary.md
-    ├── methodology.md
-    ├── reproduce.md
-    ├── explainer.md
-    └── figures/
-        ├── historical/     ← SPC / observed-data maps (RP + p_occ)
-        ├── stochastic/     ← stochastic catalog maps (RP + p_occ)
-        └── analysis/       ← comparison charts, spatial correlation diagnostics
+Hail size is an extremal variable. Native-to-model-grid aggregation must use a maximum operator:
+
+```text
+out_cell = max(native_cells intersecting out_cell)
 ```
 
+Do not use area means, bilinear interpolation, or summation for MESH fields unless the purpose is a clearly labelled diagnostic.
+
 ---
 
-## 3. Build Pipeline — Raster Construction
+## 3. Stage 01 - MYRORSS Download and Raster Build
 
-### 3.1 Raw Rasters (0.05°)
+**Script:** `scripts/01_download_myrorss.py`  
+**Input:** MYRORSS sparse NetCDF files on public AWS S3 (`.netcdf` and `.netcdf.gz`)
+**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif`
+**Manifest:** `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`
 
-**Script:** `scripts/06_build_hail_rasters.py`
+### 3.1 Technical behavior
 
-For each SPC daily CSV, reports are binned onto a 0.05° grid:
-- Extent: lon [−125, −66], lat [24, 50]
-- Grid: 1180 cols × 520 rows
-- CRS: EPSG:4326
-- Dtype: uint16
-- Bands: 29 (one per size bin)
-- Value: count of reports in that bin for that cell on that day
-- Compression: LZW
-- Output: `data/hail_0.05deg/YYYY/hail_YYYYMMDD.tif` (only written for days with ≥1 report)
+1. Iterate MYRORSS dates from April 1998 through December 2011.
+2. List source objects for each day.
+3. Accept both plain NetCDF and gzipped NetCDF objects.
+4. Decode sparse pixel arrays into the native MYRORSS grid.
+5. Accumulate daily maximum MESH at native resolution.
+6. Subset to the CONUS model domain.
+7. Aggregate to 0.05 degree by block maximum.
+8. Write one daily GeoTIFF.
+9. Upsert a source manifest row.
 
-### 3.2 Aggregated Rasters (0.25°)
+### 3.2 Manifest semantics
 
-**Script:** `scripts/08_build_hail_agg.py`
+The manifest is the authoritative source-coverage record. A zero-valued daily GeoTIFF does not, by itself, reveal whether a day was meteorologically quiet or whether source data were absent.
 
-Aggregates 0.05° rasters by summing within each coarser cell. No interpolation — integer counts are preserved.
-
-| Resolution | Grid | Aggregation |
+| Status | Meaning | Downstream interpretation |
 |---|---|---|
-| 0.25° | 236 × 104 | 5×5 sum of 0.05° cells |
+| `missing_source` | No MYRORSS objects found for the day. | Treat as data availability gap. |
+| `no_hail_pixels` | Source objects existed but produced no valid CONUS hail pixels. | Treat as observed quiet day. |
+| `ok` | Source objects existed and produced active cells. | Normal observed day. |
+| `ok_with_read_errors` | Some files failed, but active cells were produced. | Use output, flag for QA. |
+| `no_hail_pixels_with_read_errors` | Some files failed and no active cells were produced. | Use cautiously; inspect if common. |
+| `error` | All source files failed to read. | Treat as failed day until diagnosed. |
 
----
+Manifest columns:
 
-## 4. CDF and Return Period Layer
-
-**Scripts:** `scripts/10_hail_catmodel_pipeline.py` (Steps 0–3) and `scripts/11_build_smooth_cdf.py`
-**Output dir:** `data/hail_0.25deg/`
-
-### Method
-
-For each 0.25° cell, the annual maximum hail series is built from `event_peak_array.npy` (one value per year = maximum peak hail across all events in that year). A zero-inflated two-component model is fitted:
-
-- **Occurrence probability** `p_occ`: fraction of years with any hail
-- **Body (hail ≤ 2.0"):** Lognormal distribution, fitted via MLE
-- **Tail (hail > 2.0"):** Generalized Pareto Distribution, fitted via L-moments
-- **Return period inversion:** composite CDF inverted via `scipy.optimize.brentq`
-
-Step 11 (`11_build_smooth_cdf.py`) replaces cell-by-cell fits with spatially-pooled fits using a 150 km radius / 75 km Gaussian decay kernel, giving each cell 50–200 effective observations instead of 5–15.
-
-### Outputs (`data/hail_0.25deg/`)
-
-| File | Description |
-|---|---|
-| `rp_{10,25,50,100,200,250,500}yr_hail.tif` | Return period hail size (inches), float32, nodata=-9999 |
-| `p_occurrence.tif` | Annual P(hail ≥ 1.0") per cell |
-| `p_occ_{T}in.tif` | Annual P(hail ≥ T) for T in {0.25,0.50,1.00,1.50,2.00,3.00,4.00,5.00}" |
-| 6 | 100-year |
-
-Units: inches. Zero where insufficient data (< 10 hail days in pixel).
-
----
-
-## 5. Daily Climatology
-
-**Script:** `scripts/09_build_hail_climo.py`
-**Output dir:** `data/hail_0.25deg_climo/`
-
-### Method
-
-For each of 366 calendar days (MMDD from 0101 to 1231, including 0229):
-- Collect all storm-day files from applicable years (2004–2025; leap years only for 0229)
-- Sum the 29-band arrays across all matching files
-- Missing years for a given date contribute zeros (no hail = valid zero)
-
-### Output: `climo_MMDD.tif`
-
-- Bands: 29 (one per hail size bin)
-- Dtype: uint16
-- Value: summed report count across all applicable years for that calendar day
-- Tags: `n_applicable_years`, `n_years_with_data`, `calendar_day`
-
-**Example:** `climo_0601.tif` — June 1st climatology, summed across 22 years (2004–2025). On June 1st, hail occurred in 21 of 22 years.
-
----
-
-## 6. Catastrophe Model Pipeline
-
-**Script:** `scripts/10_hail_catmodel_pipeline.py`
-**Output dir:** `data/hail_0.25deg/` (flat files alongside year subfolders)
-
-### Step 0 — Data Discovery
-
-Traverses year subfolders, validates spatial consistency (sample of 100 files), parses bin midpoints from band tags (`size_range: '0-24 hundredths_of_inches'`), sets `BAND_METHOD = 'max_active_bin'` (bands are integer counts, not probabilities).
-
-### Step 1 — Characteristic Hail Size
-
-For each storm-day file, collapses 29 bands to a single intensity value per cell:
-
-```python
-# max_active_bin method:
-char_hail = max(bin_midpoint[k] for k in 1..29 if band_k > 0)
-# Returns 0.0 if no hail reported in cell
+```text
+date
+output_path
+source_files
+plain_netcdf_files
+gz_netcdf_files
+source_valid_pixels
+active_cells_0p05
+max_mesh_mm
+status
+skipped
+read_errors
 ```
 
-### Step 2 — Event Identification (Synoptic-System Grouping)
+### 3.3 Scientific notes
 
-**Damage threshold:** 1.0 inches (residential asphalt shingles)
+MYRORSS is a historical radar reanalysis. Its value is spatial and temporal continuity over the early radar era, but individual files can be sparse, missing, corrupt, or encoded differently across periods. The stage must therefore treat archive format variation as normal operational reality rather than exceptional behavior.
 
-**Grouping rule (two-condition test):**
-Two hail days are grouped into the same event if AND ONLY IF:
-1. Temporal gap ≤ 1 day (consecutive, or separated by one quiet day)
-2. Footprints spatially overlap within a **3-cell (83 km) buffer** using `scipy.ndimage.binary_dilation`
+### 3.4 Validation
 
-**Hard cap:** Maximum 5 days per event. Events longer than 5 days are split at the 5-day mark to prevent conflating separate synoptic systems.
-
-Days that fail either condition (temporal OR spatial) remain as individual events.
-
-**Rationale:** The 83 km buffer captures typical synoptic-system migration (30–60 km/day over a 1–2 day gap). The 5-day cap matches NOAA/SPC outbreak period definitions and AIR/RMS event conventions. Single-day events are the most common case.
-
-**Event catalog columns:** `event_id, start_date, end_date, duration_days, n_active_cells, footprint_area_km2, peak_hail_max_in, peak_hail_mean_in, centroid_lat, centroid_lon`
-
-**Results:** Updated after stage 10 re-run with new methodology.
-- Mean events per year: 127
-
-Output: `event_catalog.csv`, `event_peak_array.npy` (2928 × 104 × 236)
-
-### Step 3 — CDF Fitting
-
-**Annual maximum series:** For each of 23 years (2004–2026), maximum peak hail across all events in that year, per cell.
-
-**Zero-inflated model:** Cells with ≥5 non-zero annual observations receive a full parametric fit:
-
-```
-P(annual max ≤ h) = (1 − p_occ)           for h = 0
-                  = (1 − p_occ) + p_occ × F_sev(h)  for h > 0
-```
-
-where `p_occ` = fraction of years with any hail.
-
-**Severity distribution:**
-- Body: `F_sev(h) = Lognormal(shape, loc=0, scale)` fitted via MLE
-- Tail (h > 2.0"): Spliced with GPD fitted via L-moments (lmoments3):
-  `F_sev(h) = F_lognorm(u) + (1 − F_lognorm(u)) × F_GPD(h − u) × rate`
-  where u = 2.0" (tail threshold), rate = fraction of events exceeding u
-
-**Return period inversion:** `brentq` root finding on composite CDF.
-
-**Results:**
-- 7,155 cells fitted (of 24,544 total; rest outside hail belt or < 5 events)
-- Return period outputs: 10, 25, 50, 100, 200, 250, 500 years
-
-| Return Period | CONUS max | CONUS p90 |
-|---|---|---|
-| 10-year | 7.11" | 2.23" |
-| 25-year | 5.20" | 2.73" |
-| 50-year | 4.98" | 3.13" |
-| 100-year | 5.98" | 3.52" |
-| 200-year | 7.15" | 3.93" |
-| 250-year | 7.54" | 4.06" |
-| 500-year | 8.80" | 4.47" |
-
-*Note: 10-year max exceeds 25-year max due to sparse data in extreme tail cells; this is a known artifact of limited sample size at high return periods.*
-
-### Step 4 — See Section 7
+- Output directory exists.
+- TIFF count is plausible for the requested date span.
+- Manifest rows are continuous over processed dates.
+- CRS is EPSG:4326.
+- Shape is 520 x 1180.
+- Values are finite and non-negative.
+- `missing_source` and `no_hail_pixels` are distinguished by manifest status.
+- Random sample rasters open with rasterio.
 
 ---
 
-## 7. Spatial Correlation
+## 4. Stage 02 - MRMS Download and Raster Build
 
-### 7.1 Problem Statement
+**Script:** `scripts/02_download_mrms_mesh.py`  
+**Input:** MRMS MESH GRIB2 files on public AWS S3
+**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif`
 
-Hail intensities across nearby grid cells within the same event are correlated. Ignoring this correlation produces an exceedance probability (EP) curve that is too thin-tailed — it understates aggregate losses from large-footprint events.
+### 4.1 Technical behavior
 
-### 7.2 Correlation Model
+MRMS native products use conventions that differ from the final model grid. Stage 02 must:
 
-**Model:** Gaussian copula with exponential spatial decay kernel:
+1. list available MRMS MESH products;
+2. download or stream source GRIB2 files;
+3. extract the CONUS subset;
+4. convert longitude convention where needed;
+5. flip south-to-north native orientation into north-to-south model orientation;
+6. accumulate daily maxima;
+7. aggregate by block maximum;
+8. write model-grid GeoTIFFs.
 
-```
-ρ(d) = exp(−d / λ)
+### 4.2 Validation
+
+Same raster validation as Stage 01, with additional orientation sanity checks. A simple visual or statistical check should confirm that major hail maxima are over plausible U.S. regions rather than shifted over oceans, Mexico, or Canada by grid-orientation error.
+
+---
+
+## 5. Stage 03 - SPC Download
+
+**Script:** `scripts/03_download_spc.py`  
+**Input:** SPC daily hail report CSVs
+**Output:** `data/historical/spc/YYYY/YYMMDD_rpts_hail.csv`
+
+SPC reports are validation and calibration-support data. They are not the primary hazard field.
+
+### 5.1 Validation
+
+- CSV files exist for requested dates.
+- Files parse successfully.
+- Empty or missing report days are handled explicitly.
+- Report sizes, latitudes, longitudes, and timestamps pass range checks.
+
+---
+
+## 6. Stage 04a - ERA5 Isotherms
+
+**Script:** `scripts/04a_download_era5_isotherms.py`  
+**Output:** `data/historical/era5/era5_monthly_isotherms_conus.nc`
+
+### 6.1 Required variables
+
+```text
+h_0C_km
+h_m20C_km
 ```
 
-where d = inter-cell distance in km, λ = decorrelation length scale.
+### 6.2 Technical behavior
 
-**Implementation:** Cholesky decomposition of model correlation matrix → simulate correlated standard normals → map through cell-level CDFs via probability integral transform.
+Stage 04a prepares monthly thermodynamic context for GridRad SHI computation and optional filtering. The 0 C and -20 C levels define the vertical layer over which reflectivity contributes to SHI temperature weighting.
 
-### 7.3 Empirical Estimation Attempts
+### 6.3 Validation
 
-Three estimation strategies were attempted, all yielding λ ≈ 30–35 km:
-
-| Method | Data | λ result |
-|---|---|---|
-| Spearman (annual max) | (23 years × 800 cells) | 33.5 km |
-| Spearman (event-level, all events) | (2928 events × 800 cells) | 31.6 km |
-| Conditional Spearman (co-occurring events only) | 460 usable pairs | NaN (insufficient data) |
-
-**Root cause:** SPC hail swaths are 5–20 km wide; the 0.25° grid cell (~28 km) is comparable in scale. Neighboring cells routinely don't co-occur in the same event. The empirical λ reflects data sparsity, not atmospheric physics.
-
-### 7.4 Literature-Informed Choice
-
-Three candidates were tested via Monte Carlo (2,000-year simulation):
-
-| Metric | Historical | λ=100km | λ=150km | λ=200km |
-|---|---|---|---|---|
-| Annual agg variance | 19,019 | 939 | 1,506 | 2,271 |
-| Footprint variance | 5,502 | 267 | 401 | 586 |
-| Var ratio (agg) | 1.000 | 0.049 | 0.079 | **0.119** |
-
-**Chosen: λ = 200 km.** This is the best-fitting candidate and is consistent with published values for CONUS convective hail correlation (150–350 km range from radar-based studies).
-
-**Important caveat:** Even at 200 km, the simulated variance is only ~12% of historical. This gap reflects the inherent sparsity of SPC point reports relative to spatially continuous radar-based hazard fields. Future model versions should derive λ from NOAA MRMS MESH data.
-
-### 7.5 Outputs
-
-| File | Description |
-|---|---|
-| `cholesky_L.npy` | 800×800 Cholesky factor, λ=200km (retained for diagnostics) |
-| `corr_cell_idx.npy` | 800 cell indices (into flattened 104×236 grid) |
-| `lambda_km.json` | Fit metadata and variance ratios |
-| `docs/figures/analysis/corr_decay_curve.png` | Empirical correlation decay scatter with model overlay (step 15) |
-| `docs/figures/analysis/corr_event_examples.png` | Example historical event footprints (step 15) |
-
-**Note:** The stochastic catalog (step 14) and per-cell maps (step 15) use **event-resampling**, not Gaussian copula simulation. The Cholesky factor and spatial correlation analysis are retained as diagnostic outputs only.
+- NetCDF exists.
+- Required variables exist.
+- Dimensions align with expected spatial and temporal axes.
+- Median values are physically plausible.
+- NaN coverage is limited and fallback filling is logged.
 
 ---
 
-## 8. Output File Reference
+## 7. Stage 04b - GridRad Gap Fill
 
-### Cat Model Outputs (`data/hail_0.25deg/`)
+**Script:** `scripts/04b_fill_gridrad_gap.py`  
+**Input:** GridRad or GridRad-Severe NetCDF files plus ERA5 isotherms
+**Output:** daily MESH75 GeoTIFFs and `gridrad_days.txt`
 
-| File | Format | Size | Description |
-|---|---|---|---|
-| `event_catalog.csv` | CSV | ~200 KB | Historical events: dates, duration, footprint, peak hail, centroid_lat/lon |
-| `event_peak_array.npy` | NumPy | 274 MB | Peak hail per event (2928 × 104 × 236, float32) |
-| `p_occurrence.tif` | GeoTIFF | 33 KB | Annual hail occurrence probability per cell |
-| `rp_10yr_hail.tif` | GeoTIFF | 41 KB | 10-year return period hail size (inches) |
-| `rp_25yr_hail.tif` | GeoTIFF | 42 KB | 25-year return period hail size (inches) |
-| `rp_50yr_hail.tif` | GeoTIFF | 41 KB | 50-year return period hail size (inches) |
-| `rp_100yr_hail.tif` | GeoTIFF | 41 KB | 100-year return period hail size (inches) |
-| `rp_200yr_hail.tif` | GeoTIFF | 41 KB | 200-year return period hail size (inches) |
-| `rp_250yr_hail.tif` | GeoTIFF | 42 KB | 250-year return period hail size (inches) |
-| `rp_500yr_hail.tif` | GeoTIFF | 41 KB | 500-year return period hail size (inches) |
-| `bin_midpoints.json` | JSON | 1.2 KB | Bin definitions audit trail |
-| `lambda_km.json` | JSON | 513 B | Spatial correlation parameters and validation |
-| `cholesky_L.npy` | NumPy | 4.9 MB | Cholesky factor (800×800, λ=200km, diagnostics only) |
-| `corr_cell_idx.npy` | NumPy | 6.4 KB | 800 copula cell indices (used by step 15 for correlation diagnostics) |
+### 7.1 Technical behavior
 
-### Daily Climatology (`data/hail_0.25deg_climo/`)
+1. Locate GridRad-Severe where available; otherwise fall back to hourly GridRad.
+2. Load three-dimensional reflectivity profiles.
+3. Identify active columns above reflectivity threshold.
+4. Integrate Severe Hail Index above the freezing level and through the hail-growth layer.
+5. Convert SHI to MESH75:
 
-- **366 files** per resolution: `climo_MMDD.tif` (e.g., `climo_0601.tif`)
-- **29 bands** per file (one per size bin)
-- **Dtype:** uint16
-- **Value:** Summed report counts across all applicable years for that calendar day
+```text
+MESH75 = 15.096 * SHI^0.206
+```
 
----
+6. Accumulate daily maximum MESH75.
+7. Write daily GeoTIFFs on the common grid.
 
-## 8b. Stochastic Catalog Outputs (`data/stochastic/`)
+### 7.2 Scientific notes
 
-| File | Format | Size | Description |
-|---|---|---|---|
-| `pet_occurrence.csv` | CSV | ~2 MB | Occurrence PET: return_period_yr, max_hail_in, n_cells (worst single event per year) |
-| `pet_aggregate.csv` | CSV | ~2 MB | Aggregate PET: return_period_yr, agg_n_cells, agg_events (annual totals) |
-| `stochastic_event_summary.csv` | CSV | *(gitignored)* | One row per simulated event: sim_year, event_idx, template_event_id, doy, n_cells, max_hail_in, mean_hail_in, footprint_km2 |
-| `stochastic_cell_sample.csv` | CSV | *(gitignored)* | Cell-level data for validation sample years |
-| `ann_occ_max_hail.npy` | NumPy | 195 KB | Annual max hail intensity (worst event per year), shape (50000,) |
-| `ann_occ_n_cells.npy` | NumPy | 195 KB | Annual n_cells of worst event per year, shape (50000,) |
-| `ann_agg_n_cells.npy` | NumPy | 195 KB | Annual aggregate n_cells (all events summed), shape (50000,) |
+GridRad is a gap-fill source. It should not be assumed exchangeable with MYRORSS or MRMS before calibration. Differences in temporal sampling, reflectivity processing, and vertical structure can affect high-percentile hail estimates.
+
+### 7.3 Validation
+
+- GridRad day list exists.
+- Output rasters exist for available days.
+- Peak values fall within plausible hail-size bounds.
+- ERA5 fallback usage is logged.
+- Source-era distribution checks are available downstream.
 
 ---
 
-## 9. Key Parameters
+## 8. Stage 05 - Bias Correction and Environmental Filtering
 
-| Parameter | Value | Location | Notes |
-|---|---|---|---|
-| Damage threshold | 1.0 inches | Step 2, Step 4 | Residential asphalt shingles |
-| GPD tail threshold (GPD_THRESH_IN) | 2.0 inches | Step 3 | Fitted where ≥5 exceedances exist |
-| Spatial buffer (event grouping) | 3 cells (~83 km) | Step 2 | Synoptic-system migration buffer |
-| Max event duration | 5 days | Step 2 | Prevents conflating separate synoptic systems |
-| Min events for CDF fit | 5 non-zero years | Step 3 | Below this, cell gets no return period |
-| Decorrelation length λ (diagnostics) | 200 km | Step 10 | Literature-informed; stored in lambda_km.json |
-| Copula cells (diagnostics) | 800 (subsampled) | Step 10 | Used in step 15 for correlation figures |
-| Simulation length (N_SIM_YEARS) | 50,000 years | Step 14 | Stochastic catalog |
-| Step 15 simulation length | 50,000 years | Step 15 | Per-cell maps + figures (matches stage 14) |
-| Poisson rate λ | n_events / n_years | Steps 14, 15 | Derived from event_catalog.csv |
-| Intensity perturbation σ | 0.15 | Steps 14, 15 | Log-normal, applied per event |
-| Seasonal weight decay | 30 days | Steps 14, 15 | exp(−\|doy_diff\|/30) |
-| RNG seed | 42 | Steps 14, 15 | Reproducibility |
+**Script:** `scripts/05_apply_mesh_bias_correction.py`  
+**Input:** raw daily MESH rasters
+**Output:** corrected daily MESH75 rasters
+
+### 8.1 Required logic
+
+For MYRORSS and MRMS:
+
+```text
+apply corrected MESH75 recalibration
+```
+
+For GridRad:
+
+```text
+if conditional calibration artifact exists and --skip-ml is false:
+    apply conditional calibration
+else:
+    apply deterministic quantile mapping
+```
+
+For all sources:
+
+```text
+if hail-filter artifact exists and --skip-ml is false:
+    apply probabilistic filter
+else:
+    apply deterministic environmental filters
+```
+
+### 8.2 Optional artifacts
+
+```text
+data/analysis/calibration/gridrad_cqm_model.pkl
+data/analysis/calibration/hail_filter_model.pkl
+```
+
+### 8.3 Hard requirement
+
+Stage 05 must run successfully without optional artifacts. The `--skip-ml` flag must force deterministic behavior.
+
+### 8.4 Validation
+
+- Corrected rasters exist.
+- Output count is close to input count after expected date filters.
+- CRS and shape are unchanged.
+- Values remain finite, non-negative, and physically plausible.
+- Filtered-cell counts are plausible by month and region.
+- Calibration diagnostics are written.
+- Source-era distributions are reviewed for MYRORSS/GridRad/MRMS discontinuities.
 
 ---
 
-## 10. Known Issues and Flags
+## 9. Stage 06 - Validation Against SPC
 
-| Flag | Severity | Description |
-|---|---|---|
-| 10yr RP max > 25yr RP max | Low | Artifact of GPD extrapolation in data-sparse cells; not physically wrong |
-| Partial 2026 included | Low | 15 events through March 11; slightly dilutes annual max tail |
-| Empirical λ ≈ 30 km | Info | SPC report sparsity at 0.25° yields near-zero cross-cell correlation empirically; λ=200km from literature used for diagnostics only — stochastic catalog uses event-resampling, not copula |
-| Population debiasing applied | Info | Step 7 applies β=2.37 correction; urban/rural bias partially corrected |
-| 22-year record | Medium | GPD extrapolation to 500yr carries high uncertainty |
-| Event-resampling template library | Info | Stochastic catalog draws from 22-year historical event footprints. Novel geometries not in the 2004–2025 record cannot be generated directly. |
+**Script:** `scripts/06_validate_mesh_vs_spc.py`  
+**Output directory:** `data/historical/validation/`
+
+### 9.1 Required outputs
+
+```text
+mesh_vs_spc_pairs.csv
+calibration_report.csv
+spatial_bias_1deg.csv
+validation_summary.txt
+```
+
+### 9.2 Required figures
+
+```text
+docs/figures/analysis/mesh_vs_spc_scatter.png
+docs/figures/analysis/detection_by_size.png
+```
+
+### 9.3 Interpretation
+
+SPC validation is a consistency exercise, not a perfect error calculation. False-alarm and miss metrics should be labelled as proxies because either the radar field or the report record can be incomplete at a given time and location.
+
+### 9.4 Validation
+
+- Pairing logic uses documented spatial and temporal tolerances.
+- Report-size bins are stable.
+- Regional summaries identify source or terrain biases.
+- Figures are regenerated and visually inspected.
+
+---
+
+## 10. Stage 07 - Climatology
+
+**Script:** `scripts/07_build_hail_climo.py`  
+**Output:** `data/historical/mesh_0.05deg_climo/`
+
+### 10.1 Required outputs
+
+```text
+climo_001.tif ... climo_366.tif
+annual_mean_mesh75.tif
+annual_hail_days.tif
+```
+
+### 10.2 Technical behavior
+
+Stage 07 averages corrected daily MESH75 by day-of-year across available years. Zeros remain in the average because the output is expected daily hazard activity, not size conditional on hail occurrence.
+
+### 10.3 Validation
+
+- 366 climatology files exist.
+- Annual summaries exist.
+- Shapes and CRS match the grid contract.
+- Seasonal maxima occur in meteorologically plausible months.
+- Leap-day handling is explicit.
+
+---
+
+## 11. Stage 08 - Event Catalog
+
+**Script:** `scripts/08_build_event_catalog.py`  
+**Output:** `data/historical/events/`
+
+### 11.1 Required outputs
+
+```text
+event_catalog.csv
+event_peaks.npz
+```
+
+### 11.2 Event grouping constraints
+
+```text
+temporal gap <= 2 days
+buffered footprint overlap required
+duration <= 5 days
+centroid displacement <= configured limit
+peak intensity jump <= configured limit
+```
+
+### 11.3 Sparse storage requirement
+
+`event_peaks.npz` stores event arrays by event ID:
+
+```text
+rows_<event_id>
+cols_<event_id>
+vals_<event_id>
+```
+
+Dense event cubes are prohibited as production event storage. They are memory-inefficient and can make Stage 13 infeasible at full catalog length.
+
+### 11.4 Validation
+
+- CSV exists and has events.
+- NPZ exists and event IDs align with CSV.
+- Every event has matching row, column, and value lengths.
+- Duration cap is not violated.
+- Active-cell counts are positive for non-empty events.
+- Peak hail values are plausible.
+- Physical merge constraints are audited.
+
+---
+
+## 12. Stage 09 - Regional CDF Fitting
+
+**Script:** `scripts/09_fit_cdf_regional.py`  
+**Output:** `data/analysis/cdf/`
+
+### 12.1 Required outputs
+
+```text
+cdf_parameters.npz
+rp_XXXXXyr_hail.tif
+region_map.tif
+fitting_report.csv
+threshold_selection.csv
+mrl_diagnostics/
+```
+
+### 12.2 Statistical model
+
+At each grid cell, annual maxima are modeled as a zero-inflated positive distribution:
+
+```text
+p_occ = count(years with nonzero hail) / total_years
+positive distribution = lognormal body + GPD tail
+```
+
+The tail uses regional GPD shape pooling:
+
+```text
+cluster cells by climatology and geography
+pool exceedances within each region
+estimate regional xi
+estimate cell-specific scale where possible
+```
+
+### 12.3 Threshold diagnostics
+
+`threshold_selection.csv` should contain:
+
+```text
+region_id
+candidate_threshold_mm
+exceedance_count
+xi
+sigma
+mrl_score
+stability_score
+gof_score
+selected
+```
+
+Threshold selection is a model-risk control. Long return-period maps should not be interpreted without reviewing these diagnostics.
+
+### 12.4 Validation
+
+- Parameter arrays exist.
+- Return-period maps exist.
+- Values are finite and non-negative.
+- Return-period maps are monotonic by return period at almost all valid cells.
+- `xi` values are bounded and not dominated by fallback values.
+- Regions have adequate pooled exceedance counts.
+
+---
+
+## 13. Stage 10 - Spatially Pooled CDF
+
+**Script:** `scripts/10_build_smooth_cdf.py`  
+**Output:** smoothed return-period maps
+
+### 13.1 Technical behavior
+
+Stage 10 pools nearby annual maxima or fitted parameters within a configured radius and applies distance-decay weights. The goal is to reduce noisy cell-level artifacts while preserving broad hail corridors.
+
+### 13.2 Methodological caution
+
+Spatial smoothing is not a full spatial extremes model. It improves marginal maps but does not estimate extremal dependence. Aggregate risk and multi-cell joint exceedance behavior must be checked through event-based stochastic outputs.
+
+### 13.3 Validation
+
+- Smoothed return-period maps exist.
+- `p_occurrence_smooth.tif` exists.
+- Values remain plausible.
+- Smoothing does not introduce halos, edge artifacts, or shifted maxima.
+- Smoothed maps remain broadly consistent with unsmoothed maps and empirical occurrence products.
+
+---
+
+## 14. Stage 11 - Occurrence Probabilities
+
+**Script:** `scripts/11_build_occurrence_probs.py`
+
+### 14.1 Outputs
+
+```text
+p_occ_0p25in.tif
+p_occ_0p50in.tif
+p_occ_1p00in.tif
+p_occ_1p50in.tif
+p_occ_2p00in.tif
+p_occ_3p00in.tif
+p_occ_4p00in.tif
+p_occ_5p00in.tif
+```
+
+### 14.2 Validation
+
+- Values are in `[0, 1]`.
+- Higher thresholds have lower or equal probability than lower thresholds.
+- High-probability corridors are meteorologically plausible.
+- Maps are used to sanity-check fitted CDF return levels.
+
+---
+
+## 15. Stage 12 - CONUS Mask and Topographic Correction
+
+**Script:** `scripts/12_apply_conus_mask.py`
+
+### 15.1 Outputs
+
+```text
+data/analysis/conus_mask/conus_mask.tif
+data/analysis/topography/topo_correction.tif
+```
+
+### 15.2 v2.1 correction
+
+Preferred:
+
+```text
+factor = 1 + alpha * elevation_km / freezing_level_km
+factor = clip(factor, 1.0, 1.25)
+```
+
+Fallback:
+
+```text
+factor = 1 + 0.05 * elevation_km
+factor = clip(factor, 1.0, 1.20)
+```
+
+### 15.3 Validation
+
+- Mask exists.
+- Correction factor is within configured bounds.
+- Outside-CONUS cells are masked.
+- Correction does not introduce discontinuities along state or source boundaries.
+- Terrain correction is reviewed in mountainous regions.
+
+---
+
+## 16. Stage 13 - Stochastic Catalog
+
+**Script:** `scripts/13_generate_stochastic_catalog.py`
+
+### 16.1 Outputs
+
+```text
+data/stochastic/catalog/stochastic_event_summary.parquet
+data/stochastic/maps/rp_XXXXXyr_stochastic.tif
+data/stochastic/pet/pet_occurrence.csv
+data/stochastic/pet/pet_aggregate.csv
+```
+
+### 16.2 Critical implementation rule
+
+Do not reconstruct the event catalog as dense event rasters. The stochastic loop operates on:
+
+```text
+rows, cols, vals
+```
+
+### 16.3 Stochastic steps
+
+1. Draw annual event count from `Poisson(lambda)`.
+2. Draw event date from the smoothed seasonal distribution.
+3. Select historical template using seasonal weights.
+4. Calibrate global `sigma_perturb` as the median March-September monthly coefficient of variation of event peaks, clipped to `[0.10, 0.40]`.
+5. Apply percentile-aware lognormal intensity scaling.
+6. Apply sparse spatial translation.
+7. Optionally perturb sparse shape with a reduced-intensity neighbor shell.
+8. Update compact annual maxima.
+9. Write empirical return-period maps and PET tables.
+
+### 16.4 Validation
+
+- Smoke test with `--n-years 1000`.
+- Full catalog run completes without memory blowup.
+- Return-period maps exist.
+- PET tables exist.
+- Sparse logic remains memory bounded.
+- Analytical and stochastic maps are compared in Stage 15.
+
+---
+
+## 17. Stage 14 - Vulnerability
+
+**Script:** `scripts/14_build_vulnerability.py`
+
+### 17.1 Outputs
+
+```text
+mdr_curves.csv
+mdr_parameters.npz
+```
+
+### 17.2 Important caveat
+
+These curves are placeholders. They are suitable for pipeline integration and demonstration, but they are not production loss curves and should not be used for financial decisions without claims calibration.
+
+### 17.3 Validation
+
+- Curves are monotonic with hail size.
+- Mean damage ratios remain in `[0, 1]`.
+- Runtime warning or documentation clearly labels placeholder status.
+
+---
+
+## 18. Stage 15 - Figures
+
+**Script:** `scripts/15_render_figures.py`
+
+### 18.1 Output directories
+
+```text
+docs/figures/historical/
+docs/figures/stochastic/
+docs/figures/analysis/
+```
+
+### 18.2 Required categories
+
+- analytical return-period maps;
+- stochastic return-period maps;
+- exceedance probability curves;
+- validation figures;
+- analytical-vs-stochastic comparisons;
+- event summaries;
+- vulnerability curves;
+- GPD and tail diagnostics.
+
+### 18.3 Figure QA
+
+Figures are scientific diagnostics, not decoration. Review for:
+
+- shifted CONUS domain or orientation error;
+- suspicious maxima over Mexico, oceans, or masked cells;
+- source-transition artifacts;
+- over-smoothed hail corridors;
+- analytical-vs-stochastic divergence;
+- unreadable labels, legends, or colorbars;
+- generated files that should remain untracked.
+
+---
+
+## 19. Validation Commands
+
+Before a full run:
+
+```bash
+python -m py_compile run_pipeline.py scripts/*.py
+OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
+python run_pipeline.py --dry-run
+```
+
+After outputs exist:
+
+```bash
+python run_pipeline.py --validate
+```
+
+Stage-specific validation commands should be run before advancing after any failure, major source change, or methodology change.
+
+---
+
+## 20. Run Manifest
+
+Recommended manifest path:
+
+```text
+data/analysis/run_manifest.json
+```
+
+The manifest should record:
+
+- model version;
+- git commit;
+- branch;
+- random seed;
+- stages run;
+- calibration mode;
+- filtering mode;
+- stochastic years;
+- run date;
+- script versions or checksums if available;
+- source-data date ranges;
+- warnings and non-fatal read errors.
+
+The run manifest should be considered part of reproducibility, but generated manifests under `data/` should remain untracked unless the project explicitly decides to version a small summary artifact.
+
+---
+
+## 21. Pre-Run Hardening Summary
+
+The v2.1 hardening pass emphasizes:
+
+- explicit MYRORSS source manifest;
+- sparse-safe Stage 13;
+- deterministic Stage 05 fallback;
+- event merge sanity checks;
+- GPD threshold diagnostics;
+- source-transition QA;
+- expanded tests;
+- synchronized documentation.
+
+---
+
+## 22. Failure Handling
+
+If a stage fails:
+
+1. stop before rerunning destructive or expensive work;
+2. inspect the stage log;
+3. determine whether outputs are partial, complete, or corrupt;
+4. preserve diagnostic logs;
+5. rerun only the failed stage or affected date range if the script supports it;
+6. document the reason if generated outputs are deleted or replaced.
+
+Never infer success from file existence alone. Use validation checks, logs, manifest coverage, and sample raster reads.
+
+---
+
+## 23. References
+
+This section lists the technical and scientific references that define the pipeline's data formats, gridded processing assumptions, radar products, statistical machinery, and reproducibility expectations.
+
+Allen, J. T. and M. K. Tippett, 2015: The characteristics of United States hail reports: 1955-2014. *Electronic Journal of Severe Storms Meteorology*, 10(3), 1-31.
+
+Balkema, A. A. and L. de Haan, 1974: Residual life time at great age. *Annals of Probability*, 2(5), 792-804.
+
+Coles, S., 2001: *An Introduction to Statistical Modeling of Extreme Values.* Springer.
+
+Davison, A. C., S. A. Padoan, and M. Ribatet, 2012: Statistical modeling of spatial extremes. *Statistical Science*, 27(2), 161-186.
+
+GDAL/OGR contributors, 2026: *GDAL/OGR Geospatial Data Abstraction Software Library.* Open Source Geospatial Foundation.
+
+Grossi, P. and H. Kunreuther, 2005: *Catastrophe Modeling: A New Approach to Managing Risk.* Springer.
+
+Hosking, J. R. M. and J. R. Wallis, 1997: *Regional Frequency Analysis: An Approach Based on L-Moments.* Cambridge University Press.
+
+Mitchell-Wallace, K., M. Jones, J. Hillier, and M. Foote, 2017: *Natural Catastrophe Risk Management and Modelling: A Practitioner's Guide.* Wiley.
+
+Murillo, E. M. and C. R. Homeyer, 2019: Severe hail fall and hailstorm detection using remote sensing observations. *Journal of Applied Meteorology and Climatology*, 58, 947-970; corrigendum and corrected MESH relationships.
+
+Murillo, E. M., C. R. Homeyer, and J. T. Allen, 2021: A 23-year severe hail climatology using GridRad MESH observations. *Monthly Weather Review*, 149, 945-958.
+
+National Centers for Environmental Prediction, 2003: *NCEP Office Note 388: GRIB Edition 2.* National Weather Service.
+
+NetCDF Contributors, 2026: *Network Common Data Form (NetCDF) User Guide.* Unidata Program Center.
+
+NumPy Developers, 2020: Array programming with NumPy. *Nature*, 585, 357-362.
+
+Open Source Geospatial Foundation, 2026: *PROJ Coordinate Transformation Software Library.*
+
+Ortega, K. L., 2018: Evaluating multi-radar, multi-sensor products for surface hailfall estimation. *Electronic Journal of Severe Storms Meteorology*, 13(1), 1-36.
+
+Pandas Development Team, 2020: pandas-dev/pandas: Pandas. Zenodo.
+
+Pickands, J., 1975: Statistical inference using extreme order statistics. *Annals of Statistics*, 3(1), 119-131.
+
+Rasterio contributors, 2026: *Rasterio: access to geospatial raster data for Python programmers.*
+
+Scarrott, C. and A. MacDonald, 2012: A review of extreme value threshold estimation and uncertainty quantification. *REVSTAT*, 10(1), 33-60.
+
+SciPy Developers, 2020: SciPy 1.0: fundamental algorithms for scientific computing in Python. *Nature Methods*, 17, 261-272.
+
+Smith, T. M., et al., 2016: Multi-Radar Multi-Sensor severe weather and aviation products: initial operating capabilities. *Bulletin of the American Meteorological Society*, 97, 1617-1630.
+
+Wendt, N. A. and I. L. Jirak, 2021: An hourly climatology of operational MRMS MESH-diagnosed severe and significant hail with comparisons to Storm Data hail reports. *Weather and Forecasting*, 36, 645-659.
+
+Williams, S. S., K. L. Ortega, T. M. Smith, and coauthors, 2022: Comprehensive radar data for the contiguous United States: Multi-Year Reanalysis of Remotely Sensed Storms. *Bulletin of the American Meteorological Society*, 103, E838-E854.
+
+Witt, A., et al., 1998: An enhanced hail detection algorithm for the WSR-88D. *Weather and Forecasting*, 13, 286-303.

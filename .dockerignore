@@ -1,0 +1,60 @@
+# Data files — never bake into the image; mount as volumes
+data/
+logs/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# CI / pre-commit caches
+.github/
+.pre-commit-config.yaml
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+htmlcov/
+
+# ML artifacts (generated at run time, not source)
+*.pkl
+*.npz
+*.npy
+*.tif
+*.nc
+*.grib2
+*.parquet
+
+# Docs figures (generated)
+docs/figures/
+
+# Archives
+scripts/archive/
+
+# Secrets
+.env
+.secrets.baseline
