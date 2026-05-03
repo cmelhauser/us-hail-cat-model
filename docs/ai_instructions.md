@@ -72,7 +72,7 @@ Must preserve:
 - centroid and intensity checks;
 - sparse `event_peaks.npz`.
 
-**⚠️ Discrepancy to fix:** `MAX_CENTROID_KM_DAY` is `100.0` in the script but `150.0` in `_config.py`. Confirm the canonical value with the user before applying the `_config.py` import refactor.
+**Canonical value:** `MAX_CENTROID_KM_DAY = 150.0` per `methodology.md §2` and `_config.py`. Stage 08 was corrected to 150.0 on 2026-05-03. No discrepancy remains.
 
 ### Stage 09 — CDF fitting
 
@@ -181,7 +181,7 @@ When asked to review the project:
 5. Check docs and tests remain synchronized.
 6. Identify scientific limitations separately from implementation bugs.
 7. Avoid overengineering v2.1 into a v3.0 redesign unless explicitly requested.
-8. **Check for inline grid constants** — these should all be imported from `_config.py` post-refactor.
+8. **Check for inline grid constants** — stage scripts should import shared values from `_config.py`; treat new inline grid constants as regressions.
 
 ---
 
@@ -202,34 +202,32 @@ When asked to review the project:
 - `docs/README.md` (documentation index with reading paths)
 - `docs/uncertainty.md` (six-category uncertainty budget)
 
-**Code helpers (on disk; not yet wired into stage scripts):**
+**Code helpers (wired into stage scripts):**
 - `scripts/_config.py` — single source of truth for grid constants, paths, physical constants, EVT/RP/stochastic defaults
 - `scripts/_logging.py` — `get_logger()` factory
 
-### Confirmed outstanding items (from 2026-05-02 grep scan)
+### Confirmed outstanding items
 
-**Code refactors (do post-run, not during a running pipeline):**
-- `_config.py` import refactor: **0 of 15** scripts import from `_config`. Scripts needing refactor: 01, 02, 04b, 05, 06, 07, 08, 09, 10, 11, 12, 13, 15. Scripts 03, 04a, 14 have no grid constants.
-- `_logging.py` migration: **0 of 15** scripts import from `_logging`. All 15 define print-based `def log(msg)`.
-- Additional inline duplication: `RP_YEARS` in 09/10/13/15; `DAMAGE_THRESH_MM` in 08/13; `MAX_HAIL_MM` in 13.
-- `scripts/_io.py` not yet created (shared helpers: `write_geotiff`, `haversine`, `latlon_to_grid`).
+**Code refactors:**
+- ✅ `_config.py` import refactor complete: all 15 stage scripts import shared constants/paths.
+- ✅ `_logging.py` migration complete: all 15 stage scripts use `get_logger()`.
+- ✅ `scripts/_io.py` written and wired for shared `write_geotiff`, `haversine_km`, and `latlon_to_grid` helpers.
+- ✅ `MAX_CENTROID_KM_DAY`, `DAMAGE_THRESH_MM`, `MAX_HAIL_MM`, and `RP_YEARS` now come from `_config.py` in the stages that need them.
 
-**Tests not yet written:**
-- `tests/integration/test_smoke_synthetic.py` — end-to-end smoke on tiny synthetic data
-- `tests/test_no_duplicated_constants.py` — enforce _config.py import discipline
+**Remaining test opportunities:**
 - Property-based tests for Stage 13 invariants (hypothesis)
 - Performance regression test for Stage 13
+- Golden-output regression tests after first full run
 
-**Docs not yet written:**
-- `docs/sensitivity.md` — hyperparameter sweep plan (REVIEW §B.5)
-- `docs/benchmarks.md` — published RP comparison framework (REVIEW §B.6)
-- `docs/FAQ.md` (REVIEW §B.7)
-- `docs/vulnerability_derivation.md` (REVIEW §E.7)
-- Notation glossary `docs/methodology.md §0` (REVIEW §E.11)
+**Docs already added from the review pass:**
+- `docs/sensitivity.md` — hyperparameter sweep plan
+- `docs/benchmarks.md` — published RP comparison framework
+- `docs/FAQ.md`
+- `docs/vulnerability_derivation.md`
+- `docs/methodology.md §0` notation glossary
 
 **Science / methodology gaps to close:**
 - `docs/methodology.md §13`: keep σ_perturb description aligned with actual code (monthly CV, not inter-annual variance)
-- Stage 08 `MAX_CENTROID_KM_DAY` discrepancy: 100.0 in script vs 150.0 in `_config.py`
 - Topographic correction coefficient (0.25) uncited
 - GPD threshold scoring weight rationale not documented
 - Source-homogeneity KS test (Stage 05, post-run)
@@ -252,9 +250,8 @@ Stage 08 builds a sparse event catalog (event_peaks.npz: rows/cols/vals per even
 Stage 13 must remain sparse-safe — no dense event cubes.
 Stage 05 must work with --skip-ml.
 Stage 01 produces manifest_stage01_myrorss.csv — use it for source QA.
-scripts/_config.py = single source of truth for constants (NOT YET imported by stage scripts).
-scripts/_logging.py = get_logger() factory (NOT YET wired in).
-OPEN BUG: stage 08 MAX_CENTROID_KM_DAY=100.0 vs _config.py=150.0.
+scripts/_config.py = single source of truth for constants and is imported by all stage scripts.
+scripts/_logging.py = get_logger() factory wired into all stage scripts.
 OPEN DOC WATCH: methodology.md §13 and uncertainty.md §5.1 document monthly CV Mar–Sep for σ_perturb; keep them aligned with code if Stage 13 changes.
 First full run started 2026-05-01 via Codex.
 Git commits must be run from the user's terminal, not the sandbox.

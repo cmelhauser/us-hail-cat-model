@@ -46,22 +46,29 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT   = Path(__file__).resolve().parent.parent
-DATA_ROOT   = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from _io import write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from scripts._io import write_geotiff
+    from scripts._logging import get_logger
+
 GRIDRAD_DIR = DATA_ROOT / "historical" / "gridrad"
 GRIDRAD_SEV = DATA_ROOT / "historical" / "gridrad_severe"
 ERA5_FILE   = DATA_ROOT / "historical" / "era5" / "era5_monthly_isotherms_conus.nc"
 OUT_DIR     = DATA_ROOT / "historical" / "mesh_0.05deg"
-LOG_DIR     = REPO_ROOT / "logs"
+LOG_DIR     = LOG_ROOT
 LOG_FILE    = LOG_DIR / "04b_fill_gridrad_gap.log"
 
 # Output grid (must match stages 01–02)
-OUT_DX      = 0.05
-OUT_NROWS   = 520
-OUT_NCOLS   = 1180
-OUT_LAT_MAX = 50.005
-OUT_LON_MIN = -125.005
-OUT_NODATA  = 0.0
+OUT_DX      = DX
+OUT_NROWS = NROWS
+OUT_NCOLS = NCOLS
+OUT_LAT_MAX = LAT_MAX
+OUT_LON_MIN = LON_MIN
+OUT_NODATA  = NODATA
 
 # MESH75 coefficients (corrected 2021 corrigendum)
 MESH75_A = 15.096
@@ -82,14 +89,7 @@ _era5_hm20c = None
 _era5_lats = None
 _era5_lons = None
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("04b_fill_gridrad_gap", LOG_ROOT).info
 
 def load_era5_isotherms():
     """Load ERA5 monthly isotherm heights. Cached globally."""
@@ -112,7 +112,6 @@ def load_era5_isotherms():
     ds.close()
     log(f"  Loaded ERA5 isotherms: {_era5_h0c.shape}")
 
-
 def get_freezing_levels_era5(lat: float, lon: float, month: int) -> tuple:
     """Get 0°C and -20°C heights from ERA5 gridded data."""
     if _era5_h0c is None:
@@ -132,7 +131,6 @@ def get_freezing_levels_era5(lat: float, lon: float, month: int) -> tuple:
     hm20 = max(h0c + 1.0, min(12.0, hm20))
 
     return h0c, hm20
-
 
 def _get_freezing_levels_climo(lat: float, month: int) -> tuple:
     """Climatological fallback (same as original stage 04)."""
@@ -156,7 +154,6 @@ def _get_freezing_levels_climo(lat: float, month: int) -> tuple:
             return h0, hm20
     return 3.5, 6.0
 
-
 def compute_shi_column(z_profile, heights_km, h_0c, h_m20c):
     """Compute SHI for a single vertical column (Witt et al. 1998)."""
     shi = 0.0
@@ -171,7 +168,6 @@ def compute_shi_column(z_profile, heights_km, h_0c, h_m20c):
         shi += wt * e * dh
 
     return 0.1 * shi
-
 
 def find_gridrad_files(day: date) -> tuple:
     """
@@ -207,7 +203,6 @@ def find_gridrad_files(day: date) -> tuple:
         return hr_files, "gridrad-hourly"
 
     return [], "none"
-
 
 def process_gridrad_file(nc_path, daily_max, month):
     """Process a single GridRad NetCDF: compute SHI → MESH75, update daily_max."""
@@ -290,22 +285,6 @@ def process_gridrad_file(nc_path, daily_max, month):
 
     return count
 
-
-def write_geotiff(data, out_path):
-    import rasterio
-    from rasterio.transform import from_origin
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "driver": "GTiff", "dtype": "float32", "width": OUT_NCOLS,
-        "height": OUT_NROWS, "count": 1, "crs": "EPSG:4326",
-        "transform": from_origin(OUT_LON_MIN, OUT_LAT_MAX, OUT_DX, OUT_DX),
-        "compress": "lzw", "tiled": True, "blockxsize": 256,
-        "blockysize": 256, "nodata": OUT_NODATA,
-    }
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
-
-
 def process_day(day):
     out_path = OUT_DIR / f"{day.year}" / f"mesh_{day.strftime('%Y%m%d')}.tif"
     if out_path.exists():
@@ -334,13 +313,11 @@ def process_day(day):
         "peak_mesh75_mm": round(peak, 1), "errors": errors,
     }
 
-
 def iter_dates(start, end):
     d = start
     while d <= end:
         yield d
         d += timedelta(days=1)
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -454,7 +431,6 @@ def main():
     log(f"  Days skipped: {skipped:,}  |  No data: {no_data:,}")
     log(f"  Peak MESH75: {peak_mesh:.1f} mm ({peak_mesh/25.4:.1f} in)")
     log(f"{'='*60}\n")
-
 
 if __name__ == "__main__":
     main()

@@ -14,6 +14,105 @@ v2.1 is a hardening release rather than a full redesign. It preserves the 15-sta
 
 ---
 
+## 0. Notation Glossary
+
+This glossary defines symbols and abbreviations used throughout the document. Variable names in code blocks match these definitions unless a local alias is noted.
+
+### Grid and indexing
+
+| Symbol | Definition |
+|--------|-----------|
+| `i`, `j` | Row (N→S) and column (W→E) index of a 0.05° grid cell |
+| `d` | Calendar day index (integer) |
+| `doy` | Day-of-year (1–366) |
+| `y` | Year index |
+| `NROWS` | 520 — number of grid rows |
+| `NCOLS` | 1180 — number of grid columns |
+| `DX` | 0.05° — grid cell size (~5.5 km) |
+
+### Hazard variable
+
+| Symbol | Definition |
+|--------|-----------|
+| `H`, `h` | Hail size (mm); `H` is the random variable, `h` a specific value |
+| `MESH` | Maximum Expected Size of Hail (Witt et al. 1998) |
+| `MESH75` | Corrected MESH calibrated to the 75th-percentile surface-hail relationship (Murillo & Homeyer 2021) |
+| `SHI` | Severe Hail Index — intermediate computation from 3-D reflectivity and ERA5 isotherms, used in GridRad processing |
+| `MESH_witt` | Raw MESH in the original Witt et al. (1998) formulation |
+| `MESH_corrected` | MESH75 after Stage 05 bias correction and environmental filtering |
+
+### Occurrence and frequency
+
+| Symbol | Definition |
+|--------|-----------|
+| `p_occ(i,j)` | Annual exceedance probability at cell (i,j): fraction of years with nonzero severe hail |
+| `active(i,j,d)` | Indicator: 1 if `MESH75_corrected(i,j,d) ≥ 25.4 mm`, else 0 |
+| `climo_doy(i,j)` | Mean MESH75 for a given day-of-year at cell (i,j), averaged across all years |
+| `λ` | Mean annual event count (Poisson rate for stochastic simulation) |
+
+### Extreme value and return periods
+
+| Symbol | Definition |
+|--------|-----------|
+| `F_positive(h)` | CDF of hail size conditional on occurrence |
+| `u` | GPD threshold (mm); default 50.8 mm (2 inches) |
+| `x` | Exceedance above threshold: `x = h − u` |
+| `ξ` (xi) | GPD shape parameter (dimensionless); controls tail heaviness |
+| `σ` (sigma) | GPD scale parameter (mm) |
+| `T` | Return period (years) |
+| `RP_T` | Return-period hail size at return period `T` (mm) |
+
+### Stochastic catalog
+
+| Symbol | Definition |
+|--------|-----------|
+| `σ_perturb` | Global intensity perturbation parameter: median monthly CV (Mar–Sep), clipped to [0.10, 0.40] |
+| `σ_event` | Per-event perturbation SD, scaled by event peak percentile; clipped to [0.10, max(0.25, σ_perturb)] |
+| `scale` | Lognormal multiplicative intensity factor applied to each simulated event |
+| `Δrow`, `Δcol` | Integer spatial translation applied to sparse event arrays; drawn from Normal(0, `TRANSLATE_CELLS`²) |
+| `TRANSLATE_CELLS` | 3 cells (≈ 16.5 km) — SD of spatial translation |
+| `N_SIM_YEARS` | 50,000 — stochastic catalog length (years) |
+
+### Topographic correction
+
+| Symbol | Definition |
+|--------|-----------|
+| `factor` | Multiplicative topographic correction applied to return-period maps |
+| `α` (alpha) | Correction coefficient; 0.25 (freezing-level-aware form) or 0.05 (fallback km⁻¹) |
+| `elevation_km` | Cell elevation in km above sea level (from 0.05° DEM) |
+| `freezing_level_km` | ERA5 monthly 0°C isotherm height in km above sea level |
+
+### Vulnerability
+
+| Symbol | Definition |
+|--------|-----------|
+| `MDR(h)` | Mean damage ratio at hail size `h` — fraction of replacement value expected to be damaged |
+| `μ_v` | Log-scale location parameter of the lognormal MDR curve; `exp(μ_v)` ≈ median-damage hail size |
+| `σ_v` | Log-scale dispersion parameter of the lognormal MDR curve |
+| `Φ` | Standard normal CDF |
+
+### Data sources and abbreviations
+
+| Abbreviation | Definition |
+|-------------|-----------|
+| MYRORSS | Multi-Year Reanalysis of Remotely Sensed Storms — radar reanalysis, Apr 1998–Dec 2011 |
+| GridRad | Three-dimensional radar analysis from NCAR — gap-fill source, Jan 2012–Oct 2019 |
+| MRMS | Multi-Radar Multi-Sensor — operational NOAA product, Oct 2020–present |
+| ERA5 | ECMWF Reanalysis v5 — monthly 0°C / −20°C isotherms |
+| SPC | Storm Prediction Center — hail reports used for validation only |
+| CONUS | Continental United States |
+| DEM | Digital Elevation Model |
+| GPD | Generalized Pareto Distribution |
+| EVT | Extreme Value Theory |
+| MDR | Mean Damage Ratio |
+| CV | Coefficient of Variation (σ/μ) |
+| KS | Kolmogorov–Smirnov (goodness-of-fit test) |
+| MRL | Mean Residual Life (GPD threshold diagnostic) |
+| RP | Return Period |
+| PET | Probable Event Table |
+
+---
+
 ## 1. Scientific Scope
 
 The model estimates hazard, not loss. A complete insurance catastrophe model would contain:

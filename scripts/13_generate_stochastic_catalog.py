@@ -57,39 +57,29 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_HAIL_MM, RP_YEARS, RNG_SEED, N_SIM_YEARS, TRANSLATE_CELLS, NODATA
+    from _io import write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_HAIL_MM, RP_YEARS, RNG_SEED, N_SIM_YEARS, TRANSLATE_CELLS, NODATA
+    from scripts._io import write_geotiff
+    from scripts._logging import get_logger
+
 EVENT_DIR = DATA_ROOT / "historical" / "events"
 MASK_DIR  = DATA_ROOT / "analysis" / "conus_mask"
 OUT_DIR   = DATA_ROOT / "stochastic"
 CAT_DIR   = OUT_DIR / "catalog"
 MAP_DIR   = OUT_DIR / "maps"
 PET_DIR   = OUT_DIR / "pet"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "13_stochastic_catalog.log"
 
-NROWS = 520
-NCOLS = 1180
-DX    = 0.05
-LAT_MAX = 50.005
-LON_MIN = -125.005
-
-N_SIM_YEARS       = 50_000
-DAMAGE_THRESH_MM  = 25.4    # 1.0 inch
-MAX_HAIL_MM       = 250.0   # physical ceiling (~10 inches)
+# DAMAGE_THRESH_MM, MAX_HAIL_MM, N_SIM_YEARS, TRANSLATE_CELLS, and RNG_SEED imported from _config
 SPATIAL_TRANSLATE  = True
-TRANSLATE_CELLS    = 3       # ±3 cells (~16.5 km)
-RNG_SEED           = 42
-RP_YEARS = [10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000]
+RP_YEARS = list(RP_YEARS)  # mutable copy for legacy call sites
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("13_generate_stochastic_catalog", LOG_ROOT).info
 
 def load_historical_events():
     """Load event catalog and sparse peak arrays without dense reconstruction."""
@@ -112,7 +102,6 @@ def load_historical_events():
     log(f"  Loaded {len(sparse_events):,} historical sparse events")
     return event_df, sparse_events
 
-
 def calibrate_sigma(event_df, sparse_events=None):
     """Calibrate σ_perturb from monthly variability of sparse event peaks."""
     log("  Calibrating intensity perturbation σ ...")
@@ -130,7 +119,6 @@ def calibrate_sigma(event_df, sparse_events=None):
     sigma = float(np.clip(sigma, 0.10, 0.40))
     log(f"  Calibrated σ = {sigma:.3f} (monthly CVs: {[f'{c:.3f}' for c in monthly_cv]})")
     return sigma
-
 
 def build_doy_distribution(event_df):
     """Build smooth seasonal DOY distribution for event occurrence."""
@@ -151,7 +139,6 @@ def build_doy_distribution(event_df):
     cdf = np.cumsum(pdf)
     return cdf
 
-
 def build_active_index(sparse_events):
     """Map all historically active cells to compact active-column indices."""
     keys = set()
@@ -163,12 +150,10 @@ def build_active_index(sparse_events):
     lookup = {k: i for i, k in enumerate(keys)}
     return active_rows, active_cols, lookup
 
-
 def sparse_event_active_mask(sparse_events):
     """Return unique active rows/cols across sparse historical events."""
     active_rows, active_cols, _ = build_active_index(sparse_events)
     return active_rows, active_cols
-
 
 def translate_sparse(rows, cols, rng, sigma_cells=TRANSLATE_CELLS):
     """Gaussian sparse translation clipped to model domain."""
@@ -178,7 +163,6 @@ def translate_sparse(rows, cols, rng, sigma_cells=TRANSLATE_CELLS):
     cols_new = cols + dc
     keep = (rows_new >= 0) & (rows_new < NROWS) & (cols_new >= 0) & (cols_new < NCOLS)
     return rows_new[keep], cols_new[keep], keep, dr, dc
-
 
 def sparse_shape_perturb(rows, cols, vals, rng):
     """Light sparse footprint perturbation without dense grids."""
@@ -195,7 +179,6 @@ def sparse_shape_perturb(rows, cols, vals, rng):
     cols2 = np.concatenate([cols, cc[keep]])
     vals2 = np.concatenate([vals, vals[keep] * 0.5]).astype(np.float32)
     return rows2, cols2, vals2, "neighbor_shell"
-
 
 def update_sparse_max(target_row, rows, cols, vals, active_lookup):
     """Update one simulated annual-max row using sparse event cells."""
@@ -219,7 +202,6 @@ def update_sparse_max(target_row, rows, cols, vals, active_lookup):
     np.maximum.at(target_row, idx, vv)
     return int(np.count_nonzero(vv >= DAMAGE_THRESH_MM)), float(vv.max())
 
-
 def update_sparse_annual_max(target_row, active_lookup, rows, cols, vals):
     """Compatibility wrapper for updating a compact annual-max row."""
     tuple_lookup = {
@@ -227,7 +209,6 @@ def update_sparse_annual_max(target_row, active_lookup, rows, cols, vals):
         for k, v in active_lookup.items()
     }
     update_sparse_max(target_row, rows, cols, vals, tuple_lookup)
-
 
 def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years):
     """Run sparse-safe stochastic simulation."""
@@ -317,7 +298,6 @@ def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years):
     return (ann_max, active_rows, active_cols, ann_occ_peak, ann_occ_cells,
             ann_agg_cells, ann_n_events, __import__("pandas").DataFrame(stoch_records))
 
-
 def compute_empirical_rps(ann_max, active_rows, active_cols, n_years):
     """Compute empirical return periods from annual max at each active cell."""
     log(f"  Computing empirical return periods ...")
@@ -337,7 +317,6 @@ def compute_empirical_rps(ann_max, active_rows, active_cols, n_years):
                 rp_maps[rp][active_rows[ci], active_cols[ci]] = sorted_desc[rank - 1]
 
     return rp_maps
-
 
 def build_pet(ann_occ_peak, ann_occ_cells, ann_agg_cells, ann_n_events, n_years):
     """Build Probable Exceedance Tables."""
@@ -374,22 +353,6 @@ def build_pet(ann_occ_peak, ann_occ_cells, ann_agg_cells, ann_n_events, n_years)
 
     return pd.DataFrame(occ_rows), pd.DataFrame(agg_rows)
 
-
-def write_geotiff(data, out_path):
-    import rasterio
-    from rasterio.transform import from_origin
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "driver": "GTiff", "dtype": "float32", "width": NCOLS,
-        "height": NROWS, "count": 1, "crs": "EPSG:4326",
-        "transform": from_origin(LON_MIN, LAT_MAX, DX, DX),
-        "compress": "lzw", "tiled": True, "blockxsize": 256,
-        "blockysize": 256, "nodata": 0.0,
-    }
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
-
-
 def load_conus_mask():
     """Load the Stage 12 CONUS mask when available."""
     import rasterio
@@ -403,7 +366,6 @@ def load_conus_mask():
         log(f"  WARN: CONUS mask shape {mask.shape} does not match {(NROWS, NCOLS)}; stochastic maps unmasked")
         return None
     return mask
-
 
 def validate_outputs() -> bool:
     errors = []
@@ -420,7 +382,6 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(description="Generate 50,000-yr stochastic catalog.")
@@ -500,7 +461,6 @@ def main():
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

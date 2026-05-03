@@ -47,35 +47,29 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_CENTROID_KM_DAY, MAX_INTENSITY_RATIO
+    from _io import haversine_km
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_CENTROID_KM_DAY, MAX_INTENSITY_RATIO
+    from scripts._io import haversine_km
+    from scripts._logging import get_logger
+
 IN_DIR    = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR   = DATA_ROOT / "historical" / "events"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "08_build_event_catalog.log"
 
-NROWS = 520
-NCOLS = 1180
-DX    = 0.05
-LAT_MAX = 50.005
-LON_MIN = -125.005
-
 # Event identification parameters
-DAMAGE_THRESHOLD_MM = 25.4   # 1.0 inch — residential damage onset
+DAMAGE_THRESHOLD_MM = DAMAGE_THRESH_MM
 BUFFER_CELLS        = 15     # ~83 km at 0.05° (~5.5 km/cell)
 MAX_DURATION_DAYS   = 5      # hard cap per AIR/RMS conventions
 MAX_TEMPORAL_GAP    = 2      # max gap in days (1=consecutive, 2=one quiet day)
-MAX_CENTROID_KM_DAY = 100.0  # v2.1 physical coherence cap
-MAX_INTENSITY_RATIO = 3.0    # v2.1 peak jump cap between adjacent days
+# MAX_CENTROID_KM_DAY imported from _config
+# MAX_INTENSITY_RATIO imported from _config
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("08_build_event_catalog", LOG_ROOT).info
 
 def load_daily_data() -> tuple:
     """
@@ -115,7 +109,6 @@ def load_daily_data() -> tuple:
     log(f"  Active hail days (≥{DAMAGE_THRESHOLD_MM:.0f} mm): {len(dates):,}")
     return dates, footprints, peaks
 
-
 def footprints_overlap(fp1: np.ndarray, fp2: np.ndarray) -> bool:
     """Check if two footprints overlap after buffering fp1 by BUFFER_CELLS.
 
@@ -154,17 +147,6 @@ def footprints_overlap(fp1: np.ndarray, fp2: np.ndarray) -> bool:
 
     return bool(np.any(rect_sum(integral, rlo, clo, rhi, chi) > 0))
 
-
-
-def haversine_km(lat1, lon1, lat2, lon2):
-    """Great-circle distance in km for scalar coordinates."""
-    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
-    return float(6371.0 * 2.0 * np.arcsin(np.sqrt(np.clip(a, 0, 1))))
-
-
 def footprint_centroid(fp: np.ndarray, peak: np.ndarray | None = None) -> tuple[float, float]:
     """Return an intensity-weighted centroid for an active footprint."""
     rows, cols = np.where(fp)
@@ -178,12 +160,10 @@ def footprint_centroid(fp: np.ndarray, peak: np.ndarray | None = None) -> tuple[
             return float(np.average(lats, weights=w)), float(np.average(lons, weights=w))
     return float(lats.mean()), float(lons.mean())
 
-
 def peak_intensity(peak: np.ndarray, fp: np.ndarray) -> float:
     """Maximum hail intensity inside a footprint."""
     vals = peak[fp]
     return float(vals.max()) if vals.size else 0.0
-
 
 def physically_coherent_merge(dates, footprints, peaks, prev_idx: int, curr_idx: int) -> tuple[bool, float, float]:
     """v2.1 merge sanity checks: centroid speed and peak-intensity jump."""
@@ -196,7 +176,6 @@ def physically_coherent_merge(dates, footprints, peaks, prev_idx: int, curr_idx:
     ratio = max(p1, p2) / min(p1, p2)
     ok = (speed <= MAX_CENTROID_KM_DAY) and (ratio <= MAX_INTENSITY_RATIO)
     return ok, float(speed), float(ratio)
-
 
 def group_events(dates: list, footprints: list, peaks: list | None = None) -> list:
     """Group active days into events using synoptic rules."""
@@ -255,7 +234,6 @@ def group_events(dates: list, footprints: list, peaks: list | None = None) -> li
     elapsed = time.time() - t0
     log(f"  Final events (after {MAX_DURATION_DAYS}-day cap): {len(final_groups):,}  ({elapsed:.0f}s)")
     return final_groups
-
 
 def build_catalog(dates, footprints, peaks, groups):
     """Build event catalog DataFrame and sparse peak arrays."""
@@ -342,7 +320,6 @@ def build_catalog(dates, footprints, peaks, groups):
 
     return pd.DataFrame(records), sparse_events
 
-
 def save_outputs(event_df, sparse_events):
     """Write event catalog CSV and sparse peak arrays."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -366,7 +343,6 @@ def save_outputs(event_df, sparse_events):
     np.savez_compressed(npz_path, **arrays)
     size_mb = npz_path.stat().st_size / 1e6
     log(f"  Wrote {npz_path.name}: {size_mb:.1f} MB (sparse, {len(sparse_events):,} events)")
-
 
 def print_summary(event_df):
     """Print event catalog summary statistics."""
@@ -392,7 +368,6 @@ def print_summary(event_df):
     log(f"\n  Annual event counts:")
     annual = event_df.groupby(event_df["start_date"].apply(lambda d: d.year)).size()
     log(f"    mean={annual.mean():.0f}/yr  min={annual.min()}  max={annual.max()}")
-
 
 def validate_outputs() -> bool:
     errors = []
@@ -428,7 +403,6 @@ def validate_outputs() -> bool:
         return False
     log(f"Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(description="Build event catalog from corrected MESH75.")
@@ -475,7 +449,6 @@ def main():
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

@@ -22,29 +22,29 @@ Usage:
 
 import os
 import sys
-import time
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
-LOGS_ROOT = REPO_ROOT / "logs"
+try:
+    from _config import DATA_ROOT, LOG_ROOT
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import DATA_ROOT, LOG_ROOT
+    from scripts._logging import get_logger
+
 
 BASE_URL = "https://www.spc.noaa.gov/climo/reports"
 OUT_DIR  = DATA_ROOT / "historical" / "spc"
-LOG_FILE = LOGS_ROOT / "03_download_spc.log"
+LOG_FILE = LOG_ROOT / "03_download_spc.log"
+
+log = get_logger("03_download_spc", LOG_ROOT).info
 TYPES = ["torn", "hail", "wind"]
 WORKERS = 10
 HEADER_SIZE = 60  # bytes — header-only files are ~52 bytes (no data)
 
-def log(msg):
-    print(msg, flush=True)
-    LOGS_ROOT.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(msg + "\n")
 
 def download_one(url, outfile):
     if os.path.exists(outfile) and os.path.getsize(outfile) > HEADER_SIZE:
@@ -95,7 +95,6 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     log(f"\n{'='*60}")

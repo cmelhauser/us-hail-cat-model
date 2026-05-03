@@ -7,6 +7,32 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased] — 2026-05-03
+
+### Fixed
+
+- **Stage 08:** `MAX_CENTROID_KM_DAY` corrected from `100.0` to `150.0` to match
+  `scripts/_config.py` and `docs/methodology.md §8.2`. Canonical value is 150 km/day.
+- **`tests/test_no_duplicated_constants.py`:** Converted `MAX_CENTROID_KM_DAY` xfail
+  to a normal passing assertion.
+- **`CITATION.cff`:** Repository URL corrected (`melhauserc` → `cmelhauser`);
+  Cintineo et al. (2012) reference title, author initial, and page range corrected.
+
+### Added
+
+- **`scripts/_io.py`:** Shared I/O helpers (`write_geotiff`, `haversine_km`,
+  `latlon_to_grid`) extracted from stage scripts and wired into all stages that need them.
+- **Stage refactor:** All 15 stage scripts now import shared constants from `_config.py`
+  and shared logging from `_logging.py`.
+- **`docs/methodology.md §0`:** Notation glossary (grid, hazard, occurrence, EVT,
+  stochastic, topographic correction, vulnerability, abbreviations).
+- **`docs/pnas_article_ai_hail_model.md`:** Author line (Christopher Melhauser,
+  Ph.D., Independent Researcher), Google Scholar URL, repository URL, AI model
+  identifiers, v2.1 stage descriptions, two missing references, pipeline stage
+  table rewritten, benchmark discussion paragraph added.
+
+---
+
 ## [2.1.0] — 2026-05-01
 
 **Hardening release.** Same 15-stage pipeline and 0.05° grid as v2.0. No

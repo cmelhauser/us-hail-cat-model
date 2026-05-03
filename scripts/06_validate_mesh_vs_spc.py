@@ -35,20 +35,22 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN
+    from _io import latlon_to_grid
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN
+    from scripts._io import latlon_to_grid
+    from scripts._logging import get_logger
+
 MESH_DIR  = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
 SPC_DIR   = DATA_ROOT / "historical" / "spc"
 OUT_DIR   = DATA_ROOT / "historical" / "validation"
 FIG_DIR   = REPO_ROOT / "docs" / "figures" / "analysis"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "06_validate_mesh_vs_spc.log"
 
-NROWS   = 520
-NCOLS   = 1180
-DX      = 0.05
-LAT_MAX = 50.005
-LON_MIN = -125.005
 MM_PER_INCH = 25.4
 
 SIZE_BINS = [
@@ -61,22 +63,7 @@ SIZE_BINS = [
     (4.00, 99.0,  ">=4.00\""),
 ]
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
-
-def latlon_to_grid(lat: float, lon: float) -> tuple:
-    """Convert lat/lon to grid row, col. Returns (-1,-1) if outside."""
-    row = int((LAT_MAX - lat) / DX)
-    col = int((lon - LON_MIN) / DX)
-    if 0 <= row < NROWS and 0 <= col < NCOLS:
-        return row, col
-    return -1, -1
+log = get_logger("06_validate_mesh_vs_spc", LOG_ROOT).info
 
 
 def parse_spc_csv(path: Path) -> list:
@@ -114,7 +101,6 @@ def parse_spc_csv(path: Path) -> list:
         pass
     return reports
 
-
 def load_mesh_raster(date_str: str) -> np.ndarray:
     """Load a corrected MESH75 raster for a given date. Returns None if missing."""
     import rasterio
@@ -124,7 +110,6 @@ def load_mesh_raster(date_str: str) -> np.ndarray:
         return None
     with rasterio.open(path) as src:
         return src.read(1)
-
 
 def build_pairs() -> list:
     """Match all SPC reports to co-located MESH75 values."""
@@ -197,7 +182,6 @@ def build_pairs() -> list:
     log(f"  Dates without MESH raster: {skipped_no_raster:,}")
     return pairs
 
-
 def compute_calibration(pairs: list) -> list:
     """Compute calibration stats by size bin."""
     results = []
@@ -227,7 +211,6 @@ def compute_calibration(pairs: list) -> list:
         })
     return results
 
-
 def compute_spatial_bias(pairs: list) -> list:
     """Compute mean MESH/SPC ratio on 1° grid."""
     cells = defaultdict(list)
@@ -247,7 +230,6 @@ def compute_spatial_bias(pairs: list) -> list:
             "median_ratio": round(float(np.median(ratios)), 3),
         })
     return results
-
 
 def write_summary(pairs: list, cal: list):
     """Write human-readable summary."""
@@ -303,7 +285,6 @@ def write_summary(pairs: list, cal: list):
 
     log(f"  Summary written to {path.name}")
 
-
 def make_figures(pairs: list):
     """Generate diagnostic figures."""
     try:
@@ -354,7 +335,6 @@ def make_figures(pairs: list):
 
     log(f"  Figures saved to {FIG_DIR}")
 
-
 def validate_outputs() -> bool:
     """Validate outputs exist and are reasonable."""
     errors = []
@@ -372,7 +352,6 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(description="Validate MESH75 against SPC reports.")
@@ -436,7 +415,6 @@ def main():
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

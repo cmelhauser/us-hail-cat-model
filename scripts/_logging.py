@@ -18,9 +18,8 @@ Usage in stage scripts:
     log.warning("Fewer than %d exceedances in region %d", MIN_OBS, reg)
     log.error("Missing file: %s", path)
 
-Migration note (v2.1 → v2.2):
-    During the v2.1 run period, stage scripts still use print-based log().
-    When each stage is next touched, replace:
+Migration note:
+    Stage scripts now use this helper. For future stages, replace ad hoc log helpers:
 
         def log(msg):
             line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
@@ -33,8 +32,7 @@ Migration note (v2.1 → v2.2):
 
         from _logging import get_logger
         from _config import LOG_ROOT
-        _log = get_logger("NN_stage_name", LOG_ROOT)
-        log = _log.info   # drop-in replacement for call sites using log(msg)
+        log = get_logger("NN_stage_name", LOG_ROOT).info
 """
 
 from __future__ import annotations

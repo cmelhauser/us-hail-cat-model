@@ -34,35 +34,28 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from _io import write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from scripts._io import write_geotiff
+    from scripts._logging import get_logger
+
 CDF_DIR   = DATA_ROOT / "analysis" / "cdf"
 OCC_DIR   = DATA_ROOT / "analysis" / "occurrence"
 STOCH_MAP_DIR = DATA_ROOT / "stochastic" / "maps"
 MASK_DIR  = DATA_ROOT / "analysis" / "conus_mask"
 TOPO_DIR  = DATA_ROOT / "analysis" / "topography"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "12_apply_conus_mask.log"
 
-NROWS = 520
-NCOLS = 1180
-DX    = 0.05
-LAT_MAX = 50.005
-LON_MIN = -125.005
-
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("12_apply_conus_mask", LOG_ROOT).info
 
 def build_conus_mask():
     """Build CONUS land mask from regionmask US states polygon."""
@@ -84,7 +77,6 @@ def build_conus_mask():
     write_geotiff(conus_mask.astype(np.float32), MASK_DIR / "conus_mask.tif")
     return conus_mask
 
-
 def compute_topo_factor(elevation_m: np.ndarray, freezing_level_km: np.ndarray | None = None) -> np.ndarray:
     """Compute bounded v2.1 hail-survival topographic factor.
 
@@ -100,7 +92,6 @@ def compute_topo_factor(elevation_m: np.ndarray, freezing_level_km: np.ndarray |
         return np.clip(factor, 1.0, 1.25).astype(np.float32)
     factor = 1.0 + 0.05 * elev_km
     return np.clip(factor, 1.0, 1.20).astype(np.float32)
-
 
 def build_topo_correction():
     """
@@ -144,7 +135,6 @@ def build_topo_correction():
     log(f"  Topo correction: min={correction.min():.3f} max={correction.max():.3f}")
     return correction
 
-
 def apply_mask_to_rasters(conus_mask, topo_correction):
     """Apply CONUS mask and topo correction to all RP and p_occ rasters."""
     import rasterio
@@ -178,22 +168,6 @@ def apply_mask_to_rasters(conus_mask, topo_correction):
 
     log(f"  Masked {len(targets)} rasters")
 
-
-def write_geotiff(data, out_path):
-    import rasterio
-    from rasterio.transform import from_origin
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "driver": "GTiff", "dtype": "float32", "width": NCOLS,
-        "height": NROWS, "count": 1, "crs": "EPSG:4326",
-        "transform": from_origin(LON_MIN, LAT_MAX, DX, DX),
-        "compress": "lzw", "tiled": True, "blockxsize": 256,
-        "blockysize": 256, "nodata": 0.0,
-    }
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
-
-
 def validate_outputs() -> bool:
     p = MASK_DIR / "conus_mask.tif"
     if not p.exists():
@@ -201,7 +175,6 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(description="Apply CONUS mask + topo correction.")
@@ -222,7 +195,6 @@ def main():
     log(f"\n  Complete")
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

@@ -32,7 +32,7 @@ The goal is not to re-optimize every parameter on the first run. It is to verify
 
 | Field | Value |
 |-------|-------|
-| Default | **⚠️ Discrepancy: script = 100.0, `_config.py` = 150.0. Canonical value TBD.** |
+| Default | 150.0 km/day (`scripts/_config.py`; stage 08 imports this canonical value) |
 | Stage | 08 |
 | Justification | Limits how far the geographic center of hail activity can move between two consecutive active days while still counting as the same event. Synoptic systems move ~50–200 km/day; 150 km is a reasonable upper bound before two active days likely represent separate systems. |
 | Sweep | {75, 100, 150, 200} km/day |
