@@ -30,14 +30,15 @@ Use the reading paths below to orient yourself quickly.
 10. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
 
 **AI agent or future developer:**
-11. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
-12. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
+11. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation
+12. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
+13. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
 
 **Version history and migration:**
-13. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap
-14. [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
-15. [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) — upstream PR narrative for the v1.0→v2.0→v2.1 arc
-16. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
+14. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap
+15. [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
+16. [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) — upstream PR narrative for the v1.0→v2.0→v2.1 arc
+17. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
 
 ---
 
@@ -59,6 +60,7 @@ Use the reading paths below to orient yourself quickly.
 | [`data_dictionary.md`](data_dictionary.md) | Engineering | All output files: paths, schemas, units, nodata conventions |
 | [`reproduce.md`](reproduce.md) | Engineering | Step-by-step instructions to reproduce the model from scratch |
 | [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) | Audit | Checklist completed before each full pipeline execution |
+| [`AGENTS.md`](../AGENTS.md) | Governance | Canonical AI-agent and developer orientation |
 | [`ai_instructions.md`](ai_instructions.md) | Governance | Operating constraints for AI-assisted development |
 | [`project_memory.md`](project_memory.md) | Governance | Current project state: what's done, known issues, next priorities |
 | [`migration_plan.md`](migration_plan.md) | Governance | Version roadmap and migration guidance |

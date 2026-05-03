@@ -8,7 +8,7 @@
 
 Recommended:
 
-- Python 3.9+.
+- Python 3.10+.
 - At least 16 GB RAM; more is recommended for Stage 10 and Stage 13.
 - Disk space sufficient for radar data and outputs.
 - Copernicus CDS credentials for ERA5.
@@ -20,10 +20,10 @@ Install:
 git clone https://github.com/YOUR_ACCOUNT/us-hail-cat-model.git
 cd us-hail-cat-model
 
-python -m venv .venv
+python3.10 -m venv .venv
 source .venv/bin/activate
 
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
 ERA5 credentials:
@@ -53,11 +53,8 @@ These check syntax, tests, and pipeline stage selection.
 
 ## 3. Full Run
 
-```bash
-python run_pipeline.py
-```
-
-The pipeline is stage-based and should be resumable.
+The pipeline is stage-based and should be resumable. For first production runs,
+prefer the staged execution order below instead of a single unattended command.
 
 ---
 
@@ -69,7 +66,7 @@ python run_pipeline.py --only 02
 python run_pipeline.py --only 03
 python run_pipeline.py --only 04a
 python run_pipeline.py --only 04b
-python run_pipeline.py --only 05
+python run_pipeline.py --only 05 --skip-ml
 python run_pipeline.py --only 06
 python run_pipeline.py --only 07
 python run_pipeline.py --only 08
@@ -149,6 +146,9 @@ Force deterministic fallback:
 ```bash
 python run_pipeline.py --only 05 --skip-ml
 ```
+
+Use `--skip-ml` for the first full production pass unless the optional
+calibration artifacts have already been reviewed.
 
 External model retraining workflow:
 
@@ -289,11 +289,12 @@ Example:
 
 1. Run syntax and tests.
 2. Run `--dry-run`.
-3. Run stages 01–04b.
-4. Run Stage 05 with `--skip-ml` first.
-5. Run Stage 06 validation.
-6. Run stages 07–12.
-7. Run Stage 13 with 1,000 years.
-8. Run Stage 13 with 50,000 years.
-9. Run Stage 15.
-10. Archive logs and manifest.
+3. Run Stage 01 and inspect `manifest_stage01_myrorss.csv`.
+4. Run stages 02, 03, 04a, and 04b.
+5. Run Stage 05 with `--skip-ml` first.
+6. Run Stage 06 validation.
+7. Run stages 07–12.
+8. Run Stage 13 with 1,000 years.
+9. Run Stage 13 with 50,000 years.
+10. Run Stage 14 and Stage 15.
+11. Archive logs and manifest.

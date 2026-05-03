@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.1**
-**Last updated: 2026-05-02 (post full-repo scan)**
+**Last updated: 2026-05-03 (main branch, Stage 01 running)**
 
 ---
 
@@ -45,7 +45,7 @@ Do not:
 9. Change output file names without updating the data dictionary.
 10. Assume missing SPC reports mean radar false alarms.
 11. Infer MYRORSS source availability from GeoTIFF file size or all-zero raster values.
-12. Run `git commit`, `git push`, `git checkout`, or `git merge` from the sandbox bash tool — the sandbox cannot unlink `.git/index.lock`.
+12. Commit generated data, logs, rendered figures, local bootstrap files, or model artifacts.
 
 ---
 
@@ -130,8 +130,8 @@ Tests should cover:
 - MDR monotonicity;
 - figure smoke tests;
 - run_pipeline stage selection and dry run;
-- **no duplicated grid constants across stage scripts** (test to be written);
-- **integration smoke: full pipeline on synthetic 5×5 grid** (test dir to be created).
+- **no duplicated grid constants across stage scripts**;
+- **integration smoke: full pipeline on synthetic tiny-grid fixtures**.
 
 ---
 
@@ -185,7 +185,15 @@ When asked to review the project:
 
 ---
 
-## 9. Confirmed State After 2026-05-02 Scan
+## 9. Confirmed State After 2026-05-03 Scan
+
+Current repository state:
+
+- Active branch: `main`.
+- Current synced commit: `2228d54`.
+- GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing for the current PR run.
+- Stage helper refactor complete: `_config.py`, `_logging.py`, and `_io.py` are wired into stage scripts where required.
+- Stage 01 full run is still active; do not start another Stage 01 process while it is running.
 
 ### Files created 2026-05-01 (while pipeline was running)
 
@@ -237,6 +245,13 @@ When asked to review the project:
 - Regression / golden-output tests
 - Bootstrap CIs on Stage 09 RP estimates
 
+**Immediate run priorities after Stage 01 completes:**
+- Run Stage 02.
+- Run Stage 04a.
+- Run Stage 04b.
+- Re-run Stages 05–15 with `--skip-ml` against the full dataset.
+- Run Stage 13 smoke (`--n-years 1000`) before the full 50,000-year catalog.
+
 ---
 
 ## 10. Compact Project Context
@@ -254,5 +269,5 @@ scripts/_config.py = single source of truth for constants and is imported by all
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 OPEN DOC WATCH: methodology.md §13 and uncertainty.md §5.1 document monthly CV Mar–Sep for σ_perturb; keep them aligned with code if Stage 13 changes.
 First full run started 2026-05-01 via Codex.
-Git commits must be run from the user's terminal, not the sandbox.
+Current active branch is main; v2.1 has been merged and is no longer the active branch.
 ```

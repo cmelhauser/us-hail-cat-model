@@ -60,14 +60,14 @@ pre-commit install
 | Branch | Purpose |
 |--------|---------|
 | `main` | Stable, always passes CI |
-| `v2.1` | Active development branch for v2.1 hardening |
+| `codex/<name>` | AI-assisted or local work branches |
 | `feature/<name>` | New features or methodology changes |
 | `fix/<name>` | Bug fixes |
 | `docs/<name>` | Documentation-only changes |
 
-Base all new branches off `main` (or the active development branch if
-explicitly coordinating with the maintainer). Keep branches focused; one
-concern per PR.
+Base all new branches off `main` unless explicitly coordinating with the
+maintainer. Keep branches focused; one concern per PR. The historical `v2.1`
+branch has been merged and is no longer the active development branch.
 
 ---
 

@@ -1,6 +1,7 @@
-# CONUS Hail Cat Model v2.0
-# Python 3.9+ required
-# Install: pip install -r requirements.txt
+# CONUS Hail Cat Model v2.1
+# Python 3.10+ required
+# Preferred install: pip install -e ".[dev]"
+# Legacy install: pip install -r requirements.txt
 
 # Core scientific
 numpy>=1.24
