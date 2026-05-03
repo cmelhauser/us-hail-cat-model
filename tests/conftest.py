@@ -7,6 +7,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / "scripts"
 
+for path in (str(REPO_ROOT), str(SCRIPTS)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
 def load_stage(filename: str):
     path = REPO_ROOT / filename if filename == "run_pipeline.py" else SCRIPTS / filename
     module_name = "stage_" + filename.replace(".py", "").replace("-", "_").replace(".", "_")
