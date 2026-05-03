@@ -47,7 +47,7 @@ Use the reading paths below to orient yourself quickly.
 |---|---|---|
 | [`executive_summary.md`](executive_summary.md) | Overview | 5-minute model overview for decision-makers |
 | [`explainer.md`](explainer.md) | Overview | Plain-language methodology with no equations |
-| [`methodology.md`](methodology.md) | Scientific | Full methodology: MESH75, EVT, stochastic simulation, vulnerability |
+| [`methodology.md`](methodology.md) | Scientific | Full methodology: MESH75, EVT, stochastic simulation, vulnerability — includes §0 notation glossary |
 | [`literature_review.md`](literature_review.md) | Scientific | Annotated bibliography covering all model components |
 | [`uncertainty.md`](uncertainty.md) | Scientific | Uncertainty budget across six categories; companion to methodology |
 | [`sensitivity.md`](sensitivity.md) | Scientific | Hyperparameter sensitivity sweep plan: stages 08, 09, 10, 12, 13 |

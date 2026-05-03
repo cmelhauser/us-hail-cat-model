@@ -41,17 +41,14 @@ Violating any of these requires explicit user sign-off and a version bump.
 | 5 | **0.05° grid is fixed in v2.1.** No other resolution. Any change = version bump + full rerun. |
 | 6 | **Never commit data files.** `.tif`, `.npy`, `.npz`, `.nc`, `.grib2`, `.parquet`, `.pkl` are gitignored. |
 | 7 | **Update tests and docs** whenever methodology or output schemas change. |
-| 8 | **Grid constants come from `scripts/_config.py`.** Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` in stage scripts. *(Refactor pending — 13 scripts still have inline constants. Apply post-run.)* |
+| 8 | **Grid constants come from `scripts/_config.py`.** Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` in stage scripts. The refactor is complete across all 15 stages. |
 | 9 | **Preserve source-coverage metadata.** Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
 
 ---
 
-## ⚠️ Known Issues / Discrepancies (fix during next refactor)
+## Known Issues / Discrepancies
 
-| Issue | Location | Detail |
-|-------|----------|--------|
-| `MAX_CENTROID_KM_DAY` mismatch | `scripts/08_build_event_catalog.py` vs `scripts/_config.py` | Script has `100.0`; `_config.py` has `150.0`. Decide canonical value before importing. |
-| `RP_YEARS` duplicated | `09_fit_cdf_regional.py`, `10_build_smooth_cdf.py`, `13_generate_stochastic_catalog.py`, `15_render_figures.py` | All four define `RP_YEARS` inline; should import from `_config`. |
+No active constant-drift issues are known. `MAX_CENTROID_KM_DAY` was resolved on 2026-05-03, and the `_config.py`, `_logging.py`, and `_io.py` refactors are now wired into all stage scripts.
 
 ---
 
@@ -83,7 +80,7 @@ us-hail-cat-model/
 │   ├── 05_apply_mesh_bias_correction.py  ← HIGH RISK: fallback must work
 │   ├── 06_validate_mesh_vs_spc.py
 │   ├── 07_build_hail_climo.py
-│   ├── 08_build_event_catalog.py         ← HIGH RISK: sparse output; MAX_CENTROID_KM_DAY mismatch
+│   ├── 08_build_event_catalog.py         ← HIGH RISK: sparse output; centroid cap = 150.0 km/day
 │   ├── 09_fit_cdf_regional.py            ← HIGH RISK: threshold diagnostics
 │   ├── 10_build_smooth_cdf.py
 │   ├── 11_build_occurrence_probs.py
@@ -97,7 +94,7 @@ us-hail-cat-model/
 │   ├── test_01_*.py … test_15_*.py
 │   ├── test_stage*.py          ← deeper unit tests for high-risk stages
 │   ├── test_run_pipeline.py
-│   └── (integration/ dir not yet created)
+│   └── integration/              ← synthetic smoke/integration tests
 │
 ├── docs/
 │   ├── README.md               ← documentation index (start here)
@@ -215,7 +212,7 @@ Then review `docs/REVIEW_PRE_RUN.md` (the permanent audit artifact).
 | `DECAY_KM` | 75 km | Stage 10 exponential decay |
 | `N_REGIONS_DEFAULT` | 6 | K-means EVT regions |
 | `TRANSLATE_CELLS` | ±3 | Stage 13 spatial translation |
-| `MAX_CENTROID_KM_DAY` | 150.0 | Stage 08 merge check (**see known issues**) |
+| `MAX_CENTROID_KM_DAY` | 150.0 | Stage 08 merge check (fixed 2026-05-03; matches `_config.py`) |
 
 ---
 
@@ -239,14 +236,14 @@ Then review `docs/REVIEW_PRE_RUN.md` (the permanent audit artifact).
 | docs/benchmarks.md | ✅ Written (published RP comparison framework) |
 | docs/FAQ.md | ✅ Written |
 | docs/vulnerability_derivation.md | ✅ Written (MDR sources, limitations, calibration path) |
-| scripts/_config.py | ✅ Written; **0/15 stage scripts import from it** |
-| scripts/_logging.py | ✅ Written; **0/15 stage scripts import from it** |
-| scripts/_io.py | ❌ Not yet written |
+| scripts/_config.py | ✅ Written; **15/15 stage scripts import from it** |
+| scripts/_logging.py | ✅ Written; **15/15 stage scripts import from it** |
+| scripts/_io.py | ✅ Written; shared `write_geotiff`, `haversine_km`, and `latlon_to_grid` are imported by stage scripts where needed |
 | Stage 01 source manifest | ✅ Implemented |
 | Pipeline run manifest | ⏳ In progress |
 | Bootstrap CIs on RP maps | ⏳ Pending first-run outputs |
 | Regression / golden tests | ⏳ Pending first-run outputs |
-| MAX_CENTROID_KM_DAY mismatch | ⚠️ Stage 08 = 100.0, _config = 150.0 |
+| MAX_CENTROID_KM_DAY mismatch | ✅ Resolved 2026-05-03 — stage 08 corrected to 150.0 |
 | σ_perturb doc accuracy | ✅ Methodology and uncertainty docs now match the monthly CV implementation |
 
 ---
@@ -255,10 +252,9 @@ Then review `docs/REVIEW_PRE_RUN.md` (the permanent audit artifact).
 
 In priority order:
 
-1. **Decide `MAX_CENTROID_KM_DAY` canonical value** (100.0 or 150.0) before the _config refactor.
-2. **Apply `_config.py` import refactor** to 13 stage scripts (01, 02, 04b, 05, 06, 07, 08, 09, 10, 11, 12, 13, 15). Scripts 03, 04a, 14 have no grid constants and need no refactor.
-3. **Apply `_logging.py` migration** to all 15 stage scripts.
-4. **Write `scripts/_io.py`** with shared `write_geotiff` (+ provenance tags), `haversine`, `latlon_to_grid`.
+1. **Review Stage 15 figures** once the full pipeline finishes — analytical vs stochastic RP comparison.
+2. **Write regression tests** against first-run golden outputs.
+3. **Add bootstrap CIs to Stage 09** (sketch in `docs/uncertainty.md §3.1`).
 5. **Write regression tests** against first-run golden outputs.
 6. **Add bootstrap CIs to Stage 09** (sketch in `docs/uncertainty.md §3.1`).
 7. **Upgrade `.venv` to Python 3.10+** (current = 3.9.6, EOL Oct 2025).

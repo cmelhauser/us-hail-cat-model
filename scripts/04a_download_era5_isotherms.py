@@ -40,11 +40,16 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import DATA_ROOT, LOG_ROOT
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import DATA_ROOT, LOG_ROOT
+    from scripts._logging import get_logger
+
 ERA5_DIR  = DATA_ROOT / "historical" / "era5"
 OUT_FILE  = ERA5_DIR / "era5_monthly_isotherms_conus.nc"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "04a_download_era5.log"
 
 # CONUS bounding box for ERA5 download (slightly padded)
@@ -62,14 +67,7 @@ PRESSURE_LEVELS = [
 CLIM_YEARS = [str(y) for y in range(1991, 2021)]  # 1991–2020 climatology
 MONTHS = [f"{m:02d}" for m in range(1, 13)]
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("04a_download_era5", LOG_ROOT).info
 
 def download_era5_temperature():
     """Download ERA5 monthly mean temperature on pressure levels."""
@@ -105,7 +103,6 @@ def download_era5_temperature():
     log(f"  Downloaded: {raw_file.name} ({raw_file.stat().st_size / 1e6:.1f} MB)")
     return raw_file
 
-
 def download_era5_surface_geopotential():
     """Download ERA5 surface geopotential for AGL conversion."""
     import cdsapi
@@ -132,7 +129,6 @@ def download_era5_surface_geopotential():
         str(sfc_file),
     )
     return sfc_file
-
 
 def compute_isotherm_heights(raw_file: Path, sfc_file: Path):
     """
@@ -242,7 +238,6 @@ def compute_isotherm_heights(raw_file: Path, sfc_file: Path):
     ds.close()
     ds_sfc.close()
 
-
 def validate_outputs() -> bool:
     errors = []
     if not OUT_FILE.exists():
@@ -274,7 +269,6 @@ def validate_outputs() -> bool:
     log("Output validation passed ✓")
     return True
 
-
 def main():
     parser = argparse.ArgumentParser(description="Download ERA5 isotherm heights.")
     parser.add_argument("--validate", action="store_true")
@@ -293,7 +287,6 @@ def main():
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

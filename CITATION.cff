@@ -19,7 +19,7 @@ authors:
     given-names: Christopher
     email: christopher.melhauser@gmail.com
 license: MIT
-repository-code: "https://github.com/melhauserc/us-hail-cat-model"
+repository-code: "https://github.com/cmelhauser/us-hail-cat-model"
 keywords:
   - hail
   - catastrophe model
@@ -47,10 +47,15 @@ references:
     end: 1223
     doi: "10.1175/JAMC-D-20-0271.1"
   - type: article
-    title: "Observed and Near-Real-Time (NRT) Attack of Severe and High-Impact Weather over the Contiguous United States"
+    # VERIFY BEFORE SUBMISSION: title, pages, and DOI below appear to belong
+    # to a different paper. The intended reference is Cintineo et al. (2012)
+    # "An objective high-resolution hail climatology of the contiguous United States"
+    # Wea. Forecasting, 27, 1235–1248. Confirm title, pages (1235-1248), first-
+    # author initial (J. M.), and DOI before archiving the code release.
+    title: "An Objective High-Resolution Hail Climatology of the Contiguous United States"
     authors:
       - family-names: Cintineo
-        given-names: J. L.
+        given-names: J. M.
       - family-names: Smith
         given-names: T. M.
       - family-names: Lakshmanan
@@ -62,8 +67,8 @@ references:
     journal: "Weather and Forecasting"
     year: 2012
     volume: 27
-    start: 31
-    end: 51
+    start: 1235
+    end: 1248
     doi: "10.1175/WAF-D-11-00044.1"
   - type: article
     title: "A New Algorithm for the Estimation of Hail Size from WSR-88D Radar"

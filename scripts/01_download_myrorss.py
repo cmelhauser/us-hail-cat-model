@@ -66,12 +66,19 @@ from pathlib import Path
 
 import numpy as np
 
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from _io import write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from scripts._io import write_geotiff
+    from scripts._logging import get_logger
+
 # ── paths ─────────────────────────────────────────────────────────────────────
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
 OUT_DIR   = DATA_ROOT / "historical" / "mesh_0.05deg"
 MANIFEST_FILE = OUT_DIR / "manifest_stage01_myrorss.csv"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "01_download_myrorss.log"
 
 # ── MYRORSS native grid ──────────────────────────────────────────────────────
@@ -92,11 +99,11 @@ CONUS_NCOLS     = CONUS_COL_END - CONUS_COL_START    # 5900
 
 # ── output grid (0.05°) ──────────────────────────────────────────────────────
 AGG_FACTOR  = 5                  # 5×5 native cells → 1 output cell
-OUT_DX      = NATIVE_DX * AGG_FACTOR   # 0.05°
-OUT_NROWS   = CONUS_NROWS // AGG_FACTOR  # 520
-OUT_NCOLS   = CONUS_NCOLS // AGG_FACTOR  # 1180
-OUT_LAT_MAX = NATIVE_LAT_ORIGIN - CONUS_ROW_START * NATIVE_DX  # 50.005
-OUT_LON_MIN = NATIVE_LON_ORIGIN + CONUS_COL_START * NATIVE_DX  # -125.005
+OUT_DX      = DX
+OUT_NROWS   = NROWS
+OUT_NCOLS   = NCOLS
+OUT_LAT_MAX = LAT_MAX
+OUT_LON_MIN = LON_MIN
 
 # ── S3 config ────────────────────────────────────────────────────────────────
 S3_BUCKET   = "noaa-oar-myrorss-pds"
@@ -109,7 +116,7 @@ END_DATE   = date(2011, 12, 31)  # MYRORSS ends December 2011
 
 # ── nodata ────────────────────────────────────────────────────────────────────
 MYRORSS_NODATA = -99900.0
-OUT_NODATA     = 0.0
+OUT_NODATA     = NODATA
 
 MANIFEST_FIELDS = [
     "date",
@@ -125,14 +132,7 @@ MANIFEST_FIELDS = [
     "read_errors",
 ]
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("01_download_myrorss", LOG_ROOT).info
 
 def get_s3_client():
     """Create an unsigned S3 client (no AWS credentials needed)."""
@@ -144,7 +144,6 @@ def get_s3_client():
         config=Config(signature_version=UNSIGNED),
         region_name=S3_REGION,
     )
-
 
 def list_mesh_keys(s3, day: date) -> list:
     """List all MESH file keys for a given day."""
@@ -158,20 +157,17 @@ def list_mesh_keys(s3, day: date) -> list:
                 keys.append(key)
     return sorted(keys)
 
-
 def summarize_key_formats(keys: list) -> tuple:
     """Return counts of plain and gzipped NetCDF keys."""
     gz_count = sum(1 for key in keys if key.endswith(".netcdf.gz"))
     plain_count = sum(1 for key in keys if key.endswith(".netcdf"))
     return plain_count, gz_count
 
-
 def decode_netcdf_object(key: str, payload: bytes) -> bytes:
     """Return NetCDF bytes for either plain .netcdf or gzipped .netcdf.gz objects."""
     if key.endswith(".gz"):
         return gzip.decompress(payload)
     return payload
-
 
 def parse_sparse_mesh(nc_bytes: bytes, daily_max: np.ndarray) -> int:
     """
@@ -237,7 +233,6 @@ def parse_sparse_mesh(nc_bytes: bytes, daily_max: np.ndarray) -> int:
     np.maximum.at(daily_max, (r, c), v)
     return int(mask.sum())
 
-
 def block_max(data: np.ndarray, factor: int) -> np.ndarray:
     """
     Aggregate 2D array via block-maximum.
@@ -267,30 +262,6 @@ def block_max(data: np.ndarray, factor: int) -> np.ndarray:
     )
 
 
-def write_geotiff(data: np.ndarray, out_path: Path):
-    """Write a single-band float32 GeoTIFF at 0.05° CONUS grid."""
-    import rasterio
-    from rasterio.transform import from_origin
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "driver":    "GTiff",
-        "dtype":     "float32",
-        "width":     OUT_NCOLS,
-        "height":    OUT_NROWS,
-        "count":     1,
-        "crs":       "EPSG:4326",
-        "transform": from_origin(OUT_LON_MIN, OUT_LAT_MAX, OUT_DX, OUT_DX),
-        "compress":  "lzw",
-        "tiled":     True,
-        "blockxsize": 256,
-        "blockysize": 256,
-        "nodata":    OUT_NODATA,
-    }
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
-
-
 def summarize_output_raster(path: Path) -> tuple:
     """Return active 0.05° cells and max MESH from an output GeoTIFF."""
     import rasterio
@@ -304,7 +275,6 @@ def summarize_output_raster(path: Path) -> tuple:
     max_mesh = float(np.nanmax(data))
     return active_cells, round(max_mesh, 1)
 
-
 def classify_day(source_files: int, active_cells: int, read_errors: int = 0) -> str:
     """Classify source availability separately from hail/no-hail signal."""
     if source_files == 0:
@@ -316,7 +286,6 @@ def classify_day(source_files: int, active_cells: int, read_errors: int = 0) -> 
     if active_cells == 0:
         return "no_hail_pixels"
     return "ok"
-
 
 def manifest_row(day: date, out_path: Path, keys: list, source_pixels,
                  active_cells: int, max_mesh_mm: float, status: str,
@@ -337,7 +306,6 @@ def manifest_row(day: date, out_path: Path, keys: list, source_pixels,
         "read_errors": "" if read_errors is None else read_errors,
     }
 
-
 def upsert_manifest_row(row: dict):
     """Write or replace a manifest row by date."""
     MANIFEST_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -355,7 +323,6 @@ def upsert_manifest_row(row: dict):
         for key in sorted(rows):
             writer.writerow(rows[key])
     tmp_path.replace(MANIFEST_FILE)
-
 
 def process_day(s3, day: date, dry_run: bool = False) -> dict:
     """
@@ -444,14 +411,12 @@ def process_day(s3, day: date, dry_run: bool = False) -> dict:
         "status":      status,
     }
 
-
 def iter_dates(start: date, end: date):
     """Yield each date from start to end inclusive."""
     d = start
     while d <= end:
         yield d
         d += timedelta(days=1)
-
 
 def validate_outputs() -> bool:
     """Validate all outputs produced by this stage."""
@@ -492,7 +457,6 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -599,7 +563,6 @@ def main():
     if not args.dry_run:
         ok = validate_outputs()
         sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

@@ -38,28 +38,22 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from _io import write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from scripts._io import write_geotiff
+    from scripts._logging import get_logger
+
 IN_DIR    = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR   = DATA_ROOT / "historical" / "mesh_0.05deg_climo"
 FIG_DIR   = REPO_ROOT / "docs" / "figures" / "historical"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "07_build_hail_climo.log"
 
-NROWS = 520
-NCOLS = 1180
-DX    = 0.05
-LAT_MAX = 50.005
-LON_MIN = -125.005
-
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("07_build_hail_climo", LOG_ROOT).info
 
 def build_doy_index() -> dict:
     """Map each DOY (1–366) to a list of corrected MESH75 raster paths."""
@@ -73,22 +67,6 @@ def build_doy_index() -> dict:
         except ValueError:
             continue
     return doy_files
-
-
-def write_geotiff(data: np.ndarray, out_path: Path):
-    import rasterio
-    from rasterio.transform import from_origin
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "driver": "GTiff", "dtype": "float32", "width": NCOLS,
-        "height": NROWS, "count": 1, "crs": "EPSG:4326",
-        "transform": from_origin(LON_MIN, LAT_MAX, DX, DX),
-        "compress": "lzw", "tiled": True, "blockxsize": 256,
-        "blockysize": 256, "nodata": 0.0,
-    }
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
-
 
 def build_climatology():
     import rasterio
@@ -153,7 +131,6 @@ def build_climatology():
     elapsed = time.time() - t0
     log(f"  Climatology complete in {elapsed:.0f}s")
 
-
 def make_seasonal_figure():
     """Generate a seasonal hail activity summary figure."""
     import rasterio
@@ -190,7 +167,6 @@ def make_seasonal_figure():
     plt.close()
     log(f"  Seasonal figure saved to {FIG_DIR}")
 
-
 def validate_outputs() -> bool:
     import rasterio
     errors = []
@@ -215,7 +191,6 @@ def validate_outputs() -> bool:
     log(f"Output validation passed ✓ ({len(list(OUT_DIR.glob('climo_???.tif')))} files)")
     return True
 
-
 def main():
     parser = argparse.ArgumentParser(description="Build daily MESH75 climatology.")
     parser.add_argument("--validate", action="store_true")
@@ -235,7 +210,6 @@ def main():
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

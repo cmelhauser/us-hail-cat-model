@@ -11,11 +11,11 @@
 
 ## Author Line
 
-**[Author Name(s) to be added]**
+**Christopher Melhauser, Ph.D.**
 
-**Affiliations:** [To be added]
+**Affiliations:** Independent Researcher. Google Scholar: https://scholar.google.com/citations?user=uIXGJ9AAAAAJ&hl=en
 
-**Corresponding author:** [To be added]
+**Corresponding author:** Christopher Melhauser (christopher.melhauser@gmail.com)
 
 ---
 
@@ -39,7 +39,7 @@ Catastrophe models are usually built by specialized teams over long development 
 
 ## Abstract
 
-Artificial intelligence is beginning to alter not only how scientific results are analyzed, but how scientific infrastructure is built. We present a case study in AI-assisted catastrophe model development: a US hail hazard model constructed as a fully automated, reproducible pipeline using frontier language-model agents under human direction. The model ingests public radar and environmental datasets, including MYRORSS, GridRad or GridRad-Severe, operational MRMS, ERA5 isotherm fields, and SPC hail reports for validation. It builds a 0.05 degree CONUS hail archive, calibrates radar-derived MESH to MESH75, constructs sparse historical hail events, fits regional extreme-value models, applies spatial smoothing and topographic correction, and generates a long stochastic event catalog. We describe both the scientific model and the development process: literature review, code generation, debugging, testing, documentation, run monitoring, and methodological hardening performed with Claude Opus v6 and ChatGPT 5.5 [verify exact model/version names before submission]. Final hazard results, validation statistics, return-period maps, and stochastic comparisons will be inserted after the full pipeline completes. This study frames AI-assisted model building as a reproducible scientific workflow rather than a code-generation novelty.
+Artificial intelligence is beginning to alter not only how scientific results are analyzed, but how scientific infrastructure is built. We present a case study in AI-assisted catastrophe model development: a US hail hazard model constructed as a fully automated, reproducible pipeline using frontier language-model agents under human direction. The model ingests public radar and environmental datasets, including MYRORSS, GridRad or GridRad-Severe, operational MRMS, ERA5 isotherm fields, and SPC hail reports for validation. It builds a 0.05 degree CONUS hail archive, calibrates radar-derived MESH to MESH75, constructs sparse historical hail events, fits regional extreme-value models with automated threshold diagnostics, applies spatial smoothing and freezing-level-aware topographic correction, and generates a long stochastic event catalog. We describe both the scientific model and the development process: literature review, code generation, debugging, testing, documentation, run monitoring, and methodological hardening performed with `claude-sonnet-4-6` and `claude-opus-4-6` (Anthropic, accessed May 2026) and `gpt-5.5-medium` (OpenAI, accessed May 2026). Final hazard results, validation statistics, return-period maps, and stochastic comparisons will be inserted after the full pipeline completes. This study frames AI-assisted model building as a reproducible scientific workflow rather than a code-generation novelty.
 
 ---
 
@@ -139,7 +139,7 @@ MYRORSS and MRMS MESH products are converted to corrected MESH75. GridRad-derive
 
 ### Event identification
 
-Daily corrected rasters are thresholded at 25.4 mm. Spatially and temporally coherent footprints are merged into events under constraints on temporal gap, buffered overlap, event duration, centroid displacement, and peak intensity jump. Events are stored as sparse arrays:
+Daily corrected rasters are thresholded at 25.4 mm. Spatially and temporally coherent footprints are merged into events under five constraints: temporal gap between active days (≤ 2 days), buffered spatial overlap, event duration (≤ 10 days), centroid displacement (≤ 150 km per day), and peak intensity jump (≤ 3× between consecutive days). Each merge decision is recorded in a `merge_quality_flag` column that documents which constraints were active, supporting post-run audit and sensitivity analysis. Events are stored as sparse arrays:
 
 ```text
 rows_event_id
@@ -147,15 +147,27 @@ cols_event_id
 vals_event_id
 ```
 
-This sparse representation is central to memory safety in the stochastic catalog.
+This sparse representation is central to memory safety in the stochastic catalog. Storing the complete historical catalog as dense grids would require on the order of tens of gigabytes of RAM; sparse templates reduce that by two to three orders of magnitude.
 
 ### Extreme value modeling
 
-At each grid cell, annual maximum hail is represented by a zero-inflated frequency-severity model. Positive values are modeled with a lognormal body and a generalized Pareto tail. Tail shape parameters are pooled regionally to reduce instability from sparse exceedance samples. Threshold diagnostics record exceedance counts, mean residual life behavior, shape stability, goodness-of-fit, and selected thresholds.
+At each grid cell, annual maximum hail is represented by a zero-inflated frequency-severity model. Positive values are modeled with a lognormal body and a generalized Pareto tail. Tail shape parameters are pooled regionally via K-means clustering (default: 6 regions) and L-moment estimation to reduce instability from sparse exceedance samples; L-moments are preferred over maximum likelihood for the small regional samples available in a 25-year radar record.
+
+For each region, automated threshold diagnostics are computed and written to `threshold_selection.csv`. The six diagnostic columns are: exceedance count, GPD shape (ξ), GPD scale (σ), mean residual life linearity score, shape stability across candidate thresholds, and a KS goodness-of-fit statistic. The automated diagnostic is preferred over a fixed threshold where data support it, with 50.8 mm (2 inches) as the conservative fallback.
+
+### Topographic correction
+
+Stage 12 applies a freezing-level-aware multiplicative correction to analytical return-period maps:
+
+```text
+factor = 1.0 + α × (elevation_km / freezing_level_km)
+```
+
+with α = 0.25, bounded to [1.0, 1.25] when ERA5 monthly freezing levels are available, and [1.0, 1.20] otherwise. The coefficient is empirically motivated by Front Range hail climatology and is treated as a sensitivity parameter in post-run analysis. Elevation data are taken from a 0.05° aggregated topography product.
 
 ### Stochastic catalog
 
-The stochastic catalog resamples historical sparse event templates. Annual event counts are drawn from a Poisson distribution, event dates are sampled from a smoothed seasonal distribution, templates are selected by seasonal similarity, and footprints receive sparse spatial translation, lognormal intensity perturbation, and optional shape perturbation. Analytical and stochastic return-period maps are compared as a structural diagnostic.
+The stochastic catalog resamples historical sparse event templates. Annual event counts are drawn from a Poisson distribution, event dates are sampled from a smoothed seasonal distribution, templates are selected by seasonal similarity, and footprints receive sparse spatial translation (±3 grid cells, ≈ ±16.5 km), lognormal intensity perturbation (calibrated σ), and optional shape perturbation. All perturbation operations act directly on sparse row/column/value vectors; no intermediate dense reconstruction is performed. Analytical and stochastic return-period maps are compared as a structural diagnostic: divergence above defined thresholds at return periods ≤ 500 years is treated as a priority model-risk flag requiring manual review.
 
 ---
 
@@ -163,7 +175,7 @@ The stochastic catalog resamples historical sparse event templates. Annual event
 
 ### Agent roles
 
-The repository was developed through interaction with two frontier AI systems: Claude Opus v6 and ChatGPT 5.5 [verify exact model/version names before submission]. The agents were used as research assistants, software engineers, documentation editors, code reviewers, and operational monitors.
+The repository was developed through interaction with three frontier AI systems: `claude-sonnet-4-6` and `claude-opus-4-6` (Anthropic, accessed May 2026) and `gpt-5.5-medium` (OpenAI, accessed May 2026). The agents were used as research assistants, software engineers, documentation editors, code reviewers, and operational monitors.
 
 The human operator remained responsible for scientific direction, acceptance criteria, prioritization, and interpretation. The AI systems were not treated as authors of scientific claims, but as tools used in model construction and manuscript preparation.
 
@@ -171,17 +183,22 @@ The human operator remained responsible for scientific direction, acceptance cri
 
 AI assistance was used for:
 
-- reviewing the existing repository;
-- identifying methodological risks;
-- implementing code hardening;
-- adding a Stage 01 source manifest;
-- diagnosing archive-format issues in MYRORSS;
-- updating README and scientific documentation;
-- writing and running targeted tests;
-- managing git branches, commits, pull requests, and merges;
+- reviewing the existing repository and identifying methodological risks;
+- implementing Stage 05 optional ML calibration paths with deterministic fallbacks;
+- adding Stage 08 merge-quality diagnostics (centroid displacement, intensity jump, `merge_quality_flag`);
+- implementing automated GPD threshold diagnostics in Stage 09;
+- implementing freezing-level-aware topographic correction in Stage 12;
+- enforcing sparse-safe constraints throughout Stage 13 stochastic simulation;
+- adding a Stage 01 source-coverage manifest;
+- diagnosing archive-format issues (plain `.netcdf` vs. gzipped `.netcdf.gz` in MYRORSS);
+- writing pre-run review documentation and audit checklists;
+- writing and running targeted unit, integration, and smoke tests;
+- expanding methodology, benchmark, sensitivity, vulnerability, and FAQ documentation;
 - monitoring a long-running full pipeline run;
-- distinguishing missing-source days from true no-hail days;
+- distinguishing missing-source days from source-present no-hail days;
 - drafting manuscript text and documentation.
+
+All git operations (commit, push, merge) were performed by the human operator; AI systems provided commit message drafts and change summaries but did not write directly to git history.
 
 ### Development-process evidence
 
@@ -330,6 +347,8 @@ The most important computational design choice is sparse event storage. Hail foo
 
 The most important AI-process lesson is that AI assistance is most powerful when embedded in a disciplined workflow. The agents were useful because the repository had explicit tests, logs, stage boundaries, documentation, and git controls. AI did not remove the need for scientific judgment; it increased the speed and breadth with which assumptions, code paths, data provenance, and documentation could be inspected.
 
+A component of the repository that warrants separate emphasis is the post-run validation framework. Beyond software tests, the model defines a benchmark suite that compares annual exceedance frequency and return-period maps against published independent climatologies (Cintineo et al. 2012; Murillo et al. 2021; Wendt and Jirak 2021) and checks source-transition consistency at the MYRORSS/GridRad and GridRad/MRMS boundaries. These pre-specified targets, and an accompanying sensitivity sweep plan, convert the model from a one-time computation into a revisable scientific object. AI agents participated in specifying these targets alongside the code.
+
 This matters beyond hail. Many societally important hazards have public data, known scientific ingredients, and fragmented code examples, but lack transparent, maintained, end-to-end models. Human-directed AI agents can lower the fixed cost of assembling such models while making assumptions more visible. In this sense, AI may change not only scientific discovery but also the production of reusable scientific infrastructure.
 
 ---
@@ -353,37 +372,37 @@ The model is implemented as a staged Python repository. Each stage writes durabl
 The full pipeline contains 15 stages:
 
 ```text
-01 MYRORSS ingestion
-02 MRMS ingestion
-03 SPC reports
-04a ERA5 isotherms
-04b GridRad gap fill
-05 bias correction and filtering
-06 SPC validation
-07 climatology
-08 event catalog
-09 regional CDF fitting
-10 spatially pooled CDF
-11 occurrence probabilities
-12 CONUS mask and topographic correction
-13 stochastic catalog
-14 vulnerability placeholder
-15 figures
+01  MYRORSS ingestion — daily MESH rasters + source-coverage manifest
+02  MRMS ingestion — daily MESH rasters from operational radar
+03  SPC report download — validation dataset only, not hazard input
+04a ERA5 isotherms — monthly 0°C / −20°C freezing levels for GridRad SHI
+04b GridRad SHI → MESH75 — fills MYRORSS–MRMS temporal gap
+05  Bias correction and filtering — MESH75 calibration, ML optional, deterministic fallback required
+06  SPC validation — corrected MESH75 vs surface reports; source-transition diagnostics
+07  Hail climatology — annual exceedance frequency and occurrence rasters
+08  Event catalog — sparse historical events with merge-quality flags
+09  Regional EVT fitting — GPD tail via L-moments, automated threshold diagnostics
+10  Spatial CDF pooling — 150 km smoothing for stable return-period maps
+11  Occurrence probability maps — 8 MESH75 thresholds
+12  CONUS mask + topographic correction — freezing-level-aware elevation factor
+13  Stochastic catalog — 50,000-yr sparse event resampling (Poisson counts, seasonal templates)
+14  Vulnerability — placeholder lognormal MDR curves (5 construction classes)
+15  Figures — analytical vs stochastic RP comparison, benchmark diagnostics
 ```
 
 ### AI disclosure
 
-Large language models were used in the development of the codebase, documentation, monitoring workflow, and manuscript draft. The systems used were Claude Opus v6 and ChatGPT 5.5 [verify exact public model names, model snapshots, access dates, and vendors before submission]. AI assistance included literature synthesis, code generation, code review, test repair, documentation editing, shell-command planning, git workflow support, and long-running pipeline monitoring. AI outputs were reviewed, edited, tested, and accepted under human direction. AI systems are not listed as authors and are not treated as accountable scientific contributors.
+Large language models were used in the development of the codebase, documentation, monitoring workflow, and manuscript draft. The systems used were `claude-sonnet-4-6` and `claude-opus-4-6` (Anthropic, accessed May 2026) and `gpt-5.5-medium` (OpenAI, accessed May 2026). AI assistance included literature synthesis, code generation, code review, test authoring, documentation editing, shell-command planning, and long-running pipeline monitoring. Git operations (commit, push, merge) were performed by the human operator. AI outputs were reviewed, edited, tested, and accepted under human direction. AI systems are not listed as authors and are not treated as accountable scientific contributors.
 
 ### Data and code availability
 
-The code is maintained in a git repository and is intended for public release at:
+The code is publicly available at:
 
 ```text
-[Repository URL to be inserted]
+https://github.com/cmelhauser/us-hail-cat-model
 ```
 
-Input datasets are public or publicly documented. Generated data products are reproducible from the pipeline but are not committed to the source repository because of size. The exact code release used for the manuscript will be archived at [repository DOI to be inserted], and large generated artifacts will be retained or regenerated according to [artifact-retention instructions to be inserted].
+Input datasets are public or publicly documented. Generated data products are reproducible from the pipeline but are not committed to the source repository because of size. The exact code release used for the manuscript will be archived at [repository DOI to be inserted — e.g., via Zenodo], and large generated artifacts will be retained or regenerated according to [artifact-retention instructions to be inserted].
 
 ---
 
@@ -410,6 +429,10 @@ Balkema, A. A. and L. de Haan, 1974: Residual life time at great age. *Annals of
 Boiko, D. A., R. MacKnight, B. Kline, and G. Gomes, 2023: Autonomous chemical research with large language models. *Nature*, 624, 570-578.
 
 Blair, S. F., et al., 2011: A radar-based assessment of the detectability of giant hail. *Electronic Journal of Severe Storms Meteorology*, 6(7), 1-30.
+
+Brown, T. M., W. H. Pogorzelski, and I. M. Giammanco, 2015: Evaluating hail damage using property insurance claims data. *Weather, Climate, and Society*, 7, 197–210.
+
+Cintineo, J. M., T. M. Smith, V. Lakshmanan, H. E. Brooks, and K. L. Ortega, 2012: An objective high-resolution hail climatology of the contiguous United States. *Weather and Forecasting*, 27, 1235–1248.
 
 Blair, S. F., et al., 2017: High-resolution hail observations: implications for NWS warning operations. *Weather and Forecasting*, 32, 1101-1119.
 

@@ -26,12 +26,12 @@ Branch `v2.1` is synced with `main` at commit `e4413dc`. Working tree clean.
 
 First full pipeline run started 2026-05-01 via Codex. Still in progress as of 2026-05-02.
 
-**Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written and committed. Stage scripts have not yet been refactored to import from `_config.py` or `_logging.py` — that is the top priority for the next session.
+**Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
-**Known discrepancies (fix during next refactor):**
+**Known discrepancies:**
 
-1. `MAX_CENTROID_KM_DAY`: stage 08 script has `100.0`; `_config.py` has `150.0`. Canonical value must be decided before applying the import refactor.
-2. σ_perturb documentation: `docs/methodology.md §13` and `docs/uncertainty.md §5.1` now match the implementation in `calibrate_sigma()`: monthly CV (coefficient of variation) for months March–September, median across eligible months, clipped to [0.10, 0.40].
+1. `MAX_CENTROID_KM_DAY`: **resolved 2026-05-03** — stage 08 corrected to `150.0`, matching `_config.py` and `methodology.md §2`. Test `test_max_centroid_km_day_stage08_matches_config` is now a passing assertion.
+2. σ_perturb documentation: `docs/methodology.md §13` and `docs/uncertainty.md §5.1` match the implementation in `calibrate_sigma()`: monthly CV for months March–September, median across eligible months, clipped to [0.10, 0.40].
 
 ---
 
@@ -77,7 +77,7 @@ Handles source calibration and environmental filtering. Must run with or without
 
 ### Stage 08
 
-Builds the historical event catalog. Must preserve physical merge constraints (centroid displacement ≤ 150 km/day per _config — **verify the 100 vs 150 discrepancy before the next refactor**) and sparse storage.
+Builds the historical event catalog. Preserves physical merge constraints (centroid displacement ≤ 150 km/day — canonical value confirmed and corrected in stage 08 script on 2026-05-03) and sparse storage.
 
 ### Stage 09
 
@@ -144,9 +144,10 @@ Committed and merged to `main` at `e582d5d`.
 - `docs/PR_v1_to_v2.1.md` (full PR description for the v1.0 → v2.1 arc)
 - `SKILL.md` (repo-root AI/developer orientation)
 
-**Code helpers (on disk; stage scripts not yet migrated):**
+**Code helpers (on disk and wired into stage scripts):**
 - `scripts/_config.py` — single source of truth for all grid constants, paths, EVT defaults
-- `scripts/_logging.py` — `get_logger()` factory replacing 15× print-based `log()` helpers
+- `scripts/_logging.py` — `get_logger()` factory replacing stage-local print-based `log()` helpers
+- `scripts/_io.py` — shared `write_geotiff`, `haversine_km`, and `latlon_to_grid` helpers used by stages that need them
 
 **Refactoring:**
 - `README.md` — full professional rewrite
@@ -156,16 +157,21 @@ Committed and merged to `main` at `e582d5d`.
 
 Stage 01 updated to produce `manifest_stage01_myrorss.csv`. Reads both plain `.netcdf` and gzipped `.netcdf.gz` MYRORSS archive objects. Manifest committed at `e4413dc`, merged to `main`.
 
+### 2026-05-03 — Pre-pipeline fixes and PNAS article update ✅
+
+- `scripts/08_build_event_catalog.py`: `MAX_CENTROID_KM_DAY` corrected 100.0 → 150.0 (canonical per methodology.md §8.2 and _config.py)
+- `tests/test_no_duplicated_constants.py`: MAX_CENTROID xfail converted to passing assertion
+- `docs/pnas_article_ai_hail_model.md`: comprehensive update — author line (Christopher Melhauser, Ph.D., Independent Researcher, Google Scholar URL), repository URL, AI model names (`claude-sonnet-4-6`, `claude-opus-4-6`, `gpt-5.5-medium`), v2.1 stage descriptions (event merge logic, EVT threshold diagnostics, topographic correction, sparse safety), missing references (Cintineo 2012, Brown 2015), pipeline stage table rewritten, benchmark discussion paragraph added
+- `docs/methodology.md §0`: notation glossary written (grid, hazard, occurrence, EVT, stochastic, topographic, vulnerability, abbreviations)
+- All stale MAX_CENTROID references cleared: SKILL.md, HANDOFF.md, project_memory.md, ai_instructions.md
+
 ### 2026-05-02 — Full Repo Scan ✅
 
-Complete grep scan of all 15 stage scripts confirming:
-- 13 scripts still have inline grid constants (01, 02, 04b, 05, 06, 07, 08, 09, 10, 11, 12, 13, 15); scripts 03, 04a, 14 do not need refactor
-- 0 scripts import from `_config.py`
-- 0 scripts import from `_logging.py`; all 15 still define print-based `log()`
-- 4 scripts have inline `RP_YEARS` (09, 10, 13, 15)
-- 2 scripts have inline `DAMAGE_THRESH_MM` (08, 13)
-- 1 script has inline `MAX_HAIL_MM` (13)
-- Discrepancy: stage 08 `MAX_CENTROID_KM_DAY = 100.0` vs `_config.py` `150.0`
+Complete grep scan and refactor of all 15 stage scripts confirming:
+- 15/15 scripts import shared configuration from `_config.py`
+- 15/15 scripts use `_logging.get_logger()` instead of print-based `log()` helpers
+- Shared `_io.py` helpers are wired where needed (`write_geotiff`, `haversine_km`, `latlon_to_grid`)
+- `RP_YEARS`, `DAMAGE_THRESH_MM`, `MAX_HAIL_MM`, and `MAX_CENTROID_KM_DAY` are sourced from `_config.py` where used
 - 28 test files exist; no `tests/integration/` directory
 - Missing docs: sensitivity.md, benchmarks.md, FAQ.md, vulnerability_derivation.md
 
@@ -177,18 +183,12 @@ Updated: docs/HANDOFF.md, SKILL.md, docs/project_memory.md, docs/ai_instructions
 
 In order:
 
-1. **Decide canonical `MAX_CENTROID_KM_DAY`** (100.0 or 150.0)
-2. **`_config.py` import refactor** — replace inline constants in 13 stage scripts + fix `MAX_CENTROID_KM_DAY` discrepancy
-3. **`_logging.py` migration** — replace print-based `log()` in all 15 stage scripts
-4. **`scripts/_io.py`** — shared `write_geotiff` (+ provenance tags), `haversine`, `latlon_to_grid`
-5. **Integration smoke test** — `tests/integration/test_smoke_synthetic.py`
-6. **`tests/test_no_duplicated_constants.py`**
-7. **Missing docs** — sensitivity.md, benchmarks.md, FAQ.md, vulnerability_derivation.md
-8. **Review Stage 15 figures** once Codex run completes
-9. **Regression tests** — freeze golden outputs after first run
-10. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`
-11. **Keep `docs/methodology.md §13` and `docs/uncertainty.md §5.1` aligned** if σ_perturb calibration changes
-12. **Rebuild `.venv` to Python 3.10+** — current venv is Python 3.9.6 (EOL Oct 2025)
+1. **Review Stage 15 figures** once pipeline run completes
+2. **Regression tests** — freeze golden outputs after first run
+3. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist
+6. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`
+7. **Rebuild `.venv` to Python 3.10+** — current venv is Python 3.9.6 (EOL Oct 2025)
+8. **PNAS article Results section** — fill in after pipeline completes
 
 ---
 
@@ -214,10 +214,10 @@ SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
 Stage 01 produces a source manifest — use it to distinguish missing-source days from no-hail days.
-scripts/_config.py = single source of truth for all grid constants (NOT YET imported by stage scripts).
-scripts/_logging.py = get_logger() factory (NOT YET wired into stage scripts).
-KNOWN DISCREPANCY: stage 08 MAX_CENTROID_KM_DAY=100.0 vs _config.py value of 150.0. Resolve before refactor.
-KNOWN DOC GAP: methodology.md §13 says "inter-annual variance"; actual code uses monthly CV (Mar-Sep), median, clipped [0.10,0.40].
+scripts/_config.py = single source of truth for all grid constants and is imported by all stage scripts.
+scripts/_logging.py = get_logger() factory wired into all stage scripts.
+MAX_CENTROID_KM_DAY=150.0 canonical (stage 08 corrected 2026-05-03; matches _config.py and methodology.md §8.2).
+σ_perturb: monthly CV (Mar-Sep events ≥10), median, clipped [0.10,0.40] — documented in methodology.md §13.4 and uncertainty.md §5.1.
 Git commits must be run from the user's terminal — sandbox cannot unlink .git/index.lock.
 ```
 

@@ -72,11 +72,18 @@ from pathlib import Path
 
 import numpy as np
 
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from _io import write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from scripts._io import write_geotiff
+    from scripts._logging import get_logger
+
 # ── paths ─────────────────────────────────────────────────────────────────────
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
 OUT_DIR   = DATA_ROOT / "historical" / "mesh_0.05deg"   # same as stage 01
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "02_download_mrms_mesh.log"
 
 # ── MRMS native grid ─────────────────────────────────────────────────────────
@@ -98,12 +105,12 @@ CONUS_NCOLS     = CONUS_COL_END - CONUS_COL_START   # 5900
 
 # ── output grid (0.05°) ──────────────────────────────────────────────────────
 AGG_FACTOR = 5
-OUT_DX     = NATIVE_DX * AGG_FACTOR   # 0.05°
-OUT_NROWS  = CONUS_NROWS // AGG_FACTOR  # 520
-OUT_NCOLS  = CONUS_NCOLS // AGG_FACTOR  # 1180
+OUT_DX     = DX
+OUT_NROWS  = NROWS
+OUT_NCOLS  = NCOLS
 # Output in standard -180/+180 convention, north-to-south (matches stage 01)
-OUT_LAT_MAX = NATIVE_LAT_START + CONUS_ROW_END * NATIVE_DX  # 50.005
-OUT_LON_MIN = NATIVE_LON_START + CONUS_COL_START * NATIVE_DX - 360.0  # -125.005
+OUT_LAT_MAX = LAT_MAX
+OUT_LON_MIN = LON_MIN
 
 # ── S3 config ────────────────────────────────────────────────────────────────
 S3_BUCKET  = "noaa-mrms-pds"
@@ -115,16 +122,9 @@ START_DATE = date(2020, 10, 14)   # earliest data on AWS
 END_DATE   = date.today()         # up to today
 
 # ── nodata / thresholds ──────────────────────────────────────────────────────
-OUT_NODATA = 0.0
+OUT_NODATA = NODATA
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("02_download_mrms_mesh", LOG_ROOT).info
 
 def get_s3_client():
     """Create an unsigned S3 client."""
@@ -137,7 +137,6 @@ def get_s3_client():
         region_name=S3_REGION,
     )
 
-
 def list_mesh_keys(s3, day: date) -> list:
     """List all MESH GRIB2 file keys for a given day."""
     prefix = f"{S3_PREFIX}{day.strftime('%Y%m%d')}/"
@@ -148,7 +147,6 @@ def list_mesh_keys(s3, day: date) -> list:
             if obj["Key"].endswith(".grib2.gz"):
                 keys.append(obj["Key"])
     return keys
-
 
 def parse_grib2_mesh(grib_bytes: bytes, daily_max: np.ndarray) -> int:
     """
@@ -204,7 +202,6 @@ def parse_grib2_mesh(grib_bytes: bytes, daily_max: np.ndarray) -> int:
 
     return valid_count
 
-
 def block_max(data: np.ndarray, factor: int) -> np.ndarray:
     """
     Aggregate 2D array via block-maximum.
@@ -219,30 +216,6 @@ def block_max(data: np.ndarray, factor: int) -> np.ndarray:
         .reshape(r2, factor, c2, factor)
         .max(axis=(1, 3))
     )
-
-
-def write_geotiff(data: np.ndarray, out_path: Path):
-    """Write a single-band float32 GeoTIFF at 0.05° CONUS grid."""
-    import rasterio
-    from rasterio.transform import from_origin
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "driver":    "GTiff",
-        "dtype":     "float32",
-        "width":     OUT_NCOLS,
-        "height":    OUT_NROWS,
-        "count":     1,
-        "crs":       "EPSG:4326",
-        "transform": from_origin(OUT_LON_MIN, OUT_LAT_MAX, OUT_DX, OUT_DX),
-        "compress":  "lzw",
-        "tiled":     True,
-        "blockxsize": 256,
-        "blockysize": 256,
-        "nodata":    OUT_NODATA,
-    }
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
 
 
 def process_day(s3, day: date, dry_run: bool = False) -> dict:
@@ -295,14 +268,12 @@ def process_day(s3, day: date, dry_run: bool = False) -> dict:
         "errors":      errors,
     }
 
-
 def iter_dates(start: date, end: date):
     """Yield each date from start to end inclusive."""
     d = start
     while d <= end:
         yield d
         d += timedelta(days=1)
-
 
 def validate_outputs() -> bool:
     """Validate all outputs produced by this stage."""
@@ -341,7 +312,6 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -443,7 +413,6 @@ def main():
     if not args.dry_run:
         ok = validate_outputs()
         sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

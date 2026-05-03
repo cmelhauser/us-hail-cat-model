@@ -41,40 +41,27 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS, POOL_RADIUS_KM, DECAY_KM, NODATA
+    from _io import haversine_km, write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS, POOL_RADIUS_KM, DECAY_KM, NODATA
+    from scripts._io import haversine_km, write_geotiff
+    from scripts._logging import get_logger
+
 MESH_DIR  = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
 CDF_DIR   = DATA_ROOT / "analysis" / "cdf"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "10_build_smooth_cdf.log"
 
-NROWS = 520
-NCOLS = 1180
-DX    = 0.05
-LAT_MAX = 50.005
-LON_MIN = -125.005
-
-POOL_RADIUS_KM = 150.0
-DECAY_KM       = 75.0
+# POOL_RADIUS_KM imported from _config
+# DECAY_KM imported from _config
 MIN_OBS        = 10
 GPD_THRESH_MM  = 50.8   # 2.0 inches default
-RP_YEARS = [10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000]
+RP_YEARS = list(RP_YEARS)  # mutable copy for legacy call sites
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
-
-def haversine_km(lat1, lon1, lat2, lon2):
-    """Approximate distance in km between two points."""
-    dlat = np.radians(lat2 - lat1)
-    dlon = np.radians(lon2 - lon1)
-    a = np.sin(dlat/2)**2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon/2)**2
-    return 6371 * 2 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
+log = get_logger("10_build_smooth_cdf", LOG_ROOT).info
 
 
 def build_annual_max():
@@ -92,22 +79,6 @@ def build_annual_max():
 
     log(f"  Annual max: {annual_max.shape} ({years[0]}–{years[-1]})")
     return annual_max, years
-
-
-def write_geotiff(data, out_path):
-    import rasterio
-    from rasterio.transform import from_origin
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "driver": "GTiff", "dtype": "float32", "width": NCOLS,
-        "height": NROWS, "count": 1, "crs": "EPSG:4326",
-        "transform": from_origin(LON_MIN, LAT_MAX, DX, DX),
-        "compress": "lzw", "tiled": True, "blockxsize": 256,
-        "blockysize": 256, "nodata": 0.0,
-    }
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
-
 
 def return_period_value(rp, mu, sigma, xi_gpd, sigma_gpd, thresh, p_occ):
     from scipy import stats
@@ -131,7 +102,6 @@ def return_period_value(rp, mu, sigma, xi_gpd, sigma_gpd, thresh, p_occ):
             return float(thresh + sigma_gpd * (-np.log(1 - p_gpd)))
         else:
             return float(thresh + (sigma_gpd / xi_gpd) * ((1 - p_gpd)**(-xi_gpd) - 1))
-
 
 def main():
     parser = argparse.ArgumentParser(description="Spatially-pooled CDF rebuild.")
@@ -279,7 +249,6 @@ def main():
     log(f"\n{'='*60}")
     log(f"  Complete")
     log(f"{'='*60}\n")
-
 
 if __name__ == "__main__":
     main()

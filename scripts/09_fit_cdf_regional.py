@@ -80,21 +80,22 @@ import numpy as np
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS, N_REGIONS_DEFAULT, GPD_THRESH_MM_DEFAULT, NODATA
+    from _io import write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS, N_REGIONS_DEFAULT, GPD_THRESH_MM_DEFAULT, NODATA
+    from scripts._io import write_geotiff
+    from scripts._logging import get_logger
+
 EVENT_DIR = DATA_ROOT / "historical" / "events"
 MESH_DIR  = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR   = DATA_ROOT / "analysis" / "cdf"
 FIG_DIR   = REPO_ROOT / "docs" / "figures" / "analysis"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "09_fit_cdf_regional.log"
 THRESHOLD_SELECTION_FILE = OUT_DIR / "threshold_selection.csv"
-
-NROWS = 520
-NCOLS = 1180
-DX    = 0.05
-LAT_MAX = 50.005
-LON_MIN = -125.005
 
 # Return periods to compute
 # Short RPs (10–500 yr) are well-constrained by the fitted CDF.
@@ -102,24 +103,17 @@ LON_MIN = -125.005
 # and carry significant uncertainty. The stochastic catalog (stage 13)
 # provides independent empirical estimates for long RPs that should be
 # compared against these analytical values.
-RP_YEARS = [10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000]
+RP_YEARS = list(RP_YEARS)  # mutable copy for legacy call sites
 
 # CDF fitting parameters
 MIN_YEARS_FOR_FIT   = 5     # minimum nonzero years to attempt CDF fit
 MIN_EXCEEDANCES_GPD = 5     # minimum exceedances for cell-level GPD
-DEFAULT_GPD_THRESHOLD_MM = 50.8  # 2.0 inches — default splice point
+DEFAULT_GPD_THRESHOLD_MM = GPD_THRESH_MM_DEFAULT  # 2.0 inches — default splice point
 MIN_REGION_EXCEEDANCES = 50  # minimum pooled exceedances for regional ξ
-DEFAULT_N_REGIONS = 6        # K-means clusters for regional pooling
+DEFAULT_N_REGIONS = N_REGIONS_DEFAULT        # K-means clusters for regional pooling
 THRESHOLD_DIAGNOSTICS = []
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("09_fit_cdf_regional", LOG_ROOT).info
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Annual Maximum Series
@@ -156,7 +150,6 @@ def build_annual_max_series() -> tuple:
     log(f"  Annual max array: {annual_max.shape}")
     return annual_max, years
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  L-moment Estimation
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -178,7 +171,6 @@ def lmom_fit_lognormal(data: np.ndarray) -> tuple:
         return np.nan, np.nan
     return float(np.mean(log_data)), float(np.std(log_data, ddof=1))
 
-
 def lmom_fit_gpd(exceedances: np.ndarray) -> tuple:
     """Fit GPD via L-moments. Returns (xi, sigma)."""
     try:
@@ -193,7 +185,6 @@ def lmom_fit_gpd(exceedances: np.ndarray) -> tuple:
     except Exception:
         pass
     return np.nan, np.nan
-
 
 def compute_lmoment_ratios(data: np.ndarray) -> tuple:
     """Compute L-moment ratios (L-CV, L-skewness, L-kurtosis) for a sample."""
@@ -217,7 +208,6 @@ def compute_lmoment_ratios(data: np.ndarray) -> tuple:
     t = l2 / l1       # L-CV
     t3 = l3 / l2      # L-skewness
     return float(t), float(t3), float(l2)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Regional Clustering
@@ -280,7 +270,6 @@ def cluster_cells(annual_max, n_regions):
         log(f"    Region {r}: {n_cells:,} cells, mean lat = {mean_lat:.1f}°N")
 
     return region_map, active, rows, cols
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  MRL Diagnostics
@@ -403,7 +392,6 @@ def compute_mrl_and_threshold(exceedances: np.ndarray, region_id: int) -> float:
     except Exception:
         pass
     return selected
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Regional GPD Fitting
@@ -537,7 +525,6 @@ def fit_regional_gpd(annual_max, region_map, n_regions):
             gpd_threshold, fit_type, region_xi_values, region_thresholds,
             fit_report)
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Return Period Computation
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -612,25 +599,9 @@ def compute_return_periods(p_occ, lognorm_mu, lognorm_sigma,
 
     return rp_maps
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Output
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def write_geotiff(data, out_path):
-    import rasterio
-    from rasterio.transform import from_origin
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "driver": "GTiff", "dtype": "float32", "width": NCOLS,
-        "height": NROWS, "count": 1, "crs": "EPSG:4326",
-        "transform": from_origin(LON_MIN, LAT_MAX, DX, DX),
-        "compress": "lzw", "tiled": True, "blockxsize": 256,
-        "blockysize": 256, "nodata": 0.0,
-    }
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
-
 
 def save_outputs(p_occ, lognorm_mu, lognorm_sigma, gpd_xi, gpd_sigma,
                   gpd_threshold, fit_type, region_map, region_xi_values,
@@ -680,7 +651,6 @@ def save_outputs(p_occ, lognorm_mu, lognorm_sigma, gpd_xi, gpd_sigma,
             w.writerows(THRESHOLD_DIAGNOSTICS)
         log(f"  Saved threshold_selection.csv")
 
-
 def validate_outputs() -> bool:
     errors = []
     for fname in ["cdf_parameters.npz", "p_occurrence.tif", "region_map.tif", "fitting_report.csv", "threshold_selection.csv"]:
@@ -700,7 +670,6 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(description="CDF fitting with regional GPD ξ pooling.")
@@ -762,7 +731,6 @@ def main():
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

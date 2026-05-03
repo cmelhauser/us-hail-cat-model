@@ -6,8 +6,8 @@ def test_stage08_group_events_rejects_large_centroid_jump(monkeypatch):
     from datetime import date
     s = load_stage("08_build_event_catalog.py")
     monkeypatch.setattr(s, "BUFFER_CELLS", 20)
-    fp1 = np.zeros((20, 20), dtype=bool); fp1[1, 1] = True
-    fp2 = np.zeros((20, 20), dtype=bool); fp2[18, 18] = True
+    fp1 = np.zeros((50, 50), dtype=bool); fp1[1, 1] = True
+    fp2 = np.zeros((50, 50), dtype=bool); fp2[45, 45] = True
     dates = [date(2020, 5, 1), date(2020, 5, 2)]
     groups = s.group_events(dates, [fp1, fp2], [fp1.astype(float)*30, fp2.astype(float)*30])
     assert groups == [[0], [1]]

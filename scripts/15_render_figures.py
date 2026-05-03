@@ -51,8 +51,13 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, DOCS_FIG, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, DOCS_FIG, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS
+    from scripts._logging import get_logger
+
 CDF_DIR   = DATA_ROOT / "analysis" / "cdf"
 STOCH_DIR = DATA_ROOT / "stochastic"
 EVENT_DIR = DATA_ROOT / "historical" / "events"
@@ -64,25 +69,12 @@ FIG_HIST  = REPO_ROOT / "docs" / "figures" / "historical"
 FIG_STOCH = REPO_ROOT / "docs" / "figures" / "stochastic"
 FIG_ANAL  = REPO_ROOT / "docs" / "figures" / "analysis"
 
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "15_render_figures.log"
 
-NROWS = 520
-NCOLS = 1180
-DX    = 0.05
-LAT_MAX = 50.005
-LON_MIN = -125.005
+RP_YEARS = list(RP_YEARS)  # mutable copy for legacy call sites
 
-RP_YEARS = [10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000]
-
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("15_render_figures", LOG_ROOT).info
 
 def setup_matplotlib():
     """Configure matplotlib for headless rendering with cartopy."""
@@ -96,7 +88,6 @@ def setup_matplotlib():
         "font.size": 10,
     })
     return plt
-
 
 def render_rp_map(tif_path, out_path, title, vmax=None):
     """Render a return period or occurrence probability map with CONUS outline."""
@@ -155,7 +146,6 @@ def render_rp_map(tif_path, out_path, title, vmax=None):
     plt.close()
     log(f"    {out_path.name}")
 
-
 def render_historical_maps():
     """Render analytical RP maps from stage 09/10."""
     log("\n  [Historical RP Maps]")
@@ -164,7 +154,6 @@ def render_historical_maps():
         if tif.exists():
             render_rp_map(tif, FIG_HIST / f"rp_{rp:05d}yr_analytical.png",
                           f"Analytical {rp:,}-Year Return Period Hail (MESH75)")
-
 
 def render_stochastic_maps():
     """Render empirical RP maps from stage 13."""
@@ -175,7 +164,6 @@ def render_stochastic_maps():
         if tif.exists():
             render_rp_map(tif, FIG_STOCH / f"rp_{rp:05d}yr_stochastic.png",
                           f"Stochastic {rp:,}-Year Return Period Hail (50K-yr catalog)")
-
 
 def render_ep_curves():
     """Render OEP and AEP curves from PET tables."""
@@ -203,7 +191,6 @@ def render_ep_curves():
     fig.savefig(FIG_STOCH / "oep_curve.png")
     plt.close()
     log(f"    oep_curve.png")
-
 
 def render_analytical_vs_stochastic():
     """Compare analytical (stage 09/10) vs stochastic (stage 13) RPs."""
@@ -252,9 +239,6 @@ def render_analytical_vs_stochastic():
     plt.close()
     log(f"    analytical_vs_stochastic_rp.png")
 
-
-
-
 def render_delta_maps():
     """Write analytical-vs-stochastic delta rasters and quicklook PNGs."""
     log("\n  [Analytical vs Stochastic Delta Maps]")
@@ -279,7 +263,6 @@ def render_delta_maps():
                           f"Stochastic − Analytical {rp:,}-Year Hail Delta")
         except Exception as e:
             log(f"    WARN: could not render delta {rp}: {e}")
-
 
 def render_event_summary():
     """Render event catalog summary charts."""
@@ -319,7 +302,6 @@ def render_event_summary():
 
     log(f"    annual_event_counts.png, monthly_event_distribution.png")
 
-
 def validate_outputs() -> bool:
     errors = []
     for d in [FIG_HIST, FIG_STOCH, FIG_ANAL]:
@@ -337,7 +319,6 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(description="Render all figures.")
@@ -377,7 +358,6 @@ def main():
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

@@ -60,12 +60,19 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = REPO_ROOT / "data"
+try:
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from _io import write_geotiff
+    from _logging import get_logger
+except ImportError:  # pragma: no cover - pytest importlib fallback
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from scripts._io import write_geotiff
+    from scripts._logging import get_logger
+
 IN_DIR    = DATA_ROOT / "historical" / "mesh_0.05deg"
 OUT_DIR   = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
 CAL_DIR   = DATA_ROOT / "analysis" / "calibration"
-LOG_DIR   = REPO_ROOT / "logs"
+LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "05_mesh_bias_correction.log"
 
 QQ_FILE   = CAL_DIR / "gridrad_quantile_map.npz"
@@ -74,11 +81,9 @@ FILTER_FILE = CAL_DIR / "hail_filter_model.pkl"
 DIAG_FILE = CAL_DIR / "calibration_diagnostics.csv"
 FILTER_DIAG_FILE = CAL_DIR / "hail_filter_diagnostics.csv"
 
-OUT_NROWS = 520
-OUT_NCOLS = 1180
-OUT_DX    = 0.05
-LAT_MAX   = 50.005
-LON_MIN   = -125.005
+OUT_NROWS = NROWS
+OUT_NCOLS = NCOLS
+OUT_DX = DX
 
 WITT_A     = 2.54
 WITT_B     = 0.5
@@ -102,14 +107,7 @@ _qq_type      = None
 _cqm_model    = None
 _filter_model = None
 
-
-def log(msg):
-    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-    print(line, flush=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
-
+log = get_logger("05_apply_mesh_bias_correction", LOG_ROOT).info
 
 def load_gridrad_days() -> set:
     global _gridrad_days
@@ -123,10 +121,8 @@ def load_gridrad_days() -> set:
             _gridrad_days = set(line.strip() for line in f if line.strip())
     return _gridrad_days
 
-
 def is_gridrad_source(datestr: str) -> bool:
     return datestr in load_gridrad_days()
-
 
 def apply_mesh75_correction(data: np.ndarray) -> np.ndarray:
     """Convert Witt MESH → MESH75."""
@@ -136,7 +132,6 @@ def apply_mesh75_correction(data: np.ndarray) -> np.ndarray:
         shi_proxy = (data[mask] / WITT_A) ** (1.0 / WITT_B)
         out[mask] = MH19_A * (shi_proxy ** MH19_B)
     return out
-
 
 def build_cross_calibration():
     """Phase A: build quantile mapping from overlap period."""
@@ -215,7 +210,6 @@ def build_cross_calibration():
     log(f"  GridRad p50={np.median(gridrad_arr):.1f} → MYRORSS p50={np.median(myrorss_arr):.1f} mm")
     log(f"  GridRad p95={np.percentile(gridrad_arr,95):.1f} → MYRORSS p95={np.percentile(myrorss_arr,95):.1f} mm")
 
-
 def _save_default_calibration():
     CAL_DIR.mkdir(parents=True, exist_ok=True)
     np.savez(QQ_FILE,
@@ -225,7 +219,6 @@ def _save_default_calibration():
              correction_type="identity",
              note="No overlap data; 1:1 mapping")
     log("  Saved identity (1:1) mapping as fallback")
-
 
 def load_qq_map():
     global _qq_gridrad, _qq_myrorss, _qq_type
@@ -239,7 +232,6 @@ def load_qq_map():
     _qq_gridrad = data.get("gridrad_quantiles")
     _qq_myrorss = data.get("myrorss_quantiles")
 
-
 def apply_gridrad_calibration(data: np.ndarray) -> np.ndarray:
     load_qq_map()
     if _qq_type == "identity" or _qq_gridrad is None:
@@ -250,8 +242,6 @@ def apply_gridrad_calibration(data: np.ndarray) -> np.ndarray:
         out[mask] = np.interp(out[mask], _qq_gridrad, _qq_myrorss)
         out[out < 0] = 0
     return out
-
-
 
 def _load_pickle_model(path: Path):
     """Load an optional model artifact. Missing or unreadable artifacts return None.
@@ -267,7 +257,6 @@ def _load_pickle_model(path: Path):
     except Exception as e:
         log(f"  WARN: could not load optional model {path.name}: {e}")
         return None
-
 
 def _feature_matrix(data: np.ndarray, lat_grid: np.ndarray, day_of_year: int) -> np.ndarray:
     """Build a conservative, documented Stage 05 feature matrix.
@@ -286,7 +275,6 @@ def _feature_matrix(data: np.ndarray, lat_grid: np.ndarray, day_of_year: int) ->
         month_cos.reshape(-1),
     ])
     return feats
-
 
 def apply_optional_cqm(data: np.ndarray, lat_grid: np.ndarray, day_of_year: int,
                        skip_ml: bool = False) -> np.ndarray:
@@ -311,7 +299,6 @@ def apply_optional_cqm(data: np.ndarray, lat_grid: np.ndarray, day_of_year: int,
     except Exception as e:
         log(f"  WARN: conditional calibration failed; using quantile fallback: {e}")
         return fallback
-
 
 def apply_probabilistic_filter(data: np.ndarray, day_of_year: int, lat_grid: np.ndarray,
                                skip_ml: bool = False) -> np.ndarray:
@@ -344,18 +331,15 @@ def apply_probabilistic_filter(data: np.ndarray, day_of_year: int, lat_grid: np.
         log(f"  WARN: probabilistic filter failed; using deterministic fallback: {e}")
         return deterministic
 
-
 def apply_probabilistic_environmental_filter(data: np.ndarray, lat_grid: np.ndarray,
                                              month=None, day_of_year: int = 1,
                                              skip_ml: bool = False) -> np.ndarray:
     """Compatibility wrapper for the v2.1 optional environmental filter API."""
     return apply_probabilistic_filter(data, day_of_year, lat_grid, skip_ml=skip_ml)
 
-
 def build_lat_grid() -> np.ndarray:
     lats = LAT_MAX - (np.arange(OUT_NROWS) + 0.5) * OUT_DX
     return np.broadcast_to(lats[:, np.newaxis], (OUT_NROWS, OUT_NCOLS))
-
 
 def apply_environmental_filter(data, day_of_year, lat_grid):
     out = data.copy()
@@ -364,7 +348,6 @@ def apply_environmental_filter(data, day_of_year, lat_grid):
     if is_winter:
         out[(lat_grid < 30.0) & (out < MIN_MESH75_SEVERE)] = 0.0
     return out
-
 
 def process_file(in_path, out_path, lat_grid, skip_ml: bool = False):
     import rasterio
@@ -404,7 +387,6 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False):
         "filtered_pct": round(100 * (1 - out_nz / max(in_nz, 1)), 1),
     }
 
-
 def validate_outputs():
     import rasterio, random
     errors = []
@@ -434,7 +416,6 @@ def validate_outputs():
         return False
     log("Output validation passed ✓")
     return True
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -521,7 +502,6 @@ def main():
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
-
 
 if __name__ == "__main__":
     main()

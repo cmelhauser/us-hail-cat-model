@@ -4,18 +4,15 @@ test_no_duplicated_constants.py
 Enforces that stage scripts use canonical constant values matching
 scripts/_config.py.
 
-After the _config.py import refactor (post-run priority #2), all stage scripts
-should import grid constants from _config rather than redefining them inline.
-Until then, this test validates that any inline definitions still agree with
-the canonical source of truth.
+All stage scripts should import grid constants from _config rather than redefining
+them inline. This test guards against future drift from the canonical source of
+truth.
 
 What this test catches:
-  - Inline grid constants that drift from _config.py values (e.g., someone
-    changes NROWS to 521 inline without updating _config.py)
-  - New inline constants added to a script after the refactor is applied to
-    that script (regression guard)
-  - The known MAX_CENTROID_KM_DAY discrepancy (stage 08 = 100, _config = 150)
-    is tracked as an explicit xfail until resolved
+  - Imported grid constants that drift from _config.py values
+  - New inline constants added to a script after the refactor (regression guard)
+  - MAX_CENTROID_KM_DAY: fixed 2026-05-03 — stage 08 updated to 150.0 to match
+    _config.py (canonical value per methodology.md §2); test is now a normal assertion
 
 After the refactor is complete, these tests continue to pass because each
 script's attribute is the value imported from _config, which equals the
@@ -127,8 +124,8 @@ def test_out_ncols_matches_config(script):
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. RP_YEARS must match _config wherever defined inline
 #
-# Scripts 09, 10, 13, 15 still define RP_YEARS inline. These should agree
-# with _config.RP_YEARS.
+# Scripts 09, 10, 13, 15 expose RP_YEARS for legacy call sites. These should
+# agree with _config.RP_YEARS.
 # ─────────────────────────────────────────────────────────────────────────────
 
 SCRIPTS_WITH_RP_YEARS = [
@@ -174,30 +171,19 @@ def test_damage_threshold_stage13_matches_config():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. MAX_CENTROID_KM_DAY discrepancy — tracked as xfail
+# 5. MAX_CENTROID_KM_DAY — canonical value is 150.0 (methodology.md §2, _config.py)
 #
-# Stage 08 defines MAX_CENTROID_KM_DAY = 100.0 while _config.py has 150.0.
-# This is a known bug (see SKILL.md ⚠️, docs/HANDOFF.md §Known Issues).
-# The canonical value must be decided before the _config import refactor.
-# When the discrepancy is resolved, this test should be updated to a normal
-# (non-xfail) assertion.
+# Stage 08 was fixed on 2026-05-03 to use 150.0, matching _config.py.
+# This is now a normal passing assertion.
 # ─────────────────────────────────────────────────────────────────────────────
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN BUG: stage 08 MAX_CENTROID_KM_DAY=100.0 vs _config.py=150.0. "
-        "Resolve canonical value before _config import refactor. "
-        "See SKILL.md ⚠️ Known Issues and docs/HANDOFF.md."
-    ),
-)
 def test_max_centroid_km_day_stage08_matches_config():
-    """This test is expected to fail until the MAX_CENTROID_KM_DAY discrepancy is fixed."""
+    """Stage 08 MAX_CENTROID_KM_DAY must equal _config.py (canonical = 150.0)."""
     s = _load("08_build_event_catalog.py")
     assert s.MAX_CENTROID_KM_DAY == cfg.MAX_CENTROID_KM_DAY, (
         f"Stage 08 MAX_CENTROID_KM_DAY={s.MAX_CENTROID_KM_DAY} != "
         f"_config.MAX_CENTROID_KM_DAY={cfg.MAX_CENTROID_KM_DAY}. "
-        "Decide the canonical value and update either the script or _config."
+        "Canonical value is 150.0 per methodology.md §2 and _config.py."
     )
 
 
