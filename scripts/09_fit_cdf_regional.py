@@ -80,6 +80,10 @@ import numpy as np
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
+_REPO_ROOT_FOR_IMPORTS = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
+
 try:
     from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS, N_REGIONS_DEFAULT, GPD_THRESH_MM_DEFAULT, NODATA
     from _io import write_geotiff

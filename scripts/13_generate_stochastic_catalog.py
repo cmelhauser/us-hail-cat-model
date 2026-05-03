@@ -57,6 +57,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+_REPO_ROOT_FOR_IMPORTS = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
+
 try:
     from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_HAIL_MM, RP_YEARS, RNG_SEED, N_SIM_YEARS, TRANSLATE_CELLS, NODATA
     from _io import write_geotiff
