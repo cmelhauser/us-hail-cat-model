@@ -26,14 +26,28 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-ERA5 credentials:
+ERA5 access is required for Stage 04a. Register for a free Copernicus CDS
+account, accept the licence terms for the ERA5 monthly pressure-level and
+single-level datasets from their download pages, generate a personal access
+token from the CDS profile page, and store it in `~/.cdsapirc` outside the
+repository:
 
 ```bash
 cat > ~/.cdsapirc << CDSEOF
 url: https://cds.climate.copernicus.eu/api
-key: YOUR-PERSONAL-ACCESS-TOKEN
+key: YOUR_PERSONAL_ACCESS_TOKEN
 CDSEOF
+chmod 600 ~/.cdsapirc
 ```
+
+Do not commit this file or paste the token into logs. CDS can authenticate with
+a valid token and still reject Stage 04a if the dataset licence terms have not
+been accepted for that account.
+
+Stage 04a submits ERA5 pressure-level requests in bounded yearly chunks, with a
+monthly fallback if CDS rejects a year as too large. Completed chunks are kept in
+`data/historical/era5/pressure_chunks/`, so interrupted ERA5 runs can resume
+without repeating successful downloads.
 
 ---
 

@@ -37,6 +37,18 @@ OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pyte
 .venv/bin/python run_pipeline.py --dry-run
 ```
 
+Stage 04a also requires Copernicus CDS access before it can request ERA5.
+Confirm the account has accepted the ERA5 monthly pressure-level and
+single-level dataset licence terms, then confirm `~/.cdsapirc` exists with
+`url: https://cds.climate.copernicus.eu/api` and a personal access token from
+the CDS profile page. Keep the file outside the repository and do not print or
+commit the token.
+
+Stage 04a downloads ERA5 pressure-level fields in yearly chunks and falls back
+to monthly chunks if CDS rejects a yearly request as too large. Chunk files are
+cached under `data/historical/era5/pressure_chunks/` and can be reused after an
+interrupted run.
+
 ## Recommended Full Run Shape
 
 Run in cautious stage chunks. Stage 01 is complete. Stage 02 is currently

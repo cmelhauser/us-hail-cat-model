@@ -100,7 +100,18 @@ python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validat
 | SPC storm reports | 2004 – present | Validation only |
 | DEM (SRTM / GMTED) | Static | Topographic correction |
 
-Free accounts are required at [NCAR RDA](https://rda.ucar.edu) (GridRad) and [Copernicus CDS](https://cds.climate.copernicus.eu) (ERA5).
+Free accounts are required at [NCAR RDA](https://rda.ucar.edu) (GridRad) and [Copernicus CDS](https://cds.climate.copernicus.eu) (ERA5). Stage 04a uses the CDS API and requires both accepted ERA5 dataset licence terms and a local `~/.cdsapirc` file before the ERA5 download can run:
+
+```yaml
+url: https://cds.climate.copernicus.eu/api
+key: YOUR_PERSONAL_ACCESS_TOKEN
+```
+
+Generate the token from your Copernicus CDS profile, save the file outside the repository, and restrict it with `chmod 600 ~/.cdsapirc`. Never commit API credentials.
+
+Before running Stage 04a, sign in to CDS and accept the licence terms for the ERA5 monthly pressure-level and single-level datasets from their download pages. CDS will reject authenticated API calls until those licence terms are accepted for the account tied to the token.
+
+Stage 04a submits the ERA5 pressure-level request in bounded yearly chunks, with an automatic monthly fallback if CDS rejects a year as too large. The chunks are retained under `data/historical/era5/pressure_chunks/` so interrupted ERA5 runs can resume without repeating completed downloads.
 
 ---
 

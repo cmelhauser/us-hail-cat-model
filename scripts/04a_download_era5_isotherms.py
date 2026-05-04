@@ -19,7 +19,14 @@ Prerequisites
   2. API key in ~/.cdsapirc:
        url: https://cds.climate.copernicus.eu/api
        key: <YOUR-PERSONAL-ACCESS-TOKEN>
-  3. pip install cdsapi
+  3. Accepted CDS licence terms for the ERA5 pressure-level and single-level
+     monthly mean datasets.
+  4. pip install cdsapi
+
+The pressure-level request is downloaded in reusable yearly chunks. If the
+Copernicus CDS cost limit rejects a yearly request, the script automatically
+falls back to monthly chunks for that year and then combines all chunks into the
+raw NetCDF consumed by the isotherm calculation.
 
 Output
 ------
@@ -34,6 +41,7 @@ Usage
 """
 
 import argparse
+import contextlib
 import sys
 import time
 from pathlib import Path
@@ -69,36 +77,129 @@ MONTHS = [f"{m:02d}" for m in range(1, 13)]
 
 log = get_logger("04a_download_era5", LOG_ROOT).info
 
+PRESSURE_DATASET = "reanalysis-era5-pressure-levels-monthly-means"
+SINGLE_LEVEL_DATASET = "reanalysis-era5-single-levels-monthly-means"
+PRESSURE_LICENCE_URL = (
+    "https://cds.climate.copernicus.eu/datasets/"
+    "reanalysis-era5-pressure-levels-monthly-means?tab=download#manage-licences"
+)
+SINGLE_LEVEL_LICENCE_URL = (
+    "https://cds.climate.copernicus.eu/datasets/"
+    "reanalysis-era5-single-levels-monthly-means?tab=download#manage-licences"
+)
+
+
+def _era5_pressure_request(years: list[str], months: list[str]) -> dict:
+    """Build the ERA5 pressure-level request for a bounded time chunk."""
+    return {
+        "product_type": "monthly_averaged_reanalysis",
+        "variable": ["temperature", "geopotential"],
+        "pressure_level": PRESSURE_LEVELS,
+        "year": years,
+        "month": months,
+        "time": "00:00",
+        "area": AREA,
+        "grid": GRID,
+        "data_format": "netcdf",
+    }
+
+
+def _is_cds_cost_limit_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "cost limits exceeded" in msg or "request is too large" in msg
+
+
+def _is_cds_licence_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "licence" in msg and "accepted" in msg
+
+
+def _raise_cds_licence_error(dataset_url: str) -> None:
+    raise RuntimeError(
+        "CDS credentials are configured, but the required ERA5 dataset licence "
+        f"has not been accepted for this account. Visit {dataset_url}, accept "
+        "the licence terms while signed in, then rerun Stage 04a."
+    )
+
+
+def _retrieve_era5_chunk(client, years: list[str], months: list[str], target: Path) -> Path:
+    if target.exists() and target.stat().st_size > 0:
+        log(f"    Existing chunk: {target.name}")
+        return target
+
+    if target.exists():
+        target.unlink()
+
+    label = ",".join(years)
+    month_label = ",".join(months)
+    log(f"    Requesting ERA5 pressure chunk year={label} month={month_label}")
+    try:
+        client.retrieve(PRESSURE_DATASET, _era5_pressure_request(years, months), str(target))
+    except Exception as exc:
+        if _is_cds_licence_error(exc):
+            _raise_cds_licence_error(PRESSURE_LICENCE_URL)
+        raise
+    log(f"    Downloaded chunk: {target.name} ({target.stat().st_size / 1e6:.1f} MB)")
+    return target
+
+
+def _combine_era5_chunks(chunk_files: list[Path], raw_file: Path) -> None:
+    """Combine downloaded ERA5 chunks without requiring dask/open_mfdataset."""
+    import xarray as xr
+
+    log(f"  Combining {len(chunk_files)} ERA5 chunks into {raw_file.name} ...")
+    tmp_file = raw_file.with_suffix(".tmp.nc")
+    if tmp_file.exists():
+        tmp_file.unlink()
+
+    datasets = [xr.open_dataset(path) for path in chunk_files]
+    try:
+        combined = xr.concat(datasets, dim="time").sortby("time")
+        combined.to_netcdf(tmp_file)
+        combined.close()
+    finally:
+        for ds in datasets:
+            with contextlib.suppress(Exception):
+                ds.close()
+
+    tmp_file.replace(raw_file)
+    log(f"  Combined ERA5 raw file: {raw_file.name} ({raw_file.stat().st_size / 1e6:.1f} MB)")
+
 def download_era5_temperature():
     """Download ERA5 monthly mean temperature on pressure levels."""
     import cdsapi
 
     ERA5_DIR.mkdir(parents=True, exist_ok=True)
     raw_file = ERA5_DIR / "era5_monthly_temp_plevels_conus.nc"
+    chunk_dir = ERA5_DIR / "pressure_chunks"
+    chunk_dir.mkdir(parents=True, exist_ok=True)
 
     if raw_file.exists():
         log(f"  Raw ERA5 file already exists: {raw_file.name}")
         return raw_file
 
-    log("  Requesting ERA5 monthly mean temperature from CDS ...")
-    log("  (This may take 10–30 minutes depending on CDS queue)")
+    log("  Requesting ERA5 monthly mean temperature from CDS in bounded chunks ...")
+    log("  (This may take time depending on CDS queue and request throttling)")
 
     client = cdsapi.Client()
-    client.retrieve(
-        "reanalysis-era5-pressure-levels-monthly-means",
-        {
-            "product_type": "monthly_averaged_reanalysis",
-            "variable": ["temperature", "geopotential"],
-            "pressure_level": PRESSURE_LEVELS,
-            "year": CLIM_YEARS,
-            "month": MONTHS,
-            "time": "00:00",
-            "area": AREA,
-            "grid": GRID,
-            "data_format": "netcdf",
-        },
-        str(raw_file),
-    )
+    chunk_files = []
+    for year in CLIM_YEARS:
+        yearly_file = chunk_dir / f"era5_monthly_temp_plevels_conus_{year}.nc"
+        try:
+            chunk_files.append(_retrieve_era5_chunk(client, [year], MONTHS, yearly_file))
+            continue
+        except Exception as exc:
+            if not _is_cds_cost_limit_error(exc):
+                raise
+            log(f"    Yearly request for {year} exceeded CDS cost limits; falling back to monthly chunks")
+            if yearly_file.exists():
+                yearly_file.unlink()
+
+        for month in MONTHS:
+            monthly_file = chunk_dir / f"era5_monthly_temp_plevels_conus_{year}_{month}.nc"
+            chunk_files.append(_retrieve_era5_chunk(client, [year], [month], monthly_file))
+
+    _combine_era5_chunks(chunk_files, raw_file)
 
     log(f"  Downloaded: {raw_file.name} ({raw_file.stat().st_size / 1e6:.1f} MB)")
     return raw_file
@@ -114,20 +215,25 @@ def download_era5_surface_geopotential():
 
     log("  Requesting ERA5 surface geopotential ...")
     client = cdsapi.Client()
-    client.retrieve(
-        "reanalysis-era5-single-levels-monthly-means",
-        {
-            "product_type": "monthly_averaged_reanalysis",
-            "variable": "geopotential",
-            "year": "2020",
-            "month": "01",
-            "time": "00:00",
-            "area": AREA,
-            "grid": GRID,
-            "data_format": "netcdf",
-        },
-        str(sfc_file),
-    )
+    try:
+        client.retrieve(
+            SINGLE_LEVEL_DATASET,
+            {
+                "product_type": "monthly_averaged_reanalysis",
+                "variable": "geopotential",
+                "year": "2020",
+                "month": "01",
+                "time": "00:00",
+                "area": AREA,
+                "grid": GRID,
+                "data_format": "netcdf",
+            },
+            str(sfc_file),
+        )
+    except Exception as exc:
+        if _is_cds_licence_error(exc):
+            _raise_cds_licence_error(SINGLE_LEVEL_LICENCE_URL)
+        raise
     return sfc_file
 
 def compute_isotherm_heights(raw_file: Path, sfc_file: Path):

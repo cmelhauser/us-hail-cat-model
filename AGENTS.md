@@ -262,3 +262,18 @@ lmoments3, pyarrow, matplotlib, boto3, s3fs, cfgrib, eccodes, netCDF4, h5py,
 scikit-learn, cdsapi, tqdm, requests, tenacity.
 
 External accounts required: NCAR RDA (GridRad) and Copernicus CDS (ERA5).
+Stage 04a requires the Copernicus account to have accepted the ERA5 monthly
+pressure-level and single-level dataset licence terms, plus `~/.cdsapirc` with:
+
+```yaml
+url: https://cds.climate.copernicus.eu/api
+key: YOUR_PERSONAL_ACCESS_TOKEN
+```
+
+The file must stay outside the repository, should be `chmod 600`, and must
+never be committed or printed with the token visible.
+
+Stage 04a caches bounded ERA5 pressure-level chunks under
+`data/historical/era5/pressure_chunks/`. If a CDS yearly request exceeds cost
+limits, the script falls back to monthly chunks and then combines the cached
+pieces into the raw NetCDF used for isotherm interpolation.
