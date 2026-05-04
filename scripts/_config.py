@@ -68,7 +68,7 @@ MASK_DIR: Path = ANALYSIS / "conus_mask"
 # ── Physical constants and thresholds ────────────────────────────────────────
 DAMAGE_THRESH_MM: float = 25.4   # 1.0 inch — minimum hail for damage consideration
 MM_PER_INCH: float = 25.4        # unit conversion
-MAX_HAIL_MM: float = 250.0       # QA cap; above the 8" Vivian, SD U.S. record
+MAX_HAIL_MM: float = 300.0       # QA cap; conservative physical plausibility ceiling
 MAX_HAIL_IN: float = MAX_HAIL_MM / MM_PER_INCH
 NODATA: float = 0.0            # hail rasters use 0.0 for no MESH signal
 

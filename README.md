@@ -32,7 +32,7 @@ The model produces:
 
 - Corrected daily MESH75 rasters (1998–present)
 - Stage 01 source-coverage manifest distinguishing missing source days from true no-hail days
-- Shared hail-value QA guard for non-finite, negative, or `>250.0 mm` artifacts
+- Shared hail-value QA guard for non-finite, negative, or `>300.0 mm` artifacts
 - A sparse historical event catalog
 - Regional extreme-value return-period maps (10–50,000 years)
 - A 50,000-year stochastic event catalog

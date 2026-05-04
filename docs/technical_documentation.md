@@ -68,7 +68,7 @@ Do not use area means, bilinear interpolation, or summation for MESH fields unle
 5. Accumulate daily maximum MESH at native resolution.
 6. Subset to the CONUS model domain.
 7. Aggregate to 0.05 degree by block maximum.
-8. Apply Stage 01 physical QA: non-finite, negative, and `>250.0 mm` values
+8. Apply Stage 01 physical QA: non-finite, negative, and `>300.0 mm` values
    are reset to `0.0` before downstream use.
 9. Write one daily GeoTIFF.
 10. Upsert a source manifest row.
@@ -109,7 +109,7 @@ read_errors
 
 MYRORSS is a historical radar reanalysis. Its value is spatial and temporal continuity over the early radar era, but individual files can be sparse, missing, corrupt, or encoded differently across periods. The stage must therefore treat archive format variation as normal operational reality rather than exceptional behavior.
 
-Stage 01 uses a conservative 250.0 mm upper QA bound for hail diameter values.
+Stage 01 uses a conservative 300.0 mm upper QA bound for hail diameter values.
 This cap is larger than the NOAA/NSSL U.S. record hailstone diameter from
 Vivian, South Dakota, and is intended to remove malformed radar/source values
 without clipping plausible extreme hail. The QA pass can be run independently:
@@ -125,7 +125,7 @@ python scripts/01_download_myrorss.py --qa-only
 - Manifest rows are continuous over processed dates.
 - CRS is EPSG:4326.
 - Shape is 520 x 1180.
-- Values are finite, non-negative, and no larger than 250.0 mm.
+- Values are finite, non-negative, and no larger than 300.0 mm.
 - `missing_source` and `no_hail_pixels` are distinguished by manifest status.
 - Random sample rasters open with rasterio.
 
@@ -149,12 +149,12 @@ MRMS native products use conventions that differ from the final model grid. Stag
 6. accumulate daily maxima;
 7. aggregate by block maximum;
 8. apply the shared hail-value QA guard: finite, non-negative, and no larger
-   than 250.0 mm;
+   than 300.0 mm;
 9. write model-grid GeoTIFFs.
 
 ### 4.2 Validation
 
-Same raster validation as Stage 01, including the 250.0 mm physical QA bound,
+Same raster validation as Stage 01, including the 300.0 mm physical QA bound,
 with additional orientation sanity checks. A simple visual or statistical check
 should confirm that major hail maxima are over plausible U.S. regions rather
 than shifted over oceans, Mexico, or Canada by grid-orientation error.
@@ -224,7 +224,7 @@ MESH75 = 15.096 * SHI^0.206
 
 6. Accumulate daily maximum MESH75.
 7. Apply the shared hail-value QA guard: finite, non-negative, and no larger
-   than 250.0 mm.
+   than 300.0 mm.
 8. Write daily GeoTIFFs on the common grid.
 
 ### 7.2 Scientific notes
@@ -289,7 +289,7 @@ Stage 05 must run successfully without optional artifacts. The `--skip-ml` flag 
 - Corrected rasters exist.
 - Output count is close to input count after expected date filters.
 - CRS and shape are unchanged.
-- Values remain finite, non-negative, and no larger than 250.0 mm.
+- Values remain finite, non-negative, and no larger than 300.0 mm.
 - Filtered-cell counts are plausible by month and region.
 - Calibration diagnostics are written.
 - Source-era distributions are reviewed for MYRORSS/GridRad/MRMS discontinuities.

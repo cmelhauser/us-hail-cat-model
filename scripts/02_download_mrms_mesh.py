@@ -11,7 +11,7 @@ For each day:
   3. Extracts the CONUS subset from the full grid
   4. Accumulates the daily maximum MESH per native 0.01° pixel
   5. Aggregates to 0.05° via block-maximum (5×5 cells)
-  6. Applies physical QA (finite, non-negative, ≤250.0 mm)
+  6. Applies physical QA (finite, non-negative, ≤300.0 mm)
   7. Saves a single-band float32 GeoTIFF (MESH in mm)
 
 Output files are identical in format to stage 01 (MYRORSS) — same grid,

@@ -27,9 +27,9 @@ def test_stage05_optional_filter_falls_back_without_model():
     assert float(out[0, 0]) == 6.0
 
 
-def test_stage05_sanitizes_corrected_outputs_to_250mm_cap():
+def test_stage05_sanitizes_corrected_outputs_to_300mm_cap():
     s = load_stage("05_apply_mesh_bias_correction.py")
-    repaired, n_bad = s.sanitize_hail_values(np.array([[250.0, 300.0, np.nan]], dtype=np.float32))
-    assert s.QA_MAX_HAIL_MM == 250.0
+    repaired, n_bad = s.sanitize_hail_values(np.array([[300.0, 300.1, np.nan]], dtype=np.float32))
+    assert s.QA_MAX_HAIL_MM == 300.0
     assert n_bad == 2
-    assert repaired.tolist() == [[250.0, 0.0, 0.0]]
+    assert repaired.tolist() == [[300.0, 0.0, 0.0]]

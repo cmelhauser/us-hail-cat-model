@@ -29,7 +29,7 @@ Output
 ------
   data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif
   + data/historical/mesh_0.05deg/gridrad_days.txt (list of dates processed from GridRad)
-  Values are QA-checked to be finite, non-negative, and ≤250.0 mm.
+  Values are QA-checked to be finite, non-negative, and ≤300.0 mm.
 
 Usage
 -----

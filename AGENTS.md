@@ -143,7 +143,7 @@ data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv
 ```
 
 Stage 01 also performs a physical QA pass after download/processing. Values
-that are non-finite, negative, or greater than `MAX_HAIL_MM = 250.0` are reset
+that are non-finite, negative, or greater than `MAX_HAIL_MM = 300.0` are reset
 to `0.0`, and the manifest active-cell and daily-maximum fields are refreshed.
 Run this repair pass independently with:
 
@@ -190,7 +190,7 @@ These come from `scripts/_config.py`.
 | `LAT_MAX` | 50.005 | North edge of row 0 |
 | `LON_MIN` | -125.005 | West edge of col 0 |
 | `DAMAGE_THRESH_MM` | 25.4 | 1-inch damage threshold |
-| `MAX_HAIL_MM` | 250.0 | Physical QA cap on hail diameter values |
+| `MAX_HAIL_MM` | 300.0 | Physical QA cap on hail diameter values |
 | `RNG_SEED` | 42 | Stochastic RNG seed |
 | `N_SIM_YEARS` | 50000 | Catalog length |
 | `POOL_RADIUS_KM` | 150 | Stage 10 smoothing radius |
@@ -221,8 +221,9 @@ As of 2026-05-04:
 ## Current Run Watch
 
 As of the 2026-05-04 snapshot, Stage 01 is complete through 2011-12-31 with
-5,023 MYRORSS daily rasters. The Stage 01 QA repair pass fixed 199 files and
-3,852 cells, and no remaining Stage 01 raster value exceeds 250.0 mm. Stage 02
+5,023 MYRORSS daily rasters. The earlier Stage 01 QA repair pass fixed 199 files and
+3,852 cells under the prior 250.0 mm ceiling; the subsequent 300.0 mm
+rescan found 0 files or cells requiring repair. Stage 02
 is running in a detached `screen` session.
 
 The remaining production sequence is:

@@ -147,7 +147,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 01 (MYRORSS) | ✅ Complete + QA repaired | 5,023 rasters through 2011-12-31. QA repaired 199 files / 3,852 cells with 250.0 mm cap; validation passed. |
+| Stage 01 (MYRORSS) | ✅ Complete + QA repaired | 5,023 rasters through 2011-12-31. Earlier 250.0 mm QA repaired 199 files / 3,852 cells; 300.0 mm rescan found 0 remaining issues and validation passed. |
 | Stage 02 (MRMS) | ⏳ Running | Detached `screen` session `hail_stage02_mrms`. |
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. |
 | Stage 04a (ERA5) | ❌ Not run | Log file is empty. Must run after Stage 01. |

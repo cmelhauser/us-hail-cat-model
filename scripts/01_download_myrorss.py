@@ -119,7 +119,7 @@ OUT_LON_MIN = LON_MIN
 
 # ── physical QA ───────────────────────────────────────────────────────────────
 # NOAA/NSSL lists the U.S. record hailstone as the 8 inch Vivian, South Dakota
-# stone from 23 June 2010. Stage 01 uses a conservative 250 mm ceiling above
+# stone from 23 June 2010. Stage 01 uses a conservative 300 mm ceiling above
 # that observed record and treats larger/non-finite values as invalid source
 # artifacts before downstream bias correction and tail fitting.
 QA_MAX_HAIL_IN = MAX_HAIL_IN

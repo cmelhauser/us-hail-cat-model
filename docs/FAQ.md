@@ -182,9 +182,9 @@ Run with `--skip-ml`. The ML artifacts (`gridrad_cqm_model.pkl`, `hail_filter_mo
 
 This is expected for days with no hail pixels or missing source files. Do not diagnose source availability from the GeoTIFF values alone. Check `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`. Status `missing_source` means no MYRORSS NetCDF objects existed for that day; `no_hail_pixels` means files existed but no active cells were found.
 
-**Q: Why are some Stage 01 daily maxima exactly below 250 mm?**
+**Q: Why are some Stage 01 daily maxima exactly below 300 mm?**
 
-Stage 01 applies a physical QA bound of 250.0 mm. Non-finite, negative, or
+Stage 01 applies a physical QA bound of 300.0 mm. Non-finite, negative, or
 larger raw MYRORSS values are treated as source artifacts and reset to `0.0`.
 The repair pass can be rerun with `python scripts/01_download_myrorss.py --qa-only`.
 The same cap is enforced for MRMS, GridRad-derived gap-fill, and Stage 05

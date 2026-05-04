@@ -34,7 +34,7 @@ Raw daily maximum MESH raster before Stage 05 correction.
 | Source | MYRORSS, GridRad-derived MESH75, or operational MRMS |
 | Meaning | daily maximum estimated hail size per grid cell |
 | Important caveat | `0.0` means no MESH signal in the raster cell; use the Stage 01 manifest to distinguish missing MYRORSS source days from available-source no-hail days |
-| Value QA | Values must be finite and within `[0.0, 250.0]` mm after each producing stage's QA pass |
+| Value QA | Values must be finite and within `[0.0, 300.0]` mm after each producing stage's QA pass |
 
 ### `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`
 
@@ -51,7 +51,7 @@ availability from no-hail raster values.
 | `gz_netcdf_files` | integer | Source objects ending in `.netcdf.gz` |
 | `source_valid_pixels` | integer or blank | Valid native CONUS hail pixels read from source files; blank for skipped existing rasters |
 | `active_cells_0p05` | integer | Output 0.05° cells with MESH > 0 |
-| `max_mesh_mm` | float | Daily maximum MESH in millimeters after Stage 01 QA repair; values are capped by validation at 250.0 mm |
+| `max_mesh_mm` | float | Daily maximum MESH in millimeters after Stage 01 QA repair; values are capped by validation at 300.0 mm |
 | `status` | string | `missing_source`, `no_hail_pixels`, `ok`, `ok_with_read_errors`, `no_hail_pixels_with_read_errors`, or `error` |
 | `skipped` | integer | `1` when the GeoTIFF already existed and was not rebuilt in this pass, else `0` |
 | `read_errors` | integer or blank | Count of source files that failed to read; blank for skipped existing rasters |
@@ -76,7 +76,7 @@ Bias-corrected and filtered MESH75 raster.
 | Units | mm MESH75 |
 | Meaning | homogenized daily hail-size estimate |
 | v2.1 behavior | may include optional conditional calibration and probability-weighted filtering |
-| Value QA | Values must be finite and within `[0.0, 250.0]` mm after Stage 05 correction/filtering |
+| Value QA | Values must be finite and within `[0.0, 300.0]` mm after Stage 05 correction/filtering |
 
 ---
 

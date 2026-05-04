@@ -32,7 +32,7 @@ validated on 2026-05-03, then Stage 01 QA repair was added and run on
 
 - Stage 01 manifest rows: 5,023, covering 1998-04-01 through 2011-12-31;
 - status counts: 4,981 `ok`, 30 `missing_source`, 11 `ok_with_read_errors`, 1 `no_hail_pixels`;
-- QA repair: 199 files and 3,852 cells repaired; no remaining value exceeds 250.0 mm;
+- QA repair: earlier 250.0 mm pass repaired 199 files and 3,852 cells; 300.0 mm rescan found 0 files or cells requiring repair;
 - Stage 02 is running in detached `screen` session `hail_stage02_mrms`;
 - free disk: about 373 GiB;
 - Stage 03 is complete;
@@ -175,16 +175,14 @@ Stage 01 updated to produce `manifest_stage01_myrorss.csv`. Reads both plain `.n
 ### 2026-05-04 — Stage 01 Physical QA Repair ✅
 
 Stage 01 now enforces a post-processing QA scan over MYRORSS rasters. The QA
-bound is `MAX_HAIL_MM = 250.0`; non-finite, negative, or larger values are reset
+bound is `MAX_HAIL_MM = 300.0`; non-finite, negative, or larger values are reset
 to `0.0`, and the manifest `active_cells_0p05`, `max_mesh_mm`, and `status`
 fields are refreshed. The completed Stage 01 archive was repaired with
-`python scripts/01_download_myrorss.py --qa-only`: 199 files and 3,852 cells
-were repaired, including one non-finite file. Post-repair validation passed and
-no Stage 01 raster or manifest maximum exceeds 250.0 mm.
+`python scripts/01_download_myrorss.py --qa-only`: the prior 250.0 mm pass repaired 199 files and 3,852 cells, including one non-finite file; after raising the bound to 300.0 mm, a full rescan found 0 files or cells requiring repair. Post-repair validation passed and no Stage 01 raster or manifest maximum exceeds 300.0 mm.
 
 The same shared QA helper is now wired into Stage 02, Stage 04b, and Stage 05,
 so raw MRMS, GridRad-derived gap-fill, and corrected MESH75 outputs all enforce
-the same finite/non-negative/250.0 mm value invariant.
+the same finite/non-negative/300.0 mm value invariant.
 
 ### 2026-05-03 — Pre-pipeline fixes and PNAS article update ✅
 

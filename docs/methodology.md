@@ -188,12 +188,12 @@ data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv
 
 This manifest is a scientific data product. It records whether each day had missing source files, valid source files with no hail pixels, valid source files with active cells, or read errors. An all-zero GeoTIFF alone cannot distinguish a meteorologically quiet day from a missing-source day; the manifest carries that distinction.
 
-Stage 01 enforces a 250.0 mm upper QA bound on raw MYRORSS hail values after
+Stage 01 enforces a 300.0 mm upper QA bound on raw MYRORSS hail values after
 download and again in a post-processing repair scan. The bound is above the
 NOAA/NSSL U.S. record hailstone diameter and is used as an artifact filter, not
 as an estimate of the physical maximum possible hailstone size.
 
-The same finite-value and 250.0 mm physical-bound QA guard is applied to
+The same finite-value and 300.0 mm physical-bound QA guard is applied to
 operational MRMS raw rasters, GridRad-derived gap-fill rasters, and Stage 05
 corrected MESH75 outputs. This creates a single hail-value invariant before
 climatology, event building, extreme-value fitting, and stochastic simulation.
