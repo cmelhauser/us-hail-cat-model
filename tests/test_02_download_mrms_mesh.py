@@ -8,3 +8,11 @@ def test_stage02_block_max_shape_and_values():
     out = s.block_max(data, 2)
     assert out.shape == (2, 2)
     assert np.allclose(out, [[5, 7], [13, 15]])
+
+
+def test_stage02_uses_shared_250mm_qa_cap():
+    s = load_stage("02_download_mrms_mesh.py")
+    repaired, n_bad = s.sanitize_hail_values(np.array([[250.0, 250.1, np.inf]], dtype=np.float32))
+    assert s.QA_MAX_HAIL_MM == 250.0
+    assert n_bad == 2
+    assert repaired.tolist() == [[250.0, 0.0, 0.0]]

@@ -4,8 +4,8 @@
 
 - Date started: 2026-05-01 14:47 EDT
 - Active branch: `main`
-- Current commit: `2228d54`
-- Remote sync: `main` and `origin/main` are aligned at `2228d54`
+- Current commit: `e4c9331`
+- Remote sync: `main`, `origin/main`, and `upstream/main` are aligned at `e4c9331`
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active
   development.
@@ -14,15 +14,17 @@
 
 ## Current Run Status
 
-Snapshot taken 2026-05-03 16:46 EDT:
+Snapshot taken 2026-05-04 02:25 EDT:
 
-- Stage 01 is still running under `.venv/bin/python run_pipeline.py --only 01`.
-- Latest Stage 01 log progress: 2010-09-10, `done=4,034`, `skipped=512`,
-  ETA approximately 5 h 13 m.
-- TIFF count under `data/historical/mesh_0.05deg`: 4,578.
-- Stage 01 manifest extends into 2010-09-11 and continues to record `ok`,
-  `missing_source`, `no_hail_pixels`, and read-error statuses.
-- Disk available: approximately 370 GiB.
+- Stage 01 completed successfully through 2011-12-31 and validated.
+- Stage 01 QA repair applied the 250.0 mm physical cap: 199 files and 3,852
+  cells were repaired; post-repair validation passed.
+- TIFF count under `data/historical/mesh_0.05deg`: 5,023 Stage 01 files plus
+  any in-progress Stage 02 MRMS outputs.
+- Stage 01 manifest has 5,023 rows: 4,981 `ok`, 30 `missing_source`,
+  11 `ok_with_read_errors`, and 1 `no_hail_pixels`.
+- Disk available: approximately 373 GiB.
+- Stage 02 is running in detached `screen` session `hail_stage02_mrms`.
 - Stages 05–15 outputs from the earlier May-2011 smoke path are placeholders,
   not production outputs.
 
@@ -36,11 +38,10 @@ OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pyte
 
 ## Recommended Full Run Shape
 
-Run in cautious stage chunks. Because Stage 01 is already active, do not start
-another Stage 01 process. When Stage 01 completes, continue from Stage 02:
+Run in cautious stage chunks. Stage 01 is complete. Stage 02 is currently
+running; after it completes, continue with:
 
 ```bash
-.venv/bin/python run_pipeline.py --only 02
 .venv/bin/python run_pipeline.py --only 03
 .venv/bin/python run_pipeline.py --only 04a
 .venv/bin/python run_pipeline.py --only 04b
@@ -73,15 +74,15 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 - Patched `scripts/01_download_myrorss.py` to ingest both formats and removed 597 generated zero rasters from 1998-04-24 through 1999-12-31 that had plain NetCDF source files.
 - A direct April 1998 canary rerun rebuilt three formerly zero days from 888 source files.
 - Added `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` so Stage 01 records source availability separately from output raster values. Status values distinguish `missing_source` from `no_hail_pixels` and `ok`.
-- Stage 01 has already been restarted and is running. Do not rerun it unless the
-  active process fails or the user explicitly asks for a clean rebuild.
+- Stage 01 completed on 2026-05-03. A 250.0 mm QA repair pass was added and run
+  on 2026-05-04. Do not rerun Stage 01 downloads unless the user explicitly asks
+  for a clean rebuild; use `--qa-only` for repair/validation without downloading.
 
 ## Next Actions
 
-When Stage 01 completes:
+When Stage 02 completes:
 
 ```bash
-.venv/bin/python run_pipeline.py --only 02
 .venv/bin/python run_pipeline.py --only 04a
 .venv/bin/python run_pipeline.py --only 04b
 .venv/bin/python run_pipeline.py --from 05 --skip-ml

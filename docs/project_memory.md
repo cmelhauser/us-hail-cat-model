@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.1**
-**Last updated: 2026-05-03 (main branch, Stage 01 running)**
+**Last updated: 2026-05-04 (main branch, Stage 02 running)**
 
 ---
 
@@ -20,17 +20,21 @@
 
 ---
 
-## 2. Current State (as of 2026-05-03)
+## 2. Current State (as of 2026-05-04)
 
-Branch `main` is synced with `origin/main` at commit `2228d54`. The historical
-`v2.1` branch has been merged and is no longer the active development branch.
+Branch `main` is synced with `origin/main` and `upstream/main` at commit
+`e4c9331`. The historical `v2.1` branch has been merged and is no longer the
+active development branch.
 
-First full pipeline run started 2026-05-01 via Codex. Stage 01 is still running
-as of the 2026-05-03 16:46 EDT snapshot:
+First full pipeline run started 2026-05-01 via Codex. Stage 01 completed and
+validated on 2026-05-03, then Stage 01 QA repair was added and run on
+2026-05-04:
 
-- latest log progress: 2010-09-10, `done=4,034`, `skipped=512`, ETA about 5 h 13 m;
-- TIFF count under `data/historical/mesh_0.05deg`: 4,578;
-- free disk: about 370 GiB;
+- Stage 01 manifest rows: 5,023, covering 1998-04-01 through 2011-12-31;
+- status counts: 4,981 `ok`, 30 `missing_source`, 11 `ok_with_read_errors`, 1 `no_hail_pixels`;
+- QA repair: 199 files and 3,852 cells repaired; no remaining value exceeds 250.0 mm;
+- Stage 02 is running in detached `screen` session `hail_stage02_mrms`;
+- free disk: about 373 GiB;
 - Stage 03 is complete;
 - Stages 02, 04a, and 04b still need to run;
 - Stages 05–15 outputs from the earlier May-2011 smoke path are placeholders,
@@ -168,6 +172,20 @@ Committed and merged to `main` at `e582d5d`.
 
 Stage 01 updated to produce `manifest_stage01_myrorss.csv`. Reads both plain `.netcdf` and gzipped `.netcdf.gz` MYRORSS archive objects. Manifest committed at `e4413dc`, merged to `main`.
 
+### 2026-05-04 — Stage 01 Physical QA Repair ✅
+
+Stage 01 now enforces a post-processing QA scan over MYRORSS rasters. The QA
+bound is `MAX_HAIL_MM = 250.0`; non-finite, negative, or larger values are reset
+to `0.0`, and the manifest `active_cells_0p05`, `max_mesh_mm`, and `status`
+fields are refreshed. The completed Stage 01 archive was repaired with
+`python scripts/01_download_myrorss.py --qa-only`: 199 files and 3,852 cells
+were repaired, including one non-finite file. Post-repair validation passed and
+no Stage 01 raster or manifest maximum exceeds 250.0 mm.
+
+The same shared QA helper is now wired into Stage 02, Stage 04b, and Stage 05,
+so raw MRMS, GridRad-derived gap-fill, and corrected MESH75 outputs all enforce
+the same finite/non-negative/250.0 mm value invariant.
+
 ### 2026-05-03 — Pre-pipeline fixes and PNAS article update ✅
 
 - `scripts/08_build_event_catalog.py`: `MAX_CENTROID_KM_DAY` corrected 100.0 → 150.0 (canonical per methodology.md §8.2 and _config.py)
@@ -196,20 +214,19 @@ Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instruction
   module collection, preventing GitHub Actions from resolving repo `_io.py` to
   Python's stdlib `io` module.
 - GitHub Actions PR checks pass on Python 3.10, 3.11, and 3.12.
-- Commit: `2228d54`.
+- Commit: `e4c9331`.
 
 ## 8. Immediate Priorities
 
 In order:
 
-1. **Let Stage 01 finish.** Do not start a second Stage 01 process.
-2. **Run Stage 02** after Stage 01 completes.
-3. **Run Stage 04a and Stage 04b** after Stage 02.
-4. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset.
-5. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
-6. **Review Stage 15 figures** once production outputs exist.
-7. **Regression tests** — freeze golden outputs after first production run.
-8. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist.
+1. **Let Stage 02 finish** and validate MRMS outputs.
+2. **Run Stage 04a and Stage 04b** after Stage 02; Stage 04a requires CDS credentials.
+3. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset.
+4. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
+5. **Review Stage 15 figures** once production outputs exist.
+6. **Regression tests** — freeze golden outputs after first production run.
+7. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist.
 9. **Rebuild `.venv` to Python 3.10+** — current run venv is Python 3.9.6 (EOL Oct 2025).
 10. **PNAS article Results section** — fill in after pipeline completes.
 

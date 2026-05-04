@@ -32,6 +32,7 @@ The model produces:
 
 - Corrected daily MESH75 rasters (1998–present)
 - Stage 01 source-coverage manifest distinguishing missing source days from true no-hail days
+- Shared hail-value QA guard for non-finite, negative, or `>250.0 mm` artifacts
 - A sparse historical event catalog
 - Regional extreme-value return-period maps (10–50,000 years)
 - A 50,000-year stochastic event catalog
@@ -180,7 +181,7 @@ python run_pipeline.py --validate
 | Output | Location | Description |
 |--------|----------|-------------|
 | Raw daily MESH rasters | `data/historical/mesh_0.05deg/` | Stage 01/02/04b daily GeoTIFFs before correction |
-| Stage 01 source manifest | `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` | Per-day MYRORSS source counts and `missing_source` / `no_hail_pixels` / `ok` status |
+| Stage 01 source manifest | `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` | Per-day MYRORSS source counts, QA-repaired daily maxima, and `missing_source` / `no_hail_pixels` / `ok` status |
 | Corrected MESH rasters | `data/historical/mesh_0.05deg_corrected/` | Daily MESH75 grids |
 | Event catalog | `data/historical/events/` | Sparse `.npz` per event |
 | EVT parameters | `data/analysis/cdf/` | GPD ξ, σ, threshold per cell |

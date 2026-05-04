@@ -188,13 +188,21 @@ def test_max_centroid_km_day_stage08_matches_config():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. MAX_HAIL_MM in Stage 13 must match _config
+# 6. MAX_HAIL_MM consumers must match _config
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_max_hail_mm_stage13_matches_config():
-    s = _load("13_generate_stochastic_catalog.py")
-    assert s.MAX_HAIL_MM == cfg.MAX_HAIL_MM, (
-        f"Stage 13 MAX_HAIL_MM={s.MAX_HAIL_MM} != _config.MAX_HAIL_MM={cfg.MAX_HAIL_MM}"
+@pytest.mark.parametrize("script", [
+    "01_download_myrorss.py",
+    "02_download_mrms_mesh.py",
+    "04b_fill_gridrad_gap.py",
+    "05_apply_mesh_bias_correction.py",
+    "13_generate_stochastic_catalog.py",
+])
+def test_max_hail_mm_consumers_match_config(script):
+    s = _load(script)
+    script_val = getattr(s, "QA_MAX_HAIL_MM", getattr(s, "MAX_HAIL_MM", None))
+    assert script_val == cfg.MAX_HAIL_MM, (
+        f"{script}: hail QA cap {script_val} != _config.MAX_HAIL_MM={cfg.MAX_HAIL_MM}"
     )
 
 
