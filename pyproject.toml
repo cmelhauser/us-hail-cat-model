@@ -132,7 +132,7 @@ markers   = [
     "regression: marks regression tests requiring golden outputs",
 ]
 filterwarnings = [
-    # Matplotlib versions compatible with Python 3.9 can emit pyparsing
+    # Some Matplotlib dependency combinations can emit pyparsing
     # deprecation warnings during font/mathtext parser setup. They are
     # third-party compatibility noise, not model-code warnings.
     "ignore::pyparsing.exceptions.PyparsingDeprecationWarning:matplotlib\\..*",

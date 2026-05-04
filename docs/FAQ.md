@@ -184,7 +184,9 @@ This is expected for days with no hail pixels or missing source files. Do not di
 
 **Q: `git commit` hangs or fails with a lock error.**
 
-Do not run `git commit`, `git push`, `git checkout`, or `git merge` from the sandbox bash environment. These commands create `.git/index.lock` files that the sandbox cannot remove. Run all git commands from the user's terminal directly.
+Check whether a git process is still running before removing any lock. If no
+git process is active, remove `.git/index.lock` and retry the command. Do not
+remove a lock while another git operation is in progress.
 
 **Q: Tests fail with import errors for stage scripts.**
 

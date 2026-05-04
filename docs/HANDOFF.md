@@ -1,15 +1,18 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.1
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-05-02 (post full-repo scan, pipeline running via Codex).
+> Last updated: 2026-05-03 (main branch, Stage 01 running via Codex).
 
 ---
 
 ## Repository
 
 - **Local:** `/Users/melhauserc/GitHub/us-hail-cat-model`
-- **Branch:** `v2.1` (active dev) — synced with `main` at commit `e4413dc`
-- **Working tree:** clean (as of 2026-05-02 scan)
+- **Branch:** `main` — synced with `origin/main` at commit `2228d54`
+- **Working tree:** should be kept clean except for intentional documentation or
+  code edits in the current session
+- **Historical note:** `v2.1` has been merged and is no longer the active
+  development branch.
 
 ---
 
@@ -90,12 +93,6 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ---
 
-## Git Rule for This Repo
-
-**Never run `git commit`, `git push`, `git checkout`, or `git merge` from the sandbox bash tool.** The sandbox creates `.git/index.lock` during git operations but cannot unlink it (Operation not permitted), which blocks all subsequent git commands. Prepare the exact command sequence and ask the user to run it in their terminal. `git status` and `git add -A` are safe for verification only.
-
----
-
 ## Confirmed State After 2026-05-03 Scan
 
 ### What's done ✅
@@ -118,7 +115,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 - `scripts/_logging.py` — `get_logger()` factory; **15/15 stage scripts import from it**
 - `scripts/_io.py` — `write_geotiff`, `haversine_km`, `latlon_to_grid`; imported by stage scripts where needed
 
-**Tests:** 28 test files cover all 15 stages (test_01 through test_15, test_run_pipeline, test_stage\*); integration smoke test and no-dup-constants test written
+**Tests:** 28 pytest files cover all 15 stages (test_01 through test_15, test_run_pipeline, test_stage\*); integration smoke test and no-dup-constants test written. GitHub Actions is green on Python 3.10, 3.11, and 3.12 at commit `2228d54`.
 
 **README.md** — professional rewrite: Python badge corrected to 3.10+, Mermaid removed, pipeline table with exact filenames
 
@@ -142,7 +139,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ---
 
-## ⚠️ Pipeline Run Status (as of 2026-05-03)
+## Pipeline Run Status (as of 2026-05-03 16:46 EDT)
 
 The Codex-run pipeline on 2026-05-01 ran **Stages 05–15 prematurely** before Stage 01 finished.
 All Stages 05–15 output is **placeholder, not production** — built on 31 events from May 2011 only.
@@ -150,7 +147,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 01 (MYRORSS) | ⏳ Running | At day 3,994/5,023 as of 16:13 on 2026-05-03. ETA ~5.5 h (est. finish ~21:50). |
+| Stage 01 (MYRORSS) | ⏳ Running | At 2010-09-10, `done=4,034`, `skipped=512`, ETA ~5 h 13 m. 4,578 TIFFs present. |
 | Stage 02 (MRMS) | ❌ Not run | Log file is empty. Must run after Stage 01. |
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. |
 | Stage 04a (ERA5) | ❌ Not run | Log file is empty. Must run after Stage 01. |
@@ -159,26 +156,29 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 **Re-run sequence once Stage 01 finishes:**
 ```bash
-python run_pipeline.py --only 02     # MRMS download (2020–present)
-python run_pipeline.py --only 04a    # ERA5 isotherms
-python run_pipeline.py --only 04b    # GridRad gap-fill (2012–2019)
-python run_pipeline.py --from 05 --skip-ml   # Re-run all remaining stages
+.venv/bin/python run_pipeline.py --only 02     # MRMS download (2020–present)
+.venv/bin/python run_pipeline.py --only 04a    # ERA5 isotherms
+.venv/bin/python run_pipeline.py --only 04b    # GridRad gap-fill (2012–2019)
+.venv/bin/python run_pipeline.py --from 05 --skip-ml   # Re-run all remaining stages
 # After Stage 13 smoke passes (default n_years=1000), do the full 50k run:
-python scripts/13_generate_stochastic_catalog.py   # 50,000-year catalog
-python run_pipeline.py --only 15     # Re-render figures
+.venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
+.venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000
+.venv/bin/python run_pipeline.py --only 14
+.venv/bin/python run_pipeline.py --only 15
+.venv/bin/python run_pipeline.py --validate
 ```
 
 ---
 
 ## Immediate Next Priorities (in order)
 
-1. **Wait for Stage 01 to finish** (~21:50 tonight). Do NOT re-run Stage 01.
+1. **Wait for Stage 01 to finish.** Do NOT re-run Stage 01 while it is active.
 2. **Run Stages 02, 04a, 04b** in order. (Stage 03 is already complete.)
 3. **Re-run Stages 05–15** (`--from 05 --skip-ml`) against the full dataset.
 4. **Full 50,000-year stochastic catalog** — re-run Stage 13 after Stage 12 completes.
 5. **Regression tests** — freeze golden outputs; add checksum tests.
 6. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`.
-7. **Rebuild `.venv` to Python 3.10+** — current venv is Python 3.9.6 (EOL Oct 2025).
+7. **Rebuild `.venv` to Python 3.10+** — current run venv is Python 3.9.6 (EOL Oct 2025).
 
 **Completed in session 2026-05-02:**
 - ✅ `docs/sensitivity.md` — hyperparameter sweep plan
@@ -188,15 +188,15 @@ python run_pipeline.py --only 15     # Re-render figures
 - ✅ `tests/integration/test_smoke_synthetic.py` — stage 08→13 end-to-end smoke test
 - ✅ `tests/test_no_duplicated_constants.py` — constant values vs _config.py
 - ✅ `docs/README.md` updated with new documents
-- ✅ `SKILL.md` status table updated
+- ✅ AI-agent status table updated
 
 **Completed in session 2026-05-03:**
 - ✅ `docs/pnas_article_ai_hail_model.md` — comprehensive review and update: v2.1 stage descriptions, missing references (Cintineo 2012, Brown 2015), AI model names corrected, author line filled (Christopher Melhauser, Ph.D., Independent Researcher), Google Scholar URL, repository URL, pipeline stage table rewritten
 - ✅ `scripts/08_build_event_catalog.py` — `MAX_CENTROID_KM_DAY` corrected from 100.0 → 150.0 (canonical value per `methodology.md §8.2` and `_config.py`)
 - ✅ `tests/test_no_duplicated_constants.py` — MAX_CENTROID xfail converted to passing assertion
-- ✅ All stale MAX_CENTROID discrepancy references cleared across SKILL.md, HANDOFF.md, project_memory.md, ai_instructions.md
+- ✅ All stale MAX_CENTROID discrepancy references cleared across AGENTS.md, HANDOFF.md, project_memory.md, ai_instructions.md
 - ✅ `docs/methodology.md §0` — notation glossary added
-- ✅ `HURRICANE_MODEL_BOOTSTRAP.md` — complete 13-section bootstrap document for new US Hurricane Cat Model repository
+- ✅ Hurricane-model bootstrap document was kept local and must not be committed to this repository.
 
 **Completed in session 2026-05-03 (continued — pipeline audit):**
 - ✅ `docs/HANDOFF.md` — corrected false claims about refactor status; added pipeline run status table and re-run sequence
@@ -207,7 +207,7 @@ python run_pipeline.py --only 15     # Re-render figures
 
 | File | Purpose |
 |------|---------|
-| `SKILL.md` | Repo-root orientation for AI agents and new developers |
+| `AGENTS.md` | Repo-root orientation for AI agents and new developers |
 | `docs/methodology.md` | Scientific assumptions and formulas |
 | `docs/technical_documentation.md` | Per-stage implementation notes |
 | `docs/data_dictionary.md` | All output file schemas |

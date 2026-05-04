@@ -221,6 +221,8 @@ Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) 
 | `docs/executive_summary.md` | Non-technical overview |
 | `docs/explainer.md` | Plain-language model explanation |
 | `docs/REVIEW_PRE_RUN.md` | Pre-execution audit checklist |
+| `AGENTS.md` | Canonical AI-agent and developer orientation |
+| `docs/ai_instructions.md` | Extended AI operating rules and project constraints |
 | `CONTRIBUTING.md` | Development workflow and methodology-change policy |
 
 ---

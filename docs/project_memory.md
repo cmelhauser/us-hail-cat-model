@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.1**
-**Last updated: 2026-05-02 (post full-repo scan)**
+**Last updated: 2026-05-03 (main branch, Stage 01 running)**
 
 ---
 
@@ -20,11 +20,21 @@
 
 ---
 
-## 2. Current State (as of 2026-05-02)
+## 2. Current State (as of 2026-05-03)
 
-Branch `v2.1` is synced with `main` at commit `e4413dc`. Working tree clean.
+Branch `main` is synced with `origin/main` at commit `2228d54`. The historical
+`v2.1` branch has been merged and is no longer the active development branch.
 
-First full pipeline run started 2026-05-01 via Codex. Still in progress as of 2026-05-02.
+First full pipeline run started 2026-05-01 via Codex. Stage 01 is still running
+as of the 2026-05-03 16:46 EDT snapshot:
+
+- latest log progress: 2010-09-10, `done=4,034`, `skipped=512`, ETA about 5 h 13 m;
+- TIFF count under `data/historical/mesh_0.05deg`: 4,578;
+- free disk: about 370 GiB;
+- Stage 03 is complete;
+- Stages 02, 04a, and 04b still need to run;
+- Stages 05–15 outputs from the earlier May-2011 smoke path are placeholders,
+  not production outputs.
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -123,8 +133,9 @@ Generates the stochastic catalog. Must remain sparse-safe. Must not reconstruct 
 
 ### 2026-05-01 ✅ Completed
 
-First full pipeline run executed via Codex (Python 3.9.6, branch `v2.1`).
-All items below were added as new files while the run executed — no running scripts were modified.
+First full pipeline run started via Codex (Python 3.9.6, originally coordinated
+on branch `v2.1` before the project moved back to `main`).
+All items below were added as new files while the run executed.
 Committed and merged to `main` at `e582d5d`.
 
 **Project metadata:**
@@ -142,7 +153,7 @@ Committed and merged to `main` at `e582d5d`.
 - `docs/README.md` (documentation index with reading paths)
 - `docs/uncertainty.md` (six-category uncertainty budget)
 - `docs/PR_v1_to_v2.1.md` (full PR description for the v1.0 → v2.1 arc)
-- `SKILL.md` (repo-root AI/developer orientation)
+- `AGENTS.md` (repo-root AI/developer orientation)
 
 **Code helpers (on disk and wired into stage scripts):**
 - `scripts/_config.py` — single source of truth for all grid constants, paths, EVT defaults
@@ -163,7 +174,7 @@ Stage 01 updated to produce `manifest_stage01_myrorss.csv`. Reads both plain `.n
 - `tests/test_no_duplicated_constants.py`: MAX_CENTROID xfail converted to passing assertion
 - `docs/pnas_article_ai_hail_model.md`: comprehensive update — author line (Christopher Melhauser, Ph.D., Independent Researcher, Google Scholar URL), repository URL, AI model names (`claude-sonnet-4-6`, `claude-opus-4-6`, `gpt-5.5-medium`), v2.1 stage descriptions (event merge logic, EVT threshold diagnostics, topographic correction, sparse safety), missing references (Cintineo 2012, Brown 2015), pipeline stage table rewritten, benchmark discussion paragraph added
 - `docs/methodology.md §0`: notation glossary written (grid, hazard, occurrence, EVT, stochastic, topographic, vulnerability, abbreviations)
-- All stale MAX_CENTROID references cleared: SKILL.md, HANDOFF.md, project_memory.md, ai_instructions.md
+- All stale MAX_CENTROID references cleared: AGENTS.md, HANDOFF.md, project_memory.md, ai_instructions.md
 
 ### 2026-05-02 — Full Repo Scan ✅
 
@@ -172,23 +183,35 @@ Complete grep scan and refactor of all 15 stage scripts confirming:
 - 15/15 scripts use `_logging.get_logger()` instead of print-based `log()` helpers
 - Shared `_io.py` helpers are wired where needed (`write_geotiff`, `haversine_km`, `latlon_to_grid`)
 - `RP_YEARS`, `DAMAGE_THRESH_MM`, `MAX_HAIL_MM`, and `MAX_CENTROID_KM_DAY` are sourced from `_config.py` where used
-- 28 test files exist; no `tests/integration/` directory
+- 28 pytest files exist, including `tests/integration/test_smoke_synthetic.py`
 - Missing docs: sensitivity.md, benchmarks.md, FAQ.md, vulnerability_derivation.md
 
-Updated: docs/HANDOFF.md, SKILL.md, docs/project_memory.md, docs/ai_instructions.md
+Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instructions.md
 
 ---
 
-## 8. Immediate Priorities (next session)
+### 2026-05-03 — CI import fix ✅
+
+- `tests/conftest.py`: adds repo root and `scripts/` to `sys.path` before stage
+  module collection, preventing GitHub Actions from resolving repo `_io.py` to
+  Python's stdlib `io` module.
+- GitHub Actions PR checks pass on Python 3.10, 3.11, and 3.12.
+- Commit: `2228d54`.
+
+## 8. Immediate Priorities
 
 In order:
 
-1. **Review Stage 15 figures** once pipeline run completes
-2. **Regression tests** — freeze golden outputs after first run
-3. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist
-6. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`
-7. **Rebuild `.venv` to Python 3.10+** — current venv is Python 3.9.6 (EOL Oct 2025)
-8. **PNAS article Results section** — fill in after pipeline completes
+1. **Let Stage 01 finish.** Do not start a second Stage 01 process.
+2. **Run Stage 02** after Stage 01 completes.
+3. **Run Stage 04a and Stage 04b** after Stage 02.
+4. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset.
+5. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
+6. **Review Stage 15 figures** once production outputs exist.
+7. **Regression tests** — freeze golden outputs after first production run.
+8. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist.
+9. **Rebuild `.venv` to Python 3.10+** — current run venv is Python 3.9.6 (EOL Oct 2025).
+10. **PNAS article Results section** — fill in after pipeline completes.
 
 ---
 
@@ -213,12 +236,13 @@ Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
+Active branch: main, synced with origin/main at 2228d54.
+Stage 01 is currently running; do not rerun it unless it fails.
 Stage 01 produces a source manifest — use it to distinguish missing-source days from no-hail days.
 scripts/_config.py = single source of truth for all grid constants and is imported by all stage scripts.
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 MAX_CENTROID_KM_DAY=150.0 canonical (stage 08 corrected 2026-05-03; matches _config.py and methodology.md §8.2).
 σ_perturb: monthly CV (Mar-Sep events ≥10), median, clipped [0.10,0.40] — documented in methodology.md §13.4 and uncertainty.md §5.1.
-Git commits must be run from the user's terminal — sandbox cannot unlink .git/index.lock.
 ```
 
 ---
