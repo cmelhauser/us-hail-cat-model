@@ -12,7 +12,8 @@ For each day:
   4. Accumulates the daily maximum MESH per native 0.01° pixel
   5. Aggregates to 0.05° via block-maximum (5×5 cells)
   6. Saves a single-band float32 GeoTIFF (MESH in mm)
-  7. Records source/file/output status in a daily manifest
+  7. Runs a physical QA pass over written rasters
+  8. Records source/file/output status in a daily manifest
 
 This avoids storing ~1.5 million small files. One output file per day.
 
@@ -47,6 +48,7 @@ Usage
   python scripts/01_download_myrorss.py --year 2005      # single year
   python scripts/01_download_myrorss.py --year 2005 --month 5   # single month
   python scripts/01_download_myrorss.py --validate       # check outputs only
+  python scripts/01_download_myrorss.py --qa-only        # repair existing rasters + manifest
   python scripts/01_download_myrorss.py --dry-run        # count files without downloading
 
 Runtime
@@ -61,7 +63,7 @@ import gzip
 import io
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -71,12 +73,18 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
-    from _io import write_geotiff
+    from _config import (
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
+        NODATA, MAX_HAIL_IN, MAX_HAIL_MM,
+    )
+    from _io import sanitize_hail_values, write_geotiff
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
-    from scripts._io import write_geotiff
+    from scripts._config import (
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
+        NODATA, MAX_HAIL_IN, MAX_HAIL_MM,
+    )
+    from scripts._io import sanitize_hail_values, write_geotiff
     from scripts._logging import get_logger
 
 # ── paths ─────────────────────────────────────────────────────────────────────
@@ -108,6 +116,14 @@ OUT_NROWS   = NROWS
 OUT_NCOLS   = NCOLS
 OUT_LAT_MAX = LAT_MAX
 OUT_LON_MIN = LON_MIN
+
+# ── physical QA ───────────────────────────────────────────────────────────────
+# NOAA/NSSL lists the U.S. record hailstone as the 8 inch Vivian, South Dakota
+# stone from 23 June 2010. Stage 01 uses a conservative 250 mm ceiling above
+# that observed record and treats larger/non-finite values as invalid source
+# artifacts before downstream bias correction and tail fitting.
+QA_MAX_HAIL_IN = MAX_HAIL_IN
+QA_MAX_HAIL_MM = MAX_HAIL_MM
 
 # ── S3 config ────────────────────────────────────────────────────────────────
 S3_BUCKET   = "noaa-oar-myrorss-pds"
@@ -223,7 +239,9 @@ def parse_sparse_mesh(nc_bytes: bytes, daily_max: np.ndarray) -> int:
     mask = (
         (row >= CONUS_ROW_START) & (row < CONUS_ROW_END) &
         (col >= CONUS_COL_START) & (col < CONUS_COL_END) &
-        (vals > 0) & (vals != MYRORSS_NODATA)
+        np.isfinite(vals) &
+        (vals > 0) & (vals <= QA_MAX_HAIL_MM) &
+        (vals != MYRORSS_NODATA)
     )
 
     if not np.any(mask):
@@ -236,6 +254,16 @@ def parse_sparse_mesh(nc_bytes: bytes, daily_max: np.ndarray) -> int:
     # Update daily max
     np.maximum.at(daily_max, (r, c), v)
     return int(mask.sum())
+
+
+def sanitize_mesh_array(data: np.ndarray) -> tuple[np.ndarray, int]:
+    """Return a float32 array with invalid or implausible hail values zeroed.
+
+    Stage 01 uses 0.0 as the no-signal/nodata sentinel. Values that are
+    non-finite, negative, or above the physical QA cap are treated as invalid
+    radar artifacts and set to 0.0 before GeoTIFF write or repair.
+    """
+    return sanitize_hail_values(data, max_hail_mm=QA_MAX_HAIL_MM, nodata=OUT_NODATA)
 
 def block_max(data: np.ndarray, factor: int) -> np.ndarray:
     """
@@ -272,12 +300,35 @@ def summarize_output_raster(path: Path) -> tuple:
 
     with rasterio.open(path) as src:
         data = src.read(1)
-    finite = np.isfinite(data)
-    if not np.any(finite):
+    valid = np.isfinite(data) & (data > 0) & (data <= QA_MAX_HAIL_MM)
+    if not np.any(valid):
         return 0, 0.0
-    active_cells = int(np.count_nonzero(data[finite] > 0))
-    max_mesh = float(np.nanmax(data))
+    active_cells = int(np.count_nonzero(valid))
+    max_mesh = float(data[valid].max())
     return active_cells, round(max_mesh, 1)
+
+
+def read_manifest_rows_by_date() -> dict:
+    """Read the Stage 01 manifest keyed by ISO date."""
+    rows = {}
+    if MANIFEST_FILE.exists():
+        with open(MANIFEST_FILE, newline="") as f:
+            for row in csv.DictReader(f):
+                rows[row["date"]] = row
+    return rows
+
+
+def iter_stage01_tifs() -> list[Path]:
+    """Return Stage 01 GeoTIFFs only, excluding Stage 02/04b files in OUT_DIR."""
+    paths = []
+    for path in sorted(OUT_DIR.rglob("mesh_????????.tif")):
+        try:
+            day = datetime.strptime(path.stem.replace("mesh_", ""), "%Y%m%d").date()
+        except ValueError:
+            continue
+        if START_DATE <= day <= END_DATE:
+            paths.append(path)
+    return paths
 
 def classify_day(source_files: int, active_cells: int, read_errors: int = 0) -> str:
     """Classify source availability separately from hail/no-hail signal."""
@@ -313,13 +364,13 @@ def manifest_row(day: date, out_path: Path, keys: list, source_pixels,
 def upsert_manifest_row(row: dict):
     """Write or replace a manifest row by date."""
     MANIFEST_FILE.parent.mkdir(parents=True, exist_ok=True)
-    rows = {}
-    if MANIFEST_FILE.exists():
-        with open(MANIFEST_FILE, newline="") as f:
-            for existing in csv.DictReader(f):
-                rows[existing["date"]] = existing
+    rows = read_manifest_rows_by_date()
     rows[row["date"]] = {field: row.get(field, "") for field in MANIFEST_FIELDS}
+    write_manifest_rows(rows)
 
+
+def write_manifest_rows(rows: dict):
+    """Write a complete Stage 01 manifest dictionary keyed by date."""
     tmp_path = MANIFEST_FILE.with_suffix(".csv.tmp")
     with open(tmp_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS)
@@ -390,17 +441,18 @@ def process_day(s3, day: date, dry_run: bool = False) -> dict:
             if errors <= 3:
                 log(f"    WARN: failed to read {key}: {e}")
 
-    # Aggregate to 0.05° via block-max
-    out_data = block_max(daily_max, AGG_FACTOR)
+    # Aggregate to 0.05° via block-max and apply the physical QA cap.
+    out_data, qa_native_removed = sanitize_mesh_array(block_max(daily_max, AGG_FACTOR))
+    if qa_native_removed:
+        log(f"    WARN: removed {qa_native_removed:,} non-finite/out-of-bound cells for {day}")
 
     # Replace zeros with nodata (no MESH signal)
     # (zeros are genuinely "no hail detected", which is our nodata)
 
     write_geotiff(out_data, out_path)
 
-    peak = float(daily_max.max())
-    active_cells = int(np.count_nonzero(out_data > 0))
-    max_mesh_mm = round(peak, 1)
+    active_cells, max_mesh_mm = summarize_output_raster(out_path)
+    peak = max_mesh_mm
     status = classify_day(len(keys), active_cells, errors)
     upsert_manifest_row(manifest_row(
         day, out_path, keys, total_pixels, active_cells, max_mesh_mm,
@@ -432,14 +484,16 @@ def validate_outputs() -> bool:
     if not OUT_DIR.exists():
         errors.append(f"Missing directory: {OUT_DIR}")
     else:
-        tifs = sorted(OUT_DIR.rglob("mesh_????????.tif"))
+        tifs = iter_stage01_tifs()
         # MYRORSS covers Apr 1998 – Dec 2011: ~5,000 days
         if len(tifs) < 4000:
             errors.append(f"Too few TIFFs: {len(tifs)} (expected ≥4000)")
         else:
             log(f"  Found {len(tifs):,} daily MESH GeoTIFFs")
 
-        # Spot-check a random sample
+        # Spot-check metadata, then scan every raster for value QA. The full
+        # value scan is deliberately cheap relative to download time and keeps
+        # non-finite or physically implausible cells out of downstream stages.
         sample = random.sample(tifs, min(20, len(tifs)))
         for p in sample:
             try:
@@ -454,6 +508,20 @@ def validate_outputs() -> bool:
             except Exception as e:
                 errors.append(f"Cannot read {p.name}: {e}")
 
+        for p in tifs:
+            try:
+                with rasterio.open(p) as src:
+                    data = src.read(1)
+                invalid = (~np.isfinite(data)) | (data < 0) | (data > QA_MAX_HAIL_MM)
+                if np.any(invalid):
+                    n_invalid = int(np.count_nonzero(invalid))
+                    errors.append(
+                        f"Invalid Stage 01 values in {p.name}: {n_invalid:,} cells "
+                        f"outside [0, {QA_MAX_HAIL_MM:.1f}] mm"
+                    )
+            except Exception as e:
+                errors.append(f"Cannot read {p.name}: {e}")
+
     if errors:
         log("CRITICAL: Output validation FAILED:")
         for e in errors:
@@ -461,6 +529,84 @@ def validate_outputs() -> bool:
         return False
     log("Output validation passed ✓")
     return True
+
+
+def qa_repair_existing_outputs() -> dict:
+    """Scan Stage 01 GeoTIFFs, repair invalid values, and refresh manifest stats."""
+    import rasterio
+
+    manifest_rows = read_manifest_rows_by_date()
+    tifs = iter_stage01_tifs()
+    repaired_files = 0
+    repaired_cells = 0
+    active_files = 0
+    above_cap_files = 0
+    nonfinite_files = 0
+
+    log(f"\n  Stage 01 QA: physical cap = {QA_MAX_HAIL_MM:.1f} mm ({QA_MAX_HAIL_IN:.1f} in)")
+    log(f"  Stage 01 QA: scanning {len(tifs):,} GeoTIFFs ...")
+
+    for path in tifs:
+        try:
+            day = datetime.strptime(path.stem.replace("mesh_", ""), "%Y%m%d").date()
+        except ValueError:
+            log(f"    WARN: skipping unrecognized Stage 01 filename: {path}")
+            continue
+
+        with rasterio.open(path) as src:
+            data = src.read(1)
+
+        bad_nonfinite = (~np.isfinite(data)) & (data != OUT_NODATA)
+        bad_above_cap = np.isfinite(data) & (data > QA_MAX_HAIL_MM)
+        if np.any(bad_nonfinite):
+            nonfinite_files += 1
+        if np.any(bad_above_cap):
+            above_cap_files += 1
+
+        repaired, n_bad = sanitize_mesh_array(data)
+        if n_bad:
+            write_geotiff(repaired, path)
+            repaired_files += 1
+            repaired_cells += n_bad
+
+        active_cells, max_mesh_mm = summarize_output_raster(path)
+        if active_cells > 0:
+            active_files += 1
+
+        row = manifest_rows.get(day.isoformat())
+        if row:
+            try:
+                source_files = int(row.get("source_files") or 0)
+            except ValueError:
+                source_files = 0
+            try:
+                read_errors = int(row.get("read_errors") or 0)
+            except ValueError:
+                read_errors = 0
+            row["active_cells_0p05"] = active_cells
+            row["max_mesh_mm"] = max_mesh_mm
+            row["status"] = classify_day(source_files, active_cells, read_errors)
+            manifest_rows[day.isoformat()] = {
+                field: row.get(field, "") for field in MANIFEST_FIELDS
+            }
+
+    if manifest_rows:
+        write_manifest_rows(manifest_rows)
+
+    log("  Stage 01 QA complete:")
+    log(f"    Files repaired:       {repaired_files:,}")
+    log(f"    Cells repaired:       {repaired_cells:,}")
+    log(f"    Files with nonfinite: {nonfinite_files:,}")
+    log(f"    Files above cap:      {above_cap_files:,}")
+    log(f"    Files with signal:    {active_files:,}")
+    return {
+        "files_scanned": len(tifs),
+        "files_repaired": repaired_files,
+        "cells_repaired": repaired_cells,
+        "files_with_nonfinite": nonfinite_files,
+        "files_above_cap": above_cap_files,
+        "files_with_signal": active_files,
+    }
 
 def main():
     parser = argparse.ArgumentParser(
@@ -473,7 +619,14 @@ def main():
                         help="Count S3 files without downloading")
     parser.add_argument("--validate", action="store_true",
                         help="Check outputs only, no downloading")
+    parser.add_argument("--qa-only", action="store_true",
+                        help="Repair existing Stage 01 rasters and refresh manifest stats")
     args = parser.parse_args()
+
+    if args.qa_only:
+        qa_repair_existing_outputs()
+        ok = validate_outputs()
+        sys.exit(0 if ok else 1)
 
     if args.validate:
         ok = validate_outputs()
@@ -565,6 +718,7 @@ def main():
 
     # Validate
     if not args.dry_run:
+        qa_repair_existing_outputs()
         ok = validate_outputs()
         sys.exit(0 if ok else 1)
 

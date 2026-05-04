@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-05-03 (main branch, Stage 01 running).
+Last updated: 2026-05-04 (main branch, Stage 02 running).
 
 ## What This Project Is
 
@@ -142,6 +142,19 @@ pixels. The authoritative distinction is:
 data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv
 ```
 
+Stage 01 also performs a physical QA pass after download/processing. Values
+that are non-finite, negative, or greater than `MAX_HAIL_MM = 250.0` are reset
+to `0.0`, and the manifest active-cell and daily-maximum fields are refreshed.
+Run this repair pass independently with:
+
+```bash
+python scripts/01_download_myrorss.py --qa-only
+```
+
+The same `MAX_HAIL_MM` QA cap is enforced by Stage 02, Stage 04b, and Stage 05
+before their outputs are accepted. Do not introduce a new hail-size-producing
+stage without importing the shared QA helper from `scripts/_io.py`.
+
 Manifest statuses:
 
 | Status | Meaning |
@@ -177,7 +190,7 @@ These come from `scripts/_config.py`.
 | `LAT_MAX` | 50.005 | North edge of row 0 |
 | `LON_MIN` | -125.005 | West edge of col 0 |
 | `DAMAGE_THRESH_MM` | 25.4 | 1-inch damage threshold |
-| `MAX_HAIL_MM` | 250.0 | Hard cap on MESH75 |
+| `MAX_HAIL_MM` | 250.0 | Physical QA cap on hail diameter values |
 | `RNG_SEED` | 42 | Stochastic RNG seed |
 | `N_SIM_YEARS` | 50000 | Catalog length |
 | `POOL_RADIUS_KM` | 150 | Stage 10 smoothing radius |
@@ -188,16 +201,16 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-05-03:
+As of 2026-05-04:
 
 | Area | Status |
 |---|---|
-| Active branch | `main`, synced with `origin/main` at `2228d54` |
+| Active branch | `main`, synced with `origin/main` / `upstream/main` at `e4c9331` |
 | All 15 stage scripts | Written and syntax-checked |
 | Tests | 28 pytest files; GitHub Actions green on Python 3.10/3.11/3.12 |
 | Integration test | `tests/integration/test_smoke_synthetic.py` |
 | Constant-drift guard | `tests/test_no_duplicated_constants.py` |
-| First full pipeline run | Stage 01 in progress, started 2026-05-01 |
+| First full pipeline run | Stage 01 complete and QA-repaired; Stage 02 running |
 | Project metadata | LICENSE, CHANGELOG, CITATION, CONTRIBUTING, COC, SECURITY |
 | Python project config | pyproject.toml, .pre-commit-config.yaml |
 | CI/CD | `.github/workflows/tests.yml` |
@@ -207,16 +220,16 @@ As of 2026-05-03:
 
 ## Current Run Watch
 
-As of the 2026-05-03 16:46 EDT snapshot, Stage 01 was active at 2010-09-10
-(`done=4,034`, `skipped=512`, ETA about 5 h 13 m), with 4,578 TIFFs present
-and about 370 GiB free. Do not start another Stage 01 process while the active
-one is running.
+As of the 2026-05-04 snapshot, Stage 01 is complete through 2011-12-31 with
+5,023 MYRORSS daily rasters. The Stage 01 QA repair pass fixed 199 files and
+3,852 cells, and no remaining Stage 01 raster value exceeds 250.0 mm. Stage 02
+is running in a detached `screen` session.
 
-After Stage 01 completes, the next production sequence is:
+The remaining production sequence is:
 
-1. Run Stage 02 (MRMS).
-2. Run Stage 04a (ERA5).
-3. Run Stage 04b (GridRad).
+1. Let Stage 02 (MRMS) complete and validate.
+2. Run Stage 04a (ERA5) if CDS credentials are configured.
+3. Run Stage 04b (GridRad), or explicitly document fallback behavior if GridRad inputs remain unavailable.
 4. Re-run Stages 05-15 with `--skip-ml` against the full dataset.
 5. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
 6. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.

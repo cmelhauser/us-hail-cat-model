@@ -67,9 +67,10 @@ MASK_DIR: Path = ANALYSIS / "conus_mask"
 
 # ── Physical constants and thresholds ────────────────────────────────────────
 DAMAGE_THRESH_MM: float = 25.4   # 1.0 inch — minimum hail for damage consideration
-MAX_HAIL_MM: float = 250.0       # hard cap on MESH75 values (physical upper bound)
-NODATA: float = 0.0            # hail rasters use 0.0 for no MESH signal
 MM_PER_INCH: float = 25.4        # unit conversion
+MAX_HAIL_MM: float = 250.0       # QA cap; above the 8" Vivian, SD U.S. record
+MAX_HAIL_IN: float = MAX_HAIL_MM / MM_PER_INCH
+NODATA: float = 0.0            # hail rasters use 0.0 for no MESH signal
 
 # MESH75 formula coefficients (Murillo & Homeyer 2021, Eq. 3, corrigendum)
 MESH75_A: float = 15.096  # pre-factor
@@ -132,7 +133,7 @@ __all__ = [
     "MESH_CORR_DIR", "MESH_CLIMO_DIR", "ERA5_DIR", "SPC_DIR",
     "EVENTS_DIR", "CDF_DIR", "OCC_DIR", "TOPO_DIR", "VULN_DIR", "MASK_DIR",
     # Physical constants
-    "DAMAGE_THRESH_MM", "MAX_HAIL_MM", "NODATA", "MM_PER_INCH",
+    "DAMAGE_THRESH_MM", "MAX_HAIL_IN", "MAX_HAIL_MM", "NODATA", "MM_PER_INCH",
     "MESH75_A", "MESH75_B",
     "WITT_INCH_TO_CM", "WITT_RATIO_EXP",
     # EVT / RP

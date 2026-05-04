@@ -81,7 +81,12 @@ pytest -q tests -m "not integration and not regression and not slow"
 4. For a deterministic full run, use the staged run plan in `docs/RUN_NOTES.md` with
    `--skip-ml`.
 5. For Stage 01, monitor both the log and manifest status counts.
-6. After each stage, validate outputs before starting the next expensive stage.
+6. For Stage 01 QA repair without downloading, run
+   `python scripts/01_download_myrorss.py --qa-only`; this applies the
+   250.0 mm physical QA bound and refreshes manifest maxima/statuses.
+7. Stage 02, Stage 04b, and Stage 05 also enforce the shared 250.0 mm hail-value
+   QA cap during processing and validation.
+8. After each stage, validate outputs before starting the next expensive stage.
 
 ---
 
@@ -110,4 +115,3 @@ docs/migration_plan.md
 docs/PR_v1_to_v2.1.md
 CHANGELOG.md
 ```
-

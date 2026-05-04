@@ -1,7 +1,7 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.1
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-05-03 (main branch, Stage 01 running via Codex).
+> Last updated: 2026-05-04 (main branch, Stage 02 running via Codex).
 
 ---
 
@@ -147,16 +147,15 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 01 (MYRORSS) | ⏳ Running | At 2010-09-10, `done=4,034`, `skipped=512`, ETA ~5 h 13 m. 4,578 TIFFs present. |
-| Stage 02 (MRMS) | ❌ Not run | Log file is empty. Must run after Stage 01. |
+| Stage 01 (MYRORSS) | ✅ Complete + QA repaired | 5,023 rasters through 2011-12-31. QA repaired 199 files / 3,852 cells with 250.0 mm cap; validation passed. |
+| Stage 02 (MRMS) | ⏳ Running | Detached `screen` session `hail_stage02_mrms`. |
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. |
 | Stage 04a (ERA5) | ❌ Not run | Log file is empty. Must run after Stage 01. |
 | Stage 04b (GridRad) | ❌ Not run | Log file is empty. Stage 05 ran with identity calibration (no GridRad data). |
 | Stage 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 files only. All outputs invalid for production use. |
 
-**Re-run sequence once Stage 01 finishes:**
+**Re-run sequence once Stage 02 finishes:**
 ```bash
-.venv/bin/python run_pipeline.py --only 02     # MRMS download (2020–present)
 .venv/bin/python run_pipeline.py --only 04a    # ERA5 isotherms
 .venv/bin/python run_pipeline.py --only 04b    # GridRad gap-fill (2012–2019)
 .venv/bin/python run_pipeline.py --from 05 --skip-ml   # Re-run all remaining stages

@@ -65,12 +65,12 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
-    from _io import write_geotiff
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM
+    from _io import sanitize_hail_values, write_geotiff
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
-    from scripts._io import write_geotiff
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM
+    from scripts._io import sanitize_hail_values, write_geotiff
     from scripts._logging import get_logger
 
 IN_DIR    = DATA_ROOT / "historical" / "mesh_0.05deg"
@@ -88,6 +88,7 @@ FILTER_DIAG_FILE = CAL_DIR / "hail_filter_diagnostics.csv"
 OUT_NROWS = NROWS
 OUT_NCOLS = NCOLS
 OUT_DX = DX
+QA_MAX_HAIL_MM = MAX_HAIL_MM
 
 WITT_A     = 2.54
 WITT_B     = 0.5
@@ -299,7 +300,8 @@ def apply_optional_cqm(data: np.ndarray, lat_grid: np.ndarray, day_of_year: int,
         pred = _cqm_model.predict(feats).reshape(data.shape).astype(np.float32)
         pred = np.where(np.isfinite(pred) & (pred > 0), pred, 0.0)
         # Never let a malformed optional model inflate values beyond the physical cap.
-        return np.clip(pred, 0, 300).astype(np.float32)
+        repaired, _ = sanitize_hail_values(pred, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
+        return repaired
     except Exception as e:
         log(f"  WARN: conditional calibration failed; using quantile fallback: {e}")
         return fallback
@@ -330,7 +332,8 @@ def apply_probabilistic_filter(data: np.ndarray, day_of_year: int, lat_grid: np.
         out = data * prob
         # Keep a small deterministic safety floor after weighting.
         out[out < MIN_MESH75_MM] = 0.0
-        return out.astype(np.float32)
+        repaired, _ = sanitize_hail_values(out, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
+        return repaired
     except Exception as e:
         log(f"  WARN: probabilistic filter failed; using deterministic fallback: {e}")
         return deterministic
@@ -374,6 +377,9 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False):
         source = "MYRORSS/MRMS"
 
     filtered = apply_probabilistic_filter(corrected, doy, lat_grid, skip_ml=skip_ml)
+    filtered, n_repaired = sanitize_hail_values(filtered, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
+    if n_repaired:
+        log(f"  WARN: removed {n_repaired:,} non-finite/out-of-bound corrected cells in {in_path.name}")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     profile.update(compress="lzw", tiled=True, blockxsize=256, blockysize=256)
@@ -411,6 +417,19 @@ def validate_outputs():
                         errors.append(f"Wrong CRS: {p.name}")
                     if src.width != OUT_NCOLS or src.height != OUT_NROWS:
                         errors.append(f"Wrong shape: {p.name}")
+            except Exception as e:
+                errors.append(f"Cannot read {p.name}: {e}")
+        for p in tifs:
+            try:
+                with rasterio.open(p) as src:
+                    data = src.read(1)
+                invalid = (~np.isfinite(data)) | (data < 0) | (data > QA_MAX_HAIL_MM)
+                if np.any(invalid):
+                    errors.append(
+                        f"Invalid corrected MESH75 values in {p.name}: "
+                        f"{int(np.count_nonzero(invalid)):,} cells outside "
+                        f"[0, {QA_MAX_HAIL_MM:.1f}] mm"
+                    )
             except Exception as e:
                 errors.append(f"Cannot read {p.name}: {e}")
     if errors:

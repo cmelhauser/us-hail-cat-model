@@ -29,6 +29,7 @@ Output
 ------
   data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif
   + data/historical/mesh_0.05deg/gridrad_days.txt (list of dates processed from GridRad)
+  Values are QA-checked to be finite, non-negative, and ≤250.0 mm.
 
 Usage
 -----
@@ -51,12 +52,18 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
-    from _io import write_geotiff
+    from _config import (
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
+        NODATA, MAX_HAIL_MM,
+    )
+    from _io import sanitize_hail_values, write_geotiff
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
-    from scripts._io import write_geotiff
+    from scripts._config import (
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
+        NODATA, MAX_HAIL_MM,
+    )
+    from scripts._io import sanitize_hail_values, write_geotiff
     from scripts._logging import get_logger
 
 GRIDRAD_DIR = DATA_ROOT / "historical" / "gridrad"
@@ -73,6 +80,7 @@ OUT_NCOLS = NCOLS
 OUT_LAT_MAX = LAT_MAX
 OUT_LON_MIN = LON_MIN
 OUT_NODATA  = NODATA
+QA_MAX_HAIL_MM = MAX_HAIL_MM
 
 # MESH75 coefficients (corrected 2021 corrigendum)
 MESH75_A = 15.096
@@ -276,7 +284,7 @@ def process_gridrad_file(nc_path, daily_max, month):
             continue
 
         mesh75_mm = MESH75_A * (shi ** MESH75_B)
-        if mesh75_mm < 5.0:
+        if not np.isfinite(mesh75_mm) or mesh75_mm < 5.0 or mesh75_mm > QA_MAX_HAIL_MM:
             continue
 
         out_row = int((OUT_LAT_MAX - lat) / OUT_DX)
@@ -310,8 +318,16 @@ def process_day(day):
             if errors <= 3:
                 log(f"    WARN: {nc_path.name}: {e}")
 
-    write_geotiff(daily_max, out_path)
-    peak = float(daily_max.max())
+    out_data, n_repaired = sanitize_hail_values(
+        daily_max,
+        max_hail_mm=QA_MAX_HAIL_MM,
+        nodata=OUT_NODATA,
+    )
+    if n_repaired:
+        log(f"    WARN: removed {n_repaired:,} non-finite/out-of-bound cells for {day}")
+    write_geotiff(out_data, out_path)
+    active = out_data[(out_data > 0) & np.isfinite(out_data)]
+    peak = float(active.max()) if active.size else 0.0
     return {
         "files": len(nc_files), "source": source, "active_cols": total_cols,
         "peak_mesh75_mm": round(peak, 1), "errors": errors,
@@ -333,11 +349,34 @@ def main():
     args = parser.parse_args()
 
     if args.validate:
-        # Simple check
+        import rasterio
+        # Simple count and value QA check
         gap_tifs = sorted(p for p in OUT_DIR.rglob("mesh_????????.tif")
                           if "mesh_2012" <= p.stem <= "mesh_20201013")
         log(f"  Found {len(gap_tifs):,} GridRad gap-fill TIFFs")
-        sys.exit(0 if len(gap_tifs) >= 2000 else 1)
+        errors = []
+        if len(gap_tifs) < 2000:
+            errors.append(f"Too few GridRad gap-fill TIFFs: {len(gap_tifs)}")
+        for p in gap_tifs:
+            try:
+                with rasterio.open(p) as src:
+                    data = src.read(1)
+                invalid = (~np.isfinite(data)) | (data < 0) | (data > QA_MAX_HAIL_MM)
+                if np.any(invalid):
+                    errors.append(
+                        f"Invalid GridRad MESH75 values in {p.name}: "
+                        f"{int(np.count_nonzero(invalid)):,} cells outside "
+                        f"[0, {QA_MAX_HAIL_MM:.1f}] mm"
+                    )
+            except Exception as e:
+                errors.append(f"Cannot read {p.name}: {e}")
+        if errors:
+            log("CRITICAL: Validation FAILED:")
+            for err in errors[:50]:
+                log(f"  ✗ {err}")
+            sys.exit(1)
+        log("Output validation passed ✓")
+        sys.exit(0)
 
     log(f"\n{'='*60}")
     log(f"  GridRad Gap Fill (ERA5 + Severe Priority) — Stage 04b")

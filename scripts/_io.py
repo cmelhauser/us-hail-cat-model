@@ -9,6 +9,7 @@ profile behavior stay in one place.
 Functions
 ---------
 write_geotiff   Write a single-band float32 GeoTIFF at the canonical 0.05° grid.
+sanitize_hail_values  Reset invalid hail values to the no-signal sentinel.
 haversine_km    Great-circle distance in km between two (lat, lon) points.
 latlon_to_grid  Convert a (lat, lon) coordinate to grid (row, col).
 
@@ -34,6 +35,7 @@ try:
         NCOLS,
         DX,
         NODATA,
+        MAX_HAIL_MM,
     )
 except ImportError:  # pragma: no cover - exercised by pytest importlib loading
     from scripts._config import (
@@ -43,6 +45,7 @@ except ImportError:  # pragma: no cover - exercised by pytest importlib loading
         NCOLS,
         DX,
         NODATA,
+        MAX_HAIL_MM,
     )
 
 # ---------------------------------------------------------------------------
@@ -97,6 +100,26 @@ def write_geotiff(
 
     with rasterio.open(out_path, "w", **profile) as dst:
         dst.write(data.astype("float32"), 1)
+
+
+def sanitize_hail_values(
+    data: np.ndarray,
+    max_hail_mm: float = MAX_HAIL_MM,
+    nodata: float = NODATA,
+) -> tuple[np.ndarray, int]:
+    """Return a float32 hail array with invalid values reset to ``nodata``.
+
+    This is the shared physical QA guard for hail-size rasters. Values that are
+    non-finite, negative, or above ``max_hail_mm`` are treated as source/model
+    artifacts and reset to the model's no-signal sentinel before downstream
+    use.
+    """
+    arr = np.asarray(data, dtype=np.float32).copy()
+    bad = (~np.isfinite(arr)) | (arr < 0) | (arr > max_hail_mm)
+    n_bad = int(np.count_nonzero(bad))
+    if n_bad:
+        arr[bad] = nodata
+    return arr, n_bad
 
 
 # ---------------------------------------------------------------------------

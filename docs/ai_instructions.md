@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.1**
-**Last updated: 2026-05-03 (main branch, Stage 01 running)**
+**Last updated: 2026-05-04 (main branch, Stage 02 running)**
 
 ---
 
@@ -245,8 +245,7 @@ Current repository state:
 - Regression / golden-output tests
 - Bootstrap CIs on Stage 09 RP estimates
 
-**Immediate run priorities after Stage 01 completes:**
-- Run Stage 02.
+**Immediate run priorities after Stage 02 completes:**
 - Run Stage 04a.
 - Run Stage 04b.
 - Re-run Stages 05–15 with `--skip-ml` against the full dataset.

@@ -10,6 +10,19 @@ def test_stage01_block_max_uses_maximum_not_sum():
     assert out.tolist() == [[5.0, 7.0], [13.0, 15.0]]
 
 
+def test_stage01_qa_cap_is_250_mm():
+    s = load_stage("01_download_myrorss.py")
+    assert s.QA_MAX_HAIL_MM == 250.0
+
+
+def test_stage01_sanitize_mesh_array_removes_nonfinite_negative_and_above_cap():
+    s = load_stage("01_download_myrorss.py")
+    data = np.array([[0.0, 1.0, np.inf], [np.nan, -1.0, 251.0]], dtype=np.float32)
+    repaired, n_bad = s.sanitize_mesh_array(data)
+    assert n_bad == 4
+    assert repaired.tolist() == [[0.0, 1.0, 0.0], [0.0, 0.0, 0.0]]
+
+
 def test_stage01_iter_dates_inclusive():
     from datetime import date
     s = load_stage("01_download_myrorss.py")

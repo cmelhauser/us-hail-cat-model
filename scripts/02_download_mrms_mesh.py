@@ -11,7 +11,8 @@ For each day:
   3. Extracts the CONUS subset from the full grid
   4. Accumulates the daily maximum MESH per native 0.01° pixel
   5. Aggregates to 0.05° via block-maximum (5×5 cells)
-  6. Saves a single-band float32 GeoTIFF (MESH in mm)
+  6. Applies physical QA (finite, non-negative, ≤250.0 mm)
+  7. Saves a single-band float32 GeoTIFF (MESH in mm)
 
 Output files are identical in format to stage 01 (MYRORSS) — same grid,
 same CRS, same units — so downstream stages treat them interchangeably.
@@ -77,12 +78,18 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
-    from _io import write_geotiff
+    from _config import (
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
+        NODATA, MAX_HAIL_MM,
+    )
+    from _io import sanitize_hail_values, write_geotiff
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
-    from scripts._io import write_geotiff
+    from scripts._config import (
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
+        NODATA, MAX_HAIL_MM,
+    )
+    from scripts._io import sanitize_hail_values, write_geotiff
     from scripts._logging import get_logger
 
 # ── paths ─────────────────────────────────────────────────────────────────────
@@ -127,6 +134,7 @@ END_DATE   = date.today()         # up to today
 
 # ── nodata / thresholds ──────────────────────────────────────────────────────
 OUT_NODATA = NODATA
+QA_MAX_HAIL_MM = MAX_HAIL_MM
 
 log = get_logger("02_download_mrms_mesh", LOG_ROOT).info
 
@@ -198,7 +206,11 @@ def parse_grib2_mesh(grib_bytes: bytes, daily_max: np.ndarray) -> int:
     conus = conus[::-1, :].copy()
 
     # Replace NaN and negative values with 0
-    conus = np.where(np.isfinite(conus) & (conus > 0), conus, 0.0).astype(np.float32)
+    conus = np.where(
+        np.isfinite(conus) & (conus > 0) & (conus <= QA_MAX_HAIL_MM),
+        conus,
+        0.0,
+    ).astype(np.float32)
 
     # Update daily max
     valid_count = int(np.count_nonzero(conus > 0))
@@ -260,11 +272,18 @@ def process_day(s3, day: date, dry_run: bool = False) -> dict:
             if errors <= 3:
                 log(f"    WARN: failed to read {key.split('/')[-1]}: {e}")
 
-    # Aggregate to 0.05°
-    out_data = block_max(daily_max, AGG_FACTOR)
+    # Aggregate to 0.05° and apply the shared physical QA cap.
+    out_data, n_repaired = sanitize_hail_values(
+        block_max(daily_max, AGG_FACTOR),
+        max_hail_mm=QA_MAX_HAIL_MM,
+        nodata=OUT_NODATA,
+    )
+    if n_repaired:
+        log(f"    WARN: removed {n_repaired:,} non-finite/out-of-bound cells for {day}")
     write_geotiff(out_data, out_path)
 
-    peak = float(daily_max.max())
+    active = out_data[(out_data > 0) & np.isfinite(out_data)]
+    peak = float(active.max()) if active.size else 0.0
     return {
         "files":       len(keys),
         "pixels":      total_pixels,
@@ -306,6 +325,20 @@ def validate_outputs() -> bool:
                         errors.append(f"Wrong CRS in {p.name}: {src.crs}")
                     if src.width != OUT_NCOLS or src.height != OUT_NROWS:
                         errors.append(f"Wrong shape in {p.name}: {src.width}×{src.height}")
+            except Exception as e:
+                errors.append(f"Cannot read {p.name}: {e}")
+
+        for p in tifs:
+            try:
+                with rasterio.open(p) as src:
+                    data = src.read(1)
+                invalid = (~np.isfinite(data)) | (data < 0) | (data > QA_MAX_HAIL_MM)
+                if np.any(invalid):
+                    errors.append(
+                        f"Invalid MRMS MESH values in {p.name}: "
+                        f"{int(np.count_nonzero(invalid)):,} cells outside "
+                        f"[0, {QA_MAX_HAIL_MM:.1f}] mm"
+                    )
             except Exception as e:
                 errors.append(f"Cannot read {p.name}: {e}")
 

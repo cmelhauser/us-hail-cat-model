@@ -178,7 +178,7 @@ Optional machine-learning artifacts may improve calibration or environmental fil
 
 ### 3.1 MYRORSS historical radar reanalysis
 
-MYRORSS provides the early radar backbone from April 1998 through December 2011. The archive contains sparse radar-derived NetCDF objects at high temporal frequency and supports a spatially continuous historical hail field. Stage 01 reads both plain `.netcdf` and gzipped `.netcdf.gz` archive objects, accumulates native daily maximum MESH, subsets CONUS, aggregates by block maximum, and writes daily GeoTIFFs.
+MYRORSS provides the early radar backbone from April 1998 through December 2011. The archive contains sparse radar-derived NetCDF objects at high temporal frequency and supports a spatially continuous historical hail field. Stage 01 reads both plain `.netcdf` and gzipped `.netcdf.gz` archive objects, accumulates native daily maximum MESH, subsets CONUS, aggregates by block maximum, applies finite-value and physical-bound QA, and writes daily GeoTIFFs.
 
 Stage 01 also writes:
 
@@ -188,9 +188,19 @@ data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv
 
 This manifest is a scientific data product. It records whether each day had missing source files, valid source files with no hail pixels, valid source files with active cells, or read errors. An all-zero GeoTIFF alone cannot distinguish a meteorologically quiet day from a missing-source day; the manifest carries that distinction.
 
+Stage 01 enforces a 250.0 mm upper QA bound on raw MYRORSS hail values after
+download and again in a post-processing repair scan. The bound is above the
+NOAA/NSSL U.S. record hailstone diameter and is used as an artifact filter, not
+as an estimate of the physical maximum possible hailstone size.
+
+The same finite-value and 250.0 mm physical-bound QA guard is applied to
+operational MRMS raw rasters, GridRad-derived gap-fill rasters, and Stage 05
+corrected MESH75 outputs. This creates a single hail-value invariant before
+climatology, event building, extreme-value fitting, and stochastic simulation.
+
 ### 3.2 Operational MRMS
 
-MRMS supplies the recent operational era from October 2020 onward. It provides national multi-radar products with consistent gridded severe-weather fields. Stage 02 extracts MESH GRIB2 products, handles native orientation and longitude conventions, computes daily maxima, and writes the same 0.05 degree GeoTIFF format used by MYRORSS.
+MRMS supplies the recent operational era from October 2020 onward. It provides national multi-radar products with consistent gridded severe-weather fields. Stage 02 extracts MESH GRIB2 products, handles native orientation and longitude conventions, computes daily maxima, applies the shared hail-value QA guard, and writes the same 0.05 degree GeoTIFF format used by MYRORSS.
 
 MRMS is not assumed identical to MYRORSS. Differences in processing chain, radar network state, temporal update frequency, quality control, and algorithm evolution can create source-transition artifacts. v2.1 addresses those artifacts through Stage 05 calibration and Stage 06 source diagnostics.
 
