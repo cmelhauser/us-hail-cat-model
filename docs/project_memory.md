@@ -219,7 +219,7 @@ Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instruction
 In order:
 
 1. **Let Stage 02 finish** and validate MRMS outputs.
-2. **Run Stage 04a and Stage 04b** after Stage 02; Stage 04a requires CDS credentials.
+2. **Run Stage 04a and Stage 04b** after Stage 02; Stage 04a requires CDS credentials and accepted Copernicus ERA5 monthly pressure-level plus single-level dataset licences.
 3. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset.
 4. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
 5. **Review Stage 15 figures** once production outputs exist.

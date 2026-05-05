@@ -44,6 +44,16 @@ Do not commit this file or paste the token into logs. CDS can authenticate with
 a valid token and still reject Stage 04a if the dataset licence terms have not
 been accepted for that account.
 
+Accept both dataset licences while signed in to the same CDS account used to
+generate the token:
+
+- https://cds.climate.copernicus.eu/datasets/reanalysis-era5-pressure-levels-monthly-means?tab=download#manage-licences
+- https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels-monthly-means?tab=download#manage-licences
+
+The telltale failure is `403 Client Error: Forbidden` with `required licences
+not accepted`. That means the credential file is being read but the CDS account
+still needs dataset licence acceptance.
+
 Stage 04a submits ERA5 pressure-level requests in bounded yearly chunks, with a
 monthly fallback if CDS rejects a year as too large. Completed chunks are kept in
 `data/historical/era5/pressure_chunks/`, so interrupted ERA5 runs can resume

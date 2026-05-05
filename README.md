@@ -109,7 +109,12 @@ key: YOUR_PERSONAL_ACCESS_TOKEN
 
 Generate the token from your Copernicus CDS profile, save the file outside the repository, and restrict it with `chmod 600 ~/.cdsapirc`. Never commit API credentials.
 
-Before running Stage 04a, sign in to CDS and accept the licence terms for the ERA5 monthly pressure-level and single-level datasets from their download pages. CDS will reject authenticated API calls until those licence terms are accepted for the account tied to the token.
+Before running Stage 04a, sign in to CDS and accept the licence terms for both ERA5 monthly datasets used by the script:
+
+- [ERA5 monthly pressure-level means](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-pressure-levels-monthly-means?tab=download#manage-licences)
+- [ERA5 monthly single-level means](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels-monthly-means?tab=download#manage-licences)
+
+CDS will reject authenticated API calls until those licence terms are accepted for the account tied to the token. The failure looks like `403 Client Error: Forbidden` with `required licences not accepted`; this is a CDS account setup issue, not a bad `.cdsapirc` file.
 
 Stage 04a submits the ERA5 pressure-level request in bounded yearly chunks, with an automatic monthly fallback if CDS rejects a year as too large. The chunks are retained under `data/historical/era5/pressure_chunks/` so interrupted ERA5 runs can resume without repeating completed downloads.
 

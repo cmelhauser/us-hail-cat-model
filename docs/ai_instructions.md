@@ -251,6 +251,12 @@ Current repository state:
 - Re-run Stages 05–15 with `--skip-ml` against the full dataset.
 - Run Stage 13 smoke (`--n-years 1000`) before the full 50,000-year catalog.
 
+**Stage 04a CDS access note:** Stage 04a needs more than a valid
+`~/.cdsapirc`. The Copernicus account used for the token must also accept the
+ERA5 monthly pressure-level and single-level dataset licences. If CDS returns
+`403 Client Error: Forbidden` with `required licences not accepted`, accept both
+dataset licences from the CDS download pages, then retry Stage 04a.
+
 ---
 
 ## 10. Compact Project Context

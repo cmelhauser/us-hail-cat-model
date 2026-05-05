@@ -44,6 +44,15 @@ single-level dataset licence terms, then confirm `~/.cdsapirc` exists with
 the CDS profile page. Keep the file outside the repository and do not print or
 commit the token.
 
+The required CDS licence pages are:
+
+- https://cds.climate.copernicus.eu/datasets/reanalysis-era5-pressure-levels-monthly-means?tab=download#manage-licences
+- https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels-monthly-means?tab=download#manage-licences
+
+If Stage 04a fails with `403 Client Error: Forbidden` and `required licences not
+accepted`, the token is being read but the account has not accepted one of these
+dataset licences.
+
 Stage 04a downloads ERA5 pressure-level fields in yearly chunks and falls back
 to monthly chunks if CDS rejects a yearly request as too large. Chunk files are
 cached under `data/historical/era5/pressure_chunks/` and can be reused after an

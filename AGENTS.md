@@ -273,6 +273,14 @@ key: YOUR_PERSONAL_ACCESS_TOKEN
 The file must stay outside the repository, should be `chmod 600`, and must
 never be committed or printed with the token visible.
 
+CDS licence acceptance is per account and separate from the token. A valid
+`~/.cdsapirc` can still fail Stage 04a with `403 Client Error: Forbidden` and
+`required licences not accepted`. In that case, accept both ERA5 monthly dataset
+licences while signed in to the token's CDS account:
+
+- https://cds.climate.copernicus.eu/datasets/reanalysis-era5-pressure-levels-monthly-means?tab=download#manage-licences
+- https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels-monthly-means?tab=download#manage-licences
+
 Stage 04a caches bounded ERA5 pressure-level chunks under
 `data/historical/era5/pressure_chunks/`. If a CDS yearly request exceeds cost
 limits, the script falls back to monthly chunks and then combines the cached
