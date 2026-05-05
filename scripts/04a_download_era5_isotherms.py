@@ -25,8 +25,9 @@ Prerequisites
 
 The pressure-level request is downloaded in reusable yearly chunks. If the
 Copernicus CDS cost limit rejects a yearly request, the script automatically
-falls back to monthly chunks for that year and then combines all chunks into the
-raw NetCDF consumed by the isotherm calculation.
+falls back to monthly chunks for that year. Stage 04a computes the monthly
+climatology directly from those cached chunks so it does not need to materialize
+a large combined raw NetCDF.
 
 Output
 ------
@@ -41,9 +42,9 @@ Usage
 """
 
 import argparse
-import contextlib
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -143,28 +144,6 @@ def _retrieve_era5_chunk(client, years: list[str], months: list[str], target: Pa
     return target
 
 
-def _combine_era5_chunks(chunk_files: list[Path], raw_file: Path) -> None:
-    """Combine downloaded ERA5 chunks without requiring dask/open_mfdataset."""
-    import xarray as xr
-
-    log(f"  Combining {len(chunk_files)} ERA5 chunks into {raw_file.name} ...")
-    tmp_file = raw_file.with_suffix(".tmp.nc")
-    if tmp_file.exists():
-        tmp_file.unlink()
-
-    datasets = [xr.open_dataset(path) for path in chunk_files]
-    try:
-        combined = xr.concat(datasets, dim="time").sortby("time")
-        combined.to_netcdf(tmp_file)
-        combined.close()
-    finally:
-        for ds in datasets:
-            with contextlib.suppress(Exception):
-                ds.close()
-
-    tmp_file.replace(raw_file)
-    log(f"  Combined ERA5 raw file: {raw_file.name} ({raw_file.stat().st_size / 1e6:.1f} MB)")
-
 def download_era5_temperature():
     """Download ERA5 monthly mean temperature on pressure levels."""
     import cdsapi
@@ -176,7 +155,7 @@ def download_era5_temperature():
 
     if raw_file.exists():
         log(f"  Raw ERA5 file already exists: {raw_file.name}")
-        return raw_file
+        return [raw_file]
 
     log("  Requesting ERA5 monthly mean temperature from CDS in bounded chunks ...")
     log("  (This may take time depending on CDS queue and request throttling)")
@@ -199,10 +178,8 @@ def download_era5_temperature():
             monthly_file = chunk_dir / f"era5_monthly_temp_plevels_conus_{year}_{month}.nc"
             chunk_files.append(_retrieve_era5_chunk(client, [year], [month], monthly_file))
 
-    _combine_era5_chunks(chunk_files, raw_file)
-
-    log(f"  Downloaded: {raw_file.name} ({raw_file.stat().st_size / 1e6:.1f} MB)")
-    return raw_file
+    log(f"  ERA5 pressure chunks ready: {len(chunk_files)} file(s)")
+    return chunk_files
 
 def download_era5_surface_geopotential():
     """Download ERA5 surface geopotential for AGL conversion."""
@@ -236,7 +213,63 @@ def download_era5_surface_geopotential():
         raise
     return sfc_file
 
-def compute_isotherm_heights(raw_file: Path, sfc_file: Path):
+def _time_dim_name(ds) -> str:
+    for name in ("time", "valid_time"):
+        if name in ds.dims:
+            return name
+        if name in ds.coords and ds[name].dims:
+            return ds[name].dims[0]
+    raise KeyError("ERA5 dataset has no time/valid_time dimension")
+
+
+def _load_pressure_climatology(pressure_files: Sequence[Path]):
+    """Load ERA5 pressure chunks and return 12-month means as small arrays."""
+    import xarray as xr
+
+    if not pressure_files:
+        raise ValueError("No ERA5 pressure files were provided")
+
+    temp_sum = None
+    geop_sum = None
+    counts = np.zeros(12, dtype=np.int32)
+    lats = None
+    lons = None
+
+    for path in pressure_files:
+        log(f"    Reading pressure chunk: {path.name}")
+        with xr.open_dataset(path) as ds:
+            time_dim = _time_dim_name(ds)
+            temp = ds["t"]
+            geop = ds["z"]
+
+            if temp_sum is None:
+                sample_shape = temp.isel({time_dim: 0}).shape
+                temp_sum = np.zeros((12, *sample_shape), dtype=np.float64)
+                geop_sum = np.zeros((12, *sample_shape), dtype=np.float64)
+                lats = ds["latitude"].values
+                lons = ds["longitude"].values
+
+            months = ds[time_dim].dt.month.values
+            for month in range(1, 13):
+                idx = np.where(months == month)[0]
+                if idx.size == 0:
+                    continue
+                selector = {time_dim: idx}
+                temp_sum[month - 1] += temp.isel(selector).mean(time_dim).values
+                geop_sum[month - 1] += geop.isel(selector).mean(time_dim).values
+                counts[month - 1] += 1
+
+    missing = np.where(counts == 0)[0] + 1
+    if missing.size:
+        missing_text = ", ".join(str(m) for m in missing)
+        raise ValueError(f"ERA5 pressure climatology is missing month(s): {missing_text}")
+
+    temp_monthly = (temp_sum / counts[:, None, None, None]).astype(np.float32)
+    heights_monthly = (geop_sum / counts[:, None, None, None] / 9.80665).astype(np.float32)
+    return temp_monthly, heights_monthly, lats, lons, counts
+
+
+def compute_isotherm_heights(pressure_files: Sequence[Path], sfc_file: Path):
     """
     Compute monthly mean 0°C and −20°C isotherm heights from ERA5 data.
 
@@ -248,31 +281,23 @@ def compute_isotherm_heights(raw_file: Path, sfc_file: Path):
     """
     import xarray as xr
 
-    log("  Loading ERA5 temperature profiles ...")
-    ds = xr.open_dataset(raw_file)
+    log("  Loading ERA5 temperature profiles from cached chunks ...")
+    temp_monthly, heights_monthly, lats, lons, counts = _load_pressure_climatology(pressure_files)
     ds_sfc = xr.open_dataset(sfc_file)
 
-    # Extract variables
-    # Temperature: (time, pressure_level, latitude, longitude) in K
-    temp = ds["t"]  # or "temperature" depending on ERA5 version
-    geop = ds["z"]  # geopotential in m²/s²
-
     # Surface geopotential
-    sfc_geop = ds_sfc["z"].isel(time=0) if "time" in ds_sfc["z"].dims else ds_sfc["z"]
+    sfc_time_dim = _time_dim_name(ds_sfc) if any(name in ds_sfc["z"].dims for name in ("time", "valid_time")) else None
+    sfc_geop = ds_sfc["z"].isel({sfc_time_dim: 0}) if sfc_time_dim else ds_sfc["z"]
 
     # Heights = geopotential / g (approximate, ignoring latitude variation)
     g = 9.80665
-    heights_msl = geop / g  # meters above sea level
     sfc_height = sfc_geop / g  # surface elevation
 
     # Average over climatological years to get monthly means
     # Group by month
     log("  Computing 30-year monthly climatology ...")
-    temp_monthly = temp.groupby("time.month").mean("time")
-    heights_monthly = heights_msl.groupby("time.month").mean("time")
+    log(f"    Month sample counts: {counts.tolist()}")
 
-    lats = ds["latitude"].values
-    lons = ds["longitude"].values
     months = np.arange(1, 13)
     n_months = 12
     n_lats = len(lats)
@@ -283,8 +308,8 @@ def compute_isotherm_heights(raw_file: Path, sfc_file: Path):
 
     log("  Interpolating isotherm heights ...")
     for m_idx in range(n_months):
-        t_profile = temp_monthly.isel(month=m_idx).values      # (plev, lat, lon) in K
-        h_profile = heights_monthly.isel(month=m_idx).values    # (plev, lat, lon) in m MSL
+        t_profile = temp_monthly[m_idx]                         # (plev, lat, lon) in K
+        h_profile = heights_monthly[m_idx]                      # (plev, lat, lon) in m MSL
         sfc_h = sfc_height.values                                # (lat, lon) in m MSL
 
         for j in range(n_lats):
@@ -341,7 +366,6 @@ def compute_isotherm_heights(raw_file: Path, sfc_file: Path):
     out_ds.to_netcdf(OUT_FILE)
     log(f"  Done: {OUT_FILE} ({OUT_FILE.stat().st_size / 1e3:.0f} KB)")
 
-    ds.close()
     ds_sfc.close()
 
 def validate_outputs() -> bool:
