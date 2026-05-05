@@ -71,6 +71,14 @@ running; after it completes, continue with:
 .venv/bin/python run_pipeline.py --from 06 --skip-ml
 ```
 
+Stage 11b is included in `--from 06`; it downloads NOAA/NCEI ETOPO 2022
+surface elevation and writes `data/analysis/topography/elevation_0.05deg.tif`
+before Stage 12 applies topographic correction. It can also be run directly:
+
+```bash
+.venv/bin/python run_pipeline.py --only 11b
+```
+
 After outputs exist:
 
 ```bash
@@ -86,6 +94,7 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 ## Known Fallbacks / Watch Items
 
 - Stage 05 should use `--skip-ml` first, forcing deterministic calibration/filter fallbacks.
+- Stage 11b prepares `data/analysis/topography/elevation_0.05deg.tif` from NOAA/NCEI ETOPO 2022.
 - Stage 12 uses uniform topographic correction if `data/analysis/topography/elevation_0.05deg.tif` is absent.
 - Generated rasters, logs, and rendered figures are intentionally ignored by git.
 - Stage 13 stochastic maps are CONUS-masked during output and Stage 15 also masks at render time.

@@ -79,6 +79,7 @@ Major v2.1 additions:
 - optional calibration/filter artifacts have safe fallbacks;
 - Stage 08 adds centroid and intensity checks for event grouping;
 - Stage 09 adds threshold diagnostics for tail fitting;
+- Stage 11b adds public NOAA/NCEI ETOPO 2022 DEM preparation;
 - Stage 12 adds bounded freezing-level-aware topographic correction;
 - Stage 13 is sparse-safe and avoids dense event cubes;
 - CI runs on main with Python 3.10, 3.11, 3.12, and an integration smoke test;
@@ -136,4 +137,3 @@ and validation, following `docs/RUN_NOTES.md`.
 The PR is therefore best understood as a repository, methodology, and pipeline
 readiness merge. Final hazard results, return-period figures, and manuscript
 result placeholders will be filled after the full run finishes.
-

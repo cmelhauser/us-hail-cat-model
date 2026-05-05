@@ -44,7 +44,8 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 02_download_mrms_mesh.py        09_fit_cdf_regional.py
 03_download_spc.py              10_build_smooth_cdf.py
 04a_download_era5_isotherms.py  11_build_occurrence_probs.py
-04b_fill_gridrad_gap.py         12_apply_conus_mask.py
+04b_fill_gridrad_gap.py         11b_prepare_topography.py
+12_apply_conus_mask.py
 05_apply_mesh_bias_correction.py 13_generate_stochastic_catalog.py
 06_validate_mesh_vs_spc.py      14_build_vulnerability.py
 07_build_hail_climo.py          15_render_figures.py
@@ -229,6 +230,6 @@ python run_pipeline.py --dry-run
 
 Recommended first-run stage order:
 ```
-01 → 02 → 03 → 04a → 04b → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 12
+01 → 02 → 03 → 04a → 04b → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
 → 13 (--n-years 1000 smoke first) → 13 (full 50k) → 14 → 15
 ```

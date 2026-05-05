@@ -316,7 +316,16 @@ Binary CONUS land mask.
 
 ### `data/analysis/topography/elevation_0.05deg.tif`
 
-DEM resampled to the model grid.
+NOAA/NCEI ETOPO 2022 60 arc-second surface elevation resampled by Stage 11b to
+the model grid. Negative ocean elevations are set to 0 m before writing because
+Stage 12 uses the raster only for land-elevation topographic correction.
+
+Source DOI: https://doi.org/10.25921/fd45-gt74
+
+### `data/analysis/topography/source/ETOPO_2022_v1_60s_N90W180_surface.tif`
+
+Cached source GeoTIFF downloaded from NOAA/NCEI by Stage 11b. This generated
+source cache is ignored by git.
 
 ### `data/analysis/topography/topo_correction.tif`
 

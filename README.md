@@ -76,6 +76,7 @@ Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correc
 | 09 | `09_fit_cdf_regional.py` | Regional GPD EVT fitting via L-moments |
 | 10 | `10_build_smooth_cdf.py` | Spatial smoothing of tail parameters |
 | 11 | `11_build_occurrence_probs.py` | Exceedance probability rasters |
+| 11b | `11b_prepare_topography.py` | NOAA ETOPO 2022 DEM download and 0.05° resampling |
 | 12 | `12_apply_conus_mask.py` | CONUS mask and topographic correction |
 | 13 | `13_generate_stochastic_catalog.py` | 50,000-year stochastic simulation |
 | 14 | `14_build_vulnerability.py` | Placeholder vulnerability curves |
@@ -98,7 +99,7 @@ python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validat
 | MRMS MESH | Oct 2020 – present | Operational radar |
 | ERA5 (0°C / −20°C isotherms) | 1991–2020 | Thermodynamic filtering |
 | SPC storm reports | 2004 – present | Validation only |
-| DEM (SRTM / GMTED) | Static | Topographic correction |
+| NOAA/NCEI ETOPO 2022 surface elevation | Static | Stage 11b DEM source for topographic correction |
 
 Free accounts are required at [NCAR RDA](https://rda.ucar.edu) (GridRad) and [Copernicus CDS](https://cds.climate.copernicus.eu) (ERA5). Stage 04a uses the CDS API and requires both accepted ERA5 dataset licence terms and a local `~/.cdsapirc` file before the ERA5 download can run:
 
@@ -117,6 +118,8 @@ Before running Stage 04a, sign in to CDS and accept the licence terms for both E
 CDS will reject authenticated API calls until those licence terms are accepted for the account tied to the token. The failure looks like `403 Client Error: Forbidden` with `required licences not accepted`; this is a CDS account setup issue, not a bad `.cdsapirc` file.
 
 Stage 04a submits the ERA5 pressure-level request in bounded yearly chunks, with an automatic monthly fallback if CDS rejects a year as too large. The chunks are retained under `data/historical/era5/pressure_chunks/` so interrupted ERA5 runs can resume without repeating completed downloads.
+
+Stage 11b downloads [NOAA/NCEI ETOPO 2022](https://doi.org/10.25921/fd45-gt74) 60 arc-second surface elevation from the public NOAA archive, caches the source GeoTIFF under `data/analysis/topography/source/`, and writes `data/analysis/topography/elevation_0.05deg.tif` on the model grid. Stage 12 uses this DEM for bounded topographic correction; if the DEM is absent, Stage 12 falls back to a neutral `1.0` correction.
 
 ---
 
@@ -154,7 +157,7 @@ python run_pipeline.py --dry-run
 **Recommended first-run sequence:**
 
 ```
-01 → 02 → 03 → 04a → 04b → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 12
+01 → 02 → 03 → 04a → 04b → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
 → Stage 13 smoke (--n-years 1000) → Stage 13 full → 14 → 15
 ```
 
@@ -202,6 +205,8 @@ python run_pipeline.py --validate
 | Event catalog | `data/historical/events/` | Sparse `.npz` per event |
 | EVT parameters | `data/analysis/cdf/` | GPD ξ, σ, threshold per cell |
 | Return-period maps | `data/analysis/cdf/` | Analytical RP rasters |
+| Model-grid DEM | `data/analysis/topography/elevation_0.05deg.tif` | NOAA/NCEI ETOPO 2022 surface elevation resampled by Stage 11b |
+| Topographic correction | `data/analysis/topography/topo_correction.tif` | Bounded terrain correction applied by Stage 12 |
 | Stochastic catalog | `data/stochastic/` | 50,000-yr event library |
 | Stochastic RP maps | `data/stochastic/` | Empirical return periods |
 | Exceedance tables | `data/stochastic/` | PET tables by threshold |

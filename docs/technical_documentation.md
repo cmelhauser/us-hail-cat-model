@@ -515,18 +515,51 @@ p_occ_5p00in.tif
 
 ---
 
-## 15. Stage 12 - CONUS Mask and Topographic Correction
+## 15. Stage 11b - Public DEM Preparation
 
-**Script:** `scripts/12_apply_conus_mask.py`
+**Script:** `scripts/11b_prepare_topography.py`
+
+Stage 11b downloads the public NOAA/NCEI ETOPO 2022 60 arc-second surface
+elevation GeoTIFF and resamples it to the model's 0.05 degree grid. ETOPO 2022
+is selected because it is public, globally complete, DOI-backed, and
+scientifically documented, while its 60 arc-second product is operationally
+small enough for a reproducible pipeline stage.
+
+**Source DOI:** https://doi.org/10.25921/fd45-gt74
 
 ### 15.1 Outputs
 
 ```text
+data/analysis/topography/source/ETOPO_2022_v1_60s_N90W180_surface.tif
+data/analysis/topography/elevation_0.05deg.tif
+```
+
+Negative ocean elevations are clipped to 0 m because Stage 12 uses the raster
+only for land topographic correction. The output GeoTIFF stores source URL, DOI,
+reference, and processing metadata tags.
+
+### 15.2 Validation
+
+- Raster shape matches the canonical model grid.
+- CRS is EPSG:4326.
+- Values are finite and nonnegative.
+- CONUS maximum elevation is within a physically plausible range.
+
+---
+
+## 16. Stage 12 - CONUS Mask and Topographic Correction
+
+**Script:** `scripts/12_apply_conus_mask.py`
+
+### 16.1 Outputs
+
+```text
 data/analysis/conus_mask/conus_mask.tif
+data/analysis/topography/elevation_0.05deg.tif
 data/analysis/topography/topo_correction.tif
 ```
 
-### 15.2 v2.1 correction
+### 16.2 v2.1 correction
 
 Preferred:
 

@@ -97,6 +97,7 @@ python run_pipeline.py --only 08
 python run_pipeline.py --only 09
 python run_pipeline.py --only 10
 python run_pipeline.py --only 11
+python run_pipeline.py --only 11b
 python run_pipeline.py --only 12
 python run_pipeline.py --only 13
 python run_pipeline.py --only 14
@@ -286,7 +287,7 @@ Example:
   "model_version": "2.1",
   "run_date": "YYYY-MM-DD",
   "random_seed": 42,
-  "stages_run": ["01", "02", "03", "04a", "04b", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15"],
+  "stages_run": ["01", "02", "03", "04a", "04b", "05", "06", "07", "08", "09", "10", "11", "11b", "12", "13", "14", "15"],
   "calibration_mode": "conditional_with_quantile_fallback",
   "environment_filter": "probabilistic_with_safety_floor",
   "stochastic_years": 50000
@@ -303,7 +304,7 @@ Example:
 | 04a | CDS queue |
 | 04b | GridRad availability and SHI computation |
 | 05–06 | raster I/O and validation |
-| 07–12 | raster processing and CDF fitting |
+| 07–12 | raster processing, DEM preparation, and CDF fitting |
 | 13 | stochastic years |
 | 15 | figure rendering |
 
@@ -317,7 +318,7 @@ Example:
 4. Run stages 02, 03, 04a, and 04b.
 5. Run Stage 05 with `--skip-ml` first.
 6. Run Stage 06 validation.
-7. Run stages 07–12.
+7. Run stages 07–12. Stage 11b downloads NOAA/NCEI ETOPO 2022 surface elevation and writes `data/analysis/topography/elevation_0.05deg.tif` before Stage 12.
 8. Run Stage 13 with 1,000 years.
 9. Run Stage 13 with 50,000 years.
 10. Run Stage 14 and Stage 15.

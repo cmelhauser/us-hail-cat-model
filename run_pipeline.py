@@ -70,6 +70,7 @@ STAGES = [
     ("09",  "09_fit_cdf_regional.py",          "CDF fitting: lognormal + GPD (regional ξ)",        "~30 min"),
     ("10",  "10_build_smooth_cdf.py",          "Spatially-pooled smooth CDF rebuild",              "~30 min"),
     ("11",  "11_build_occurrence_probs.py",    "Annual occurrence probability rasters",            "~10 min"),
+    ("11b", "11b_prepare_topography.py",       "Download and resample NOAA ETOPO 2022 DEM",        "~10–30 min"),
     ("12",  "12_apply_conus_mask.py",          "CONUS mask + topographic correction",              "~10 min"),
     ("13",  "13_generate_stochastic_catalog.py","50,000-yr stochastic catalog",                    "~3 hrs"),
     ("14",  "14_build_vulnerability.py",       "MDR vulnerability curves [placeholder]",           "~5 min"),

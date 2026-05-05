@@ -84,6 +84,14 @@ Must output:
 - threshold diagnostics;
 - MRL diagnostic plots.
 
+### Stage 11b — DEM preparation
+
+Must ensure:
+
+- NOAA/NCEI ETOPO 2022 source provenance is preserved;
+- source GeoTIFF is cached under `data/analysis/topography/source/`;
+- `elevation_0.05deg.tif` is finite, nonnegative, and on the canonical grid.
+
 ### Stage 12 — Mask and topography
 
 Must ensure:

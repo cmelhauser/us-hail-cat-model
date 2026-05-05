@@ -384,6 +384,7 @@ The full pipeline contains 15 stages:
 09  Regional EVT fitting — GPD tail via L-moments, automated threshold diagnostics
 10  Spatial CDF pooling — 150 km smoothing for stable return-period maps
 11  Occurrence probability maps — 8 MESH75 thresholds
+11b Public DEM preparation — NOAA/NCEI ETOPO 2022 resampled to 0.05°
 12  CONUS mask + topographic correction — freezing-level-aware elevation factor
 13  Stochastic catalog — 50,000-yr sparse event resampling (Poisson counts, seasonal templates)
 14  Vulnerability — placeholder lognormal MDR curves (5 construction classes)

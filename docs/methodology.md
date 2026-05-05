@@ -220,7 +220,7 @@ SPC reports are used for validation, source sanity checks, and qualitative revie
 
 ### 3.6 DEM and terrain information
 
-Terrain affects hail environments through orographic lifting, boundary-layer structure, freezing-level-relative melting depth, and storm initiation. Stage 12 uses DEM information for a bounded topographic correction. This is a first-order empirical adjustment, not a microphysical hail-melting model.
+Terrain affects hail environments through orographic lifting, boundary-layer structure, freezing-level-relative melting depth, and storm initiation. Stage 11b prepares DEM information from NOAA/NCEI ETOPO 2022 60 arc-second surface elevation, a public DOI-backed global relief model, by resampling it to the 0.05° hail-model grid. Stage 12 uses that DEM information for a bounded topographic correction. This is a first-order empirical adjustment, not a microphysical hail-melting model.
 
 ---
 

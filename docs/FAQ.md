@@ -72,6 +72,7 @@ See `docs/technical_documentation.md` for per-stage implementation notes. In bri
 | 09 | Fit regional GPD extreme-value distributions |
 | 10 | Spatially smooth CDFs for stable return-period maps |
 | 11 | Build annual exceedance probability maps |
+| 11b | Download NOAA/NCEI ETOPO 2022 DEM and resample to the model grid |
 | 12 | Apply CONUS mask and topographic correction |
 | 13 | Generate 50,000-year stochastic event catalog |
 | 14 | Apply vulnerability curves (placeholder) |
@@ -141,6 +142,10 @@ Stage 12 applies:
 factor = 1.0 + α × (elevation_km / freezing_level_km)
 ```
 with α = 0.25, clipped to [1.0, 1.25] when ERA5 freezing level is available, [1.0, 1.20] otherwise. The coefficient 0.25 is empirically motivated by Front Range hail climatology but does not have a direct literature citation in v2.1 — see `docs/REVIEW_2026-05-01.md §E.8`. Sensitivity sweeps are defined in `docs/sensitivity.md §4`.
+
+Stage 11b prepares the elevation input from NOAA/NCEI ETOPO 2022 60 arc-second
+surface elevation and writes `data/analysis/topography/elevation_0.05deg.tif`.
+If that file is absent, Stage 12 falls back to a neutral topographic correction.
 
 ---
 

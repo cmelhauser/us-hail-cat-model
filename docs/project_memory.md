@@ -97,6 +97,10 @@ Builds the historical event catalog. Preserves physical merge constraints (centr
 
 Fits frequency-severity distributions. Must emit threshold diagnostics to `threshold_selection.csv`.
 
+### Stage 11b
+
+Prepares the DEM input for Stage 12 from NOAA/NCEI ETOPO 2022 60 arc-second surface elevation. Writes `data/analysis/topography/elevation_0.05deg.tif` on the canonical grid.
+
 ### Stage 12
 
 Applies topographic correction and CONUS mask. Must keep correction factors bounded (1.0–1.25 with ERA5 FL; 1.0–1.20 fallback).
@@ -220,7 +224,7 @@ In order:
 
 1. **Let Stage 02 finish** and validate MRMS outputs.
 2. **Run Stage 04a and Stage 04b** after Stage 02; Stage 04a requires CDS credentials and accepted Copernicus ERA5 monthly pressure-level plus single-level dataset licences.
-3. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset.
+3. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset; this includes Stage 11b DEM preparation before Stage 12.
 4. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
 5. **Review Stage 15 figures** once production outputs exist.
 6. **Regression tests** — freeze golden outputs after first production run.

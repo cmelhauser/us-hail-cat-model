@@ -83,6 +83,7 @@ us-hail-cat-model/
 |   |-- 09_fit_cdf_regional.py
 |   |-- 10_build_smooth_cdf.py
 |   |-- 11_build_occurrence_probs.py
+|   |-- 11b_prepare_topography.py
 |   |-- 12_apply_conus_mask.py
 |   |-- 13_generate_stochastic_catalog.py
 |   |-- 14_build_vulnerability.py
@@ -285,3 +286,8 @@ Stage 04a caches bounded ERA5 pressure-level chunks under
 `data/historical/era5/pressure_chunks/`. If a CDS yearly request exceeds cost
 limits, the script falls back to monthly chunks and then combines the cached
 pieces into the raw NetCDF used for isotherm interpolation.
+
+Stage 11b prepares the topography input for Stage 12. It downloads NOAA/NCEI
+ETOPO 2022 60 arc-second surface elevation, caches the source under
+`data/analysis/topography/source/`, and writes
+`data/analysis/topography/elevation_0.05deg.tif` on the canonical model grid.

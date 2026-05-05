@@ -131,6 +131,7 @@ v2.0 established the modern 15-stage pipeline:
 09 regional CDF fitting
 10 spatially pooled CDF
 11 occurrence probabilities
+11b public DEM preparation
 12 CONUS mask and topographic correction
 13 stochastic catalog
 14 vulnerability placeholder

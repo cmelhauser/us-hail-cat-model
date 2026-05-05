@@ -22,7 +22,8 @@ Implementation note:
   Scripts 01 and 02 use native-grid→output-grid derivation with variable
   names OUT_NROWS, OUT_NCOLS, OUT_LAT_MAX, OUT_LON_MIN rather than NROWS etc.
   Those are checked by their output names. Scripts 03, 04a, 14 have no grid
-  constants and are not listed.
+  constants and are not listed. Script 11b uses grid constants to resample
+  topography to the model grid and is listed with the other grid consumers.
 """
 from __future__ import annotations
 
@@ -72,6 +73,7 @@ SCRIPTS_WITH_NROWS = [
     "09_fit_cdf_regional.py",
     "10_build_smooth_cdf.py",
     "11_build_occurrence_probs.py",
+    "11b_prepare_topography.py",
     "12_apply_conus_mask.py",
     "13_generate_stochastic_catalog.py",
     "15_render_figures.py",
