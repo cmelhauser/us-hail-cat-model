@@ -142,7 +142,7 @@ python scripts/01_download_myrorss.py --qa-only
 MRMS native products use conventions that differ from the final model grid. Stage 02 must:
 
 1. list available MRMS MESH products;
-2. download or stream source GRIB2 files;
+2. download or stream source GRIB2 files (optional `--workers N` parallel threads per day for S3 + decode; default 8);
 3. extract the CONUS subset;
 4. convert longitude convention where needed;
 5. flip south-to-north native orientation into north-to-south model orientation;

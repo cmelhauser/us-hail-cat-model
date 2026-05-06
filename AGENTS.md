@@ -123,6 +123,9 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --validate         # re-run output validation for all stages
 --skip-ml          # force deterministic fallback in Stage 05
 --retrain-models   # retrain optional ML artifacts in Stage 05
+
+# Stage 02 is often run directly (MRMS); optional throughput flag:
+# python scripts/02_download_mrms_mesh.py --workers 8
 ```
 
 ## Stage 01 Data Provenance

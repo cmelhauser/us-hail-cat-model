@@ -57,6 +57,7 @@ Usage
   python scripts/02_download_mrms_mesh.py --year 2023 --month 5
   python scripts/02_download_mrms_mesh.py --validate     # check outputs only
   python scripts/02_download_mrms_mesh.py --dry-run      # count files only
+  python scripts/02_download_mrms_mesh.py --workers 16   # more parallel I/O per day
 
 Runtime
 -------
@@ -64,10 +65,14 @@ Runtime
   Resumable: skips days where output GeoTIFF already exists.
 """
 
+from __future__ import annotations
+
 import argparse
 import gzip
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -138,6 +143,17 @@ QA_MAX_HAIL_MM = MAX_HAIL_MM
 
 log = get_logger("02_download_mrms_mesh", LOG_ROOT).info
 
+# boto3 clients are not documented thread-safe; use one per worker thread.
+_thread_local_s3 = threading.local()
+
+
+def _thread_s3_client():
+    client = getattr(_thread_local_s3, "client", None)
+    if client is None:
+        _thread_local_s3.client = get_s3_client()
+    return _thread_local_s3.client
+
+
 def get_s3_client():
     """Create an unsigned S3 client."""
     import boto3
@@ -160,26 +176,16 @@ def list_mesh_keys(s3, day: date) -> list:
                 keys.append(obj["Key"])
     return keys
 
-def parse_grib2_mesh(grib_bytes: bytes, daily_max: np.ndarray) -> int:
+def timestep_conus_mesh_from_grib_bytes(grib_bytes: bytes) -> tuple[np.ndarray, int]:
     """
-    Parse a GRIB2 MRMS MESH file and update daily_max in place.
-
-    Operational MRMS MESH arrives as a full 3500×7000 grid (south-to-north,
-    0–360° lon). We extract the CONUS subset, flip to north-to-south
-    orientation, and take element-wise maximum with the running daily_max.
-
-    Parameters
-    ----------
-    grib_bytes : bytes
-        Raw GRIB2 file content (decompressed).
-    daily_max : np.ndarray
-        Shape (CONUS_NROWS, CONUS_NCOLS), float32. Updated in place.
-        Oriented north-to-south to match output convention.
+    Decode one MRMS MESH GRIB2 timestep into CONUS north-to-south float32 grid.
 
     Returns
     -------
-    int
-        Number of valid CONUS pixels with MESH > 0 in this timestep.
+    conus : np.ndarray
+        Shape (CONUS_NROWS, CONUS_NCOLS), float32; hail mm or 0.
+    valid_count : int
+        Count of CONUS pixels with MESH > 0 after QA.
     """
     import tempfile
     import os
@@ -212,11 +218,32 @@ def parse_grib2_mesh(grib_bytes: bytes, daily_max: np.ndarray) -> int:
         0.0,
     ).astype(np.float32)
 
-    # Update daily max
     valid_count = int(np.count_nonzero(conus > 0))
-    np.maximum(daily_max, conus, out=daily_max)
+    return conus, valid_count
 
-    return valid_count
+
+def parse_grib2_mesh(grib_bytes: bytes, daily_max: np.ndarray) -> int:
+    """Sequential helper: merge one timestep into ``daily_max``. Returns pixel count."""
+    conus, n_px = timestep_conus_mesh_from_grib_bytes(grib_bytes)
+    np.maximum(daily_max, conus, out=daily_max)
+    return n_px
+
+
+def _fetch_and_decode_timestep(key: str) -> tuple[str, np.ndarray | None, int, Exception | None]:
+    """
+    Download one gzipped GRIB2 object and decode it (runs in a worker thread).
+
+    Returns (key, conus_array_or_none, pixel_count_on_success, exception_or_none).
+    """
+    try:
+        s3 = _thread_s3_client()
+        resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        gz_data = resp["Body"].read()
+        grib_data = gzip.decompress(gz_data)
+        conus, n_px = timestep_conus_mesh_from_grib_bytes(grib_data)
+        return key, conus, n_px, None
+    except Exception as e:
+        return key, None, 0, e
 
 def block_max(data: np.ndarray, factor: int) -> np.ndarray:
     """
@@ -234,7 +261,7 @@ def block_max(data: np.ndarray, factor: int) -> np.ndarray:
     )
 
 
-def process_day(s3, day: date, dry_run: bool = False) -> dict:
+def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
     """
     Download all MESH timesteps for one day, compute daily max,
     aggregate to 0.05°, and write GeoTIFF.
@@ -259,18 +286,30 @@ def process_day(s3, day: date, dry_run: bool = False) -> dict:
     daily_max = np.zeros((CONUS_NROWS, CONUS_NCOLS), dtype=np.float32)
     total_pixels = 0
     errors = 0
+    w = max(1, int(workers))
 
-    for key in keys:
-        try:
-            resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
-            gz_data = resp["Body"].read()
-            grib_data = gzip.decompress(gz_data)
-            n_px = parse_grib2_mesh(grib_data, daily_max)
-            total_pixels += n_px
-        except Exception as e:
-            errors += 1
-            if errors <= 3:
-                log(f"    WARN: failed to read {key.split('/')[-1]}: {e}")
+    if w == 1:
+        for key in keys:
+            try:
+                resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+                gz_data = resp["Body"].read()
+                grib_data = gzip.decompress(gz_data)
+                n_px = parse_grib2_mesh(grib_data, daily_max)
+                total_pixels += n_px
+            except Exception as e:
+                errors += 1
+                if errors <= 3:
+                    log(f"    WARN: failed to read {key.split('/')[-1]}: {e}")
+    else:
+        with ThreadPoolExecutor(max_workers=w) as ex:
+            for key, conus, n_px, err in ex.map(_fetch_and_decode_timestep, keys):
+                if err is not None:
+                    errors += 1
+                    if errors <= 3:
+                        log(f"    WARN: failed to read {key.split('/')[-1]}: {err}")
+                    continue
+                np.maximum(daily_max, conus, out=daily_max)
+                total_pixels += n_px
 
     # Aggregate to 0.05° and apply the shared physical QA cap.
     out_data, n_repaired = sanitize_hail_values(
@@ -350,7 +389,8 @@ def validate_outputs() -> bool:
     log("Output validation passed ✓")
     return True
 
-def main():
+
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Download operational MRMS MESH and build daily max 0.05° rasters.")
     parser.add_argument("--year", type=int, default=None,
@@ -361,7 +401,18 @@ def main():
                         help="Count S3 files without downloading")
     parser.add_argument("--validate", action="store_true",
                         help="Check outputs only")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=8,
+        metavar="N",
+        help="Parallel S3 + decode threads per day (default: 8; use 1 for fully sequential)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_arg_parser().parse_args(argv)
 
     if args.validate:
         ok = validate_outputs()
@@ -390,6 +441,7 @@ def main():
         d_end = END_DATE
 
     log(f"  Period:    {d_start} → {d_end}")
+    log(f"  Workers:   {args.workers} thread(s) per day (S3 + GRIB decode)")
     log(f"  NOTE:      Gap exists from 2012-01-01 to 2020-10-13 (no public MRMS MESH archive)")
 
     if args.dry_run:
@@ -406,7 +458,7 @@ def main():
     log(f"\n  Processing {total_days:,} days ...\n")
 
     for i, day in enumerate(all_days):
-        result = process_day(s3, day, dry_run=args.dry_run)
+        result = process_day(s3, day, dry_run=args.dry_run, workers=args.workers)
 
         if result.get("skipped"):
             skipped += 1

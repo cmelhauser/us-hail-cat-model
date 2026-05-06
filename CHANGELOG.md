@@ -20,6 +20,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Stage 02:** `--workers N` (default 8) uses parallel threads per calendar day
+  for S3 fetch plus GRIB decode; `--workers 1` restores fully sequential I/O.
+  Thread-local boto3 clients avoid sharing one client across threads.
 - **`scripts/_io.py`:** Shared I/O helpers (`write_geotiff`, `haversine_km`,
   `latlon_to_grid`) extracted from stage scripts and wired into all stages that need them.
 - **Stage refactor:** All 15 stage scripts now import shared constants from `_config.py`
