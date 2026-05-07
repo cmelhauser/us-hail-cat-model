@@ -82,7 +82,7 @@ SCRIPTS_WITH_NROWS = [
 SCRIPTS_WITH_OUT_NROWS = [
     "01_download_myrorss.py",
     "02_download_mrms_mesh.py",
-    "04b_fill_gridrad_gap.py",
+    "04c_fill_gridrad_gap.py",
     "05_apply_mesh_bias_correction.py",
 ]
 
@@ -196,7 +196,7 @@ def test_max_centroid_km_day_stage08_matches_config():
 @pytest.mark.parametrize("script", [
     "01_download_myrorss.py",
     "02_download_mrms_mesh.py",
-    "04b_fill_gridrad_gap.py",
+    "04c_fill_gridrad_gap.py",
     "05_apply_mesh_bias_correction.py",
     "13_generate_stochastic_catalog.py",
 ])

@@ -64,7 +64,8 @@ See `docs/technical_documentation.md` for per-stage implementation notes. In bri
 | 02 | Download MRMS MESH GRIB2, write daily GeoTIFFs |
 | 03 | Download SPC hail reports |
 | 04a | Download ERA5 isotherms |
-| 04b | Compute SHI/MESH75 from GridRad reflectivity + ERA5 |
+| 04b | Download GridRad / GridRad-Severe inputs (NCAR RDA/GDEX) |
+| 04c | Compute SHI/MESH75 from GridRad reflectivity + ERA5 |
 | 05 | Calibrate all sources, apply environmental filter |
 | 06 | Validate corrected MESH vs SPC reports |
 | 07 | Build hail climatology (annual exceedance frequency) |

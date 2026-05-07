@@ -67,6 +67,7 @@ running; after it completes, continue with:
 .venv/bin/python run_pipeline.py --only 03
 .venv/bin/python run_pipeline.py --only 04a
 .venv/bin/python run_pipeline.py --only 04b
+.venv/bin/python run_pipeline.py --only 04c
 .venv/bin/python run_pipeline.py --only 05 --skip-ml
 .venv/bin/python run_pipeline.py --from 06 --skip-ml
 ```
@@ -116,6 +117,7 @@ When Stage 02 completes:
 ```bash
 .venv/bin/python run_pipeline.py --only 04a
 .venv/bin/python run_pipeline.py --only 04b
+.venv/bin/python run_pipeline.py --only 04c
 .venv/bin/python run_pipeline.py --from 05 --skip-ml
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000
