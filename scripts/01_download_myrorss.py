@@ -57,12 +57,16 @@ Runtime
   Resumable: skips days where output GeoTIFF already exists.
 """
 
+from __future__ import annotations
+
 import argparse
 import csv
 import gzip
 import io
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -154,6 +158,17 @@ MANIFEST_FIELDS = [
 
 log = get_logger("01_download_myrorss", LOG_ROOT).info
 
+# boto3 clients are not documented thread-safe; use one per worker thread.
+_thread_local_s3 = threading.local()
+
+
+def _thread_s3_client():
+    client = getattr(_thread_local_s3, "client", None)
+    if client is None:
+        _thread_local_s3.client = get_s3_client()
+    return _thread_local_s3.client
+
+
 def get_s3_client():
     """Create an unsigned S3 client (no AWS credentials needed)."""
     import boto3
@@ -189,6 +204,56 @@ def decode_netcdf_object(key: str, payload: bytes) -> bytes:
         return gzip.decompress(payload)
     return payload
 
+
+def sparse_updates_from_netcdf_bytes(
+    nc_bytes: bytes,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """
+    Parse a sparse-grid MYRORSS MESH NetCDF into CONUS updates.
+
+    Returns CONUS-subset (row, col, val) arrays so callers can merge with:
+        np.maximum.at(daily_max, (row, col), val)
+    """
+    import netCDF4
+    import tempfile
+    import os
+
+    fd, tmp = tempfile.mkstemp(suffix=".nc")
+    try:
+        os.write(fd, nc_bytes)
+        os.close(fd)
+
+        ds = netCDF4.Dataset(tmp, "r")
+        try:
+            mesh_vals = ds.variables["MESH"][:]
+            px = ds.variables["pixel_x"][:]
+            py = ds.variables["pixel_y"][:]
+        finally:
+            ds.close()
+    finally:
+        os.unlink(tmp)
+
+    row = py.astype(np.int32)
+    col = px.astype(np.int32)
+    vals = mesh_vals.astype(np.float32)
+
+    mask = (
+        (row >= CONUS_ROW_START) & (row < CONUS_ROW_END) &
+        (col >= CONUS_COL_START) & (col < CONUS_COL_END) &
+        np.isfinite(vals) &
+        (vals > 0) & (vals <= QA_MAX_HAIL_MM) &
+        (vals != MYRORSS_NODATA)
+    )
+    if not np.any(mask):
+        empty_i = np.array([], dtype=np.int32)
+        empty_v = np.array([], dtype=np.float32)
+        return empty_i, empty_i, empty_v, 0
+
+    r = row[mask] - CONUS_ROW_START
+    c = col[mask] - CONUS_COL_START
+    v = vals[mask]
+    return r, c, v, int(mask.sum())
+
 def parse_sparse_mesh(nc_bytes: bytes, daily_max: np.ndarray) -> int:
     """
     Parse a sparse-grid MYRORSS MESH NetCDF and update daily_max in place.
@@ -209,51 +274,27 @@ def parse_sparse_mesh(nc_bytes: bytes, daily_max: np.ndarray) -> int:
     int
         Number of valid CONUS pixels in this timestep.
     """
-    import netCDF4
-    import tempfile
-    import os
+    r, c, v, n = sparse_updates_from_netcdf_bytes(nc_bytes)
+    if n:
+        np.maximum.at(daily_max, (r, c), v)
+    return n
 
-    # netCDF4 needs a file path — write to a temp file
-    fd, tmp = tempfile.mkstemp(suffix=".nc")
+
+def _fetch_decode_sparse(
+    key: str,
+) -> tuple[str, np.ndarray, np.ndarray, np.ndarray, int, Exception | None]:
+    """Download one MYRORSS object and return sparse CONUS updates."""
     try:
-        os.write(fd, nc_bytes)
-        os.close(fd)
-
-        ds = netCDF4.Dataset(tmp, "r")
-        try:
-            mesh_vals = ds.variables["MESH"][:]
-            px = ds.variables["pixel_x"][:]
-            py = ds.variables["pixel_y"][:]
-        finally:
-            ds.close()
-    finally:
-        os.unlink(tmp)
-
-    # Filter to CONUS subset and valid values
-    # pixel_y = row in full grid, pixel_x = col in full grid
-    row = py.astype(np.int32)
-    col = px.astype(np.int32)
-    vals = mesh_vals.astype(np.float32)
-
-    # Mask: within CONUS bounds and valid MESH
-    mask = (
-        (row >= CONUS_ROW_START) & (row < CONUS_ROW_END) &
-        (col >= CONUS_COL_START) & (col < CONUS_COL_END) &
-        np.isfinite(vals) &
-        (vals > 0) & (vals <= QA_MAX_HAIL_MM) &
-        (vals != MYRORSS_NODATA)
-    )
-
-    if not np.any(mask):
-        return 0
-
-    r = row[mask] - CONUS_ROW_START
-    c = col[mask] - CONUS_COL_START
-    v = vals[mask]
-
-    # Update daily max
-    np.maximum.at(daily_max, (r, c), v)
-    return int(mask.sum())
+        s3 = _thread_s3_client()
+        resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        raw_data = resp["Body"].read()
+        nc_data = decode_netcdf_object(key, raw_data)
+        r, c, v, n = sparse_updates_from_netcdf_bytes(nc_data)
+        return key, r, c, v, n, None
+    except Exception as e:
+        empty_i = np.array([], dtype=np.int32)
+        empty_v = np.array([], dtype=np.float32)
+        return key, empty_i, empty_i, empty_v, 0, e
 
 
 def sanitize_mesh_array(data: np.ndarray) -> tuple[np.ndarray, int]:
@@ -379,7 +420,7 @@ def write_manifest_rows(rows: dict):
             writer.writerow(rows[key])
     tmp_path.replace(MANIFEST_FILE)
 
-def process_day(s3, day: date, dry_run: bool = False) -> dict:
+def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
     """
     Download all MESH timesteps for one day, compute daily max,
     aggregate to 0.05°, and write GeoTIFF.
@@ -429,17 +470,31 @@ def process_day(s3, day: date, dry_run: bool = False) -> dict:
     total_pixels = 0
     errors = 0
 
-    for key in keys:
-        try:
-            resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
-            raw_data = resp["Body"].read()
-            nc_data = decode_netcdf_object(key, raw_data)
-            n_pixels = parse_sparse_mesh(nc_data, daily_max)
-            total_pixels += n_pixels
-        except Exception as e:
-            errors += 1
-            if errors <= 3:
-                log(f"    WARN: failed to read {key}: {e}")
+    w = max(1, int(workers))
+
+    if w == 1:
+        for key in keys:
+            try:
+                resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+                raw_data = resp["Body"].read()
+                nc_data = decode_netcdf_object(key, raw_data)
+                n_pixels = parse_sparse_mesh(nc_data, daily_max)
+                total_pixels += n_pixels
+            except Exception as e:
+                errors += 1
+                if errors <= 3:
+                    log(f"    WARN: failed to read {key}: {e}")
+    else:
+        with ThreadPoolExecutor(max_workers=w) as ex:
+            for key, r, c, v, n_pixels, err in ex.map(_fetch_decode_sparse, keys):
+                if err is not None:
+                    errors += 1
+                    if errors <= 3:
+                        log(f"    WARN: failed to read {key}: {err}")
+                    continue
+                if n_pixels:
+                    np.maximum.at(daily_max, (r, c), v)
+                    total_pixels += n_pixels
 
     # Aggregate to 0.05° via block-max and apply the physical QA cap.
     out_data, qa_native_removed = sanitize_mesh_array(block_max(daily_max, AGG_FACTOR))
@@ -608,7 +663,7 @@ def qa_repair_existing_outputs() -> dict:
         "files_with_signal": active_files,
     }
 
-def main():
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Download MYRORSS MESH and build daily max 0.05° rasters.")
     parser.add_argument("--year", type=int, default=None,
@@ -621,7 +676,18 @@ def main():
                         help="Check outputs only, no downloading")
     parser.add_argument("--qa-only", action="store_true",
                         help="Repair existing Stage 01 rasters and refresh manifest stats")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=8,
+        metavar="N",
+        help="Parallel S3 + NetCDF decode threads per day (default: 8; use 1 for sequential)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_arg_parser().parse_args(argv)
 
     if args.qa_only:
         qa_repair_existing_outputs()
@@ -656,6 +722,7 @@ def main():
         d_end = END_DATE
 
     log(f"  Period:    {d_start} → {d_end}")
+    log(f"  Workers:   {args.workers} thread(s) per day (S3 + NetCDF decode)")
 
     if args.dry_run:
         log(f"  Mode:      DRY RUN (count files only)")
@@ -673,7 +740,7 @@ def main():
     log(f"\n  Processing {total_days:,} days ...\n")
 
     for i, day in enumerate(all_days):
-        result = process_day(s3, day, dry_run=args.dry_run)
+        result = process_day(s3, day, dry_run=args.dry_run, workers=args.workers)
 
         if result.get("skipped"):
             skipped += 1
