@@ -119,9 +119,10 @@ def _day_out_dir(base: Path, day: date) -> Path:
 
 
 def _catalog_url(dsid: str, day: date) -> str:
-    # Many RDA datasets are organized by YYYY/YYYYMMDD/ under files/g/[dsid]/.
-    # We discover the exact contents from the per-day catalog.
-    return f"{THREDDS_BASE}{dsid}/{day.year}/{_ymd(day)}/catalog.xml"
+    # Catalogs for GridRad hourly are organized by YYYYMM under files/g/[dsid]/.
+    # (e.g. .../d841000/201505/catalog.xml). We discover filenames from that
+    # month catalog and then filter by day.
+    return f"{THREDDS_BASE}{dsid}/{day.year}{day.month:02d}/catalog.xml"
 
 
 def _fileserver_url(dsid: str, day: date, filename: str) -> str:
@@ -145,6 +146,9 @@ def _auth_params() -> dict:
 def list_day_catalog_files(session: requests.Session, dsid: str, day: date) -> list[str]:
     """
     Return list of `.nc` filenames present in the THREDDS catalog for this day.
+
+    Implementation note: for GridRad hourly (d841000), catalogs are month-level.
+    We load the month catalog and then filter filenames by YYYYMMDD substring.
     """
     url = _catalog_url(dsid, day)
     r = session.get(url, timeout=60)
@@ -153,12 +157,16 @@ def list_day_catalog_files(session: requests.Session, dsid: str, day: date) -> l
     r.raise_for_status()
 
     root = ET.fromstring(r.text)
-    # THREDDS catalogs use {http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0}
     ns = {"t": "http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"}
+    ymd = _ymd(day)
+
     out: list[str] = []
     for el in root.findall(".//t:dataset", ns):
         name = el.attrib.get("name", "")
-        if name.endswith(".nc"):
+        if not name.endswith(".nc"):
+            continue
+        # Common GridRad naming embeds YYYYMMDD in the filename.
+        if ymd in name:
             out.append(name)
     return sorted(set(out))
 

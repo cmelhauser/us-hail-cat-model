@@ -16,5 +16,5 @@ def test_stage04b_download_gridrad_catalog_url_shape(load_script):
     assert s.DS_HOURLY in url
     assert "catalog.xml" in url
     assert "2015" in url
-    assert "20150501" in url
+    assert "201505" in url
 
