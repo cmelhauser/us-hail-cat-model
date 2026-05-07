@@ -1,47 +1,24 @@
 #!/usr/bin/env python3
 """
-04b_fill_gridrad_gap.py — Compute MESH75 from GridRad 3D Reflectivity (2012–2019)
+04c_fill_gridrad_gap.py — Compute MESH75 from GridRad 3D Reflectivity (2012–2019)
 ==================================================================================
 Fills the 2012–2019 gap using GridRad NEXRAD composite reflectivity.
 
-Improvements over the naive approach:
-  1. ERA5 gridded freezing levels (from stage 04a) replace the latitude-band
-     lookup table, reducing isotherm height error from ~500 m to ~100 m.
-  2. GridRad-Severe (5-min temporal resolution) files are prioritized over
-     hourly GridRad V3.1/V4.2 when available, capturing short-lived peak
-     hail signatures that hourly composites miss.
-  3. Output is tagged as GridRad-sourced in a sidecar metadata file so that
-     stage 04c can apply cross-calibration independently.
+This stage is compute-only. It assumes GridRad inputs already exist locally under:
 
-Data Sources
-------------
-  GridRad V3.1:      NCAR RDA d841000, 1995–2017, hourly, 0.02°
-  GridRad V4.2:      NCAR RDA d841000, 2008–2021, hourly, 0.02°
-  GridRad-Severe:    NCAR RDA d841006, 2010–2023, 5-min, 0.02°
-  ERA5 isotherms:    data/historical/era5/era5_monthly_isotherms_conus.nc (from stage 04a)
+- `data/historical/gridrad/`
+- `data/historical/gridrad_severe/`
 
-SHI → MESH75 Algorithm
------------------------
-  SHI = 0.1 × ∫[H0 to Htop] Wt(H) × E(Z(H)) dH   (Witt et al. 1998)
-  MESH75 = 15.096 × SHI^0.206                        (corrected corrigendum 2021)
-
-Output
-------
-  data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif
-  + data/historical/mesh_0.05deg/gridrad_days.txt (list of dates processed from GridRad)
-  Values are QA-checked to be finite, non-negative, and ≤300.0 mm.
-
-Usage
------
-  python scripts/04b_fill_gridrad_gap.py
-  python scripts/04b_fill_gridrad_gap.py --year 2015 --month 5
-  python scripts/04b_fill_gridrad_gap.py --check-data
-  python scripts/04b_fill_gridrad_gap.py --validate
+Use Stage 04b (`scripts/04b_download_gridrad.py`) to retrieve those inputs from
+NCAR RDA/GDEX.
 """
+
+from __future__ import annotations
 
 import argparse
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -71,7 +48,7 @@ GRIDRAD_SEV = DATA_ROOT / "historical" / "gridrad_severe"
 ERA5_FILE   = DATA_ROOT / "historical" / "era5" / "era5_monthly_isotherms_conus.nc"
 OUT_DIR     = DATA_ROOT / "historical" / "mesh_0.05deg"
 LOG_DIR     = LOG_ROOT
-LOG_FILE    = LOG_DIR / "04b_fill_gridrad_gap.log"
+LOG_FILE    = LOG_DIR / "04c_fill_gridrad_gap.log"
 
 # Output grid (must match stages 01–02)
 OUT_DX      = DX
@@ -101,7 +78,8 @@ _era5_hm20c = None
 _era5_lats = None
 _era5_lons = None
 
-log = get_logger("04b_fill_gridrad_gap", LOG_ROOT).info
+log = get_logger("04c_fill_gridrad_gap", LOG_ROOT).info
+
 
 def load_era5_isotherms():
     """Load ERA5 monthly isotherm heights. Cached globally."""
@@ -112,7 +90,7 @@ def load_era5_isotherms():
 
     if not ERA5_FILE.exists():
         log(f"  WARNING: ERA5 isotherm file not found: {ERA5_FILE}")
-        log(f"  Run stage 04a first, or using climatological fallback.")
+        log("  Run stage 04a first, or using climatological fallback.")
         return
 
     import xarray as xr
@@ -123,6 +101,7 @@ def load_era5_isotherms():
     _era5_lons  = ds["longitude"].values
     ds.close()
     log(f"  Loaded ERA5 isotherms: {_era5_h0c.shape}")
+
 
 def get_freezing_levels_era5(lat: float, lon: float, month: int) -> tuple:
     """Get 0°C and -20°C heights from ERA5 gridded data."""
@@ -143,6 +122,7 @@ def get_freezing_levels_era5(lat: float, lon: float, month: int) -> tuple:
     hm20 = max(h0c + 1.0, min(12.0, hm20))
 
     return h0c, hm20
+
 
 def _get_freezing_levels_climo(lat: float, month: int) -> tuple:
     """Climatological fallback (same as original stage 04)."""
@@ -166,6 +146,7 @@ def _get_freezing_levels_climo(lat: float, month: int) -> tuple:
             return h0, hm20
     return 3.5, 6.0
 
+
 def compute_shi_column(z_profile, heights_km, h_0c, h_m20c):
     """Compute SHI for a single vertical column (Witt et al. 1998)."""
     shi = 0.0
@@ -181,12 +162,12 @@ def compute_shi_column(z_profile, heights_km, h_0c, h_m20c):
 
     return 0.1 * shi
 
+
 def find_gridrad_files(day: date) -> tuple:
     """
     Find GridRad files for a day. Returns (files, source_type).
     Prioritizes GridRad-Severe (5-min) over hourly when available.
     """
-    # Check GridRad-Severe first (5-min resolution, ~100 events/yr)
     sev_patterns = [
         GRIDRAD_SEV / f"{day.year}" / f"{day.strftime('%Y%m%d')}" / "*.nc",
         GRIDRAD_SEV / f"{day.year}" / f"nexrad_*_{day.strftime('%Y%m%d')}T*.nc",
@@ -194,11 +175,9 @@ def find_gridrad_files(day: date) -> tuple:
     sev_files = []
     for pat in sev_patterns:
         sev_files.extend(sorted(pat.parent.glob(pat.name)))
-
     if sev_files:
         return sev_files, "gridrad-severe-5min"
 
-    # Fall back to hourly GridRad
     hr_patterns = [
         GRIDRAD_DIR / f"{day.year}" / f"{day.strftime('%Y%m%d')}" / "*.nc",
         GRIDRAD_DIR / f"{day.year}" / f"nexrad_*_{day.strftime('%Y%m%d')}T*.nc",
@@ -210,11 +189,11 @@ def find_gridrad_files(day: date) -> tuple:
             if f not in seen and f.suffix == ".nc":
                 hr_files.append(f)
                 seen.add(f)
-
     if hr_files:
         return hr_files, "gridrad-hourly"
 
     return [], "none"
+
 
 def process_gridrad_file(nc_path, daily_max, month):
     """Process a single GridRad NetCDF: compute SHI → MESH75, update daily_max."""
@@ -222,7 +201,6 @@ def process_gridrad_file(nc_path, daily_max, month):
 
     ds = netCDF4.Dataset(nc_path, "r")
     try:
-        # Try standard variable names
         for lat_name in ["Latitude", "latitude", "lat"]:
             if lat_name in ds.variables:
                 lats = ds.variables[lat_name][:]
@@ -263,7 +241,6 @@ def process_gridrad_file(nc_path, daily_max, month):
     if refl.ndim != 3:
         return 0
 
-    # Pre-filter: find columns with Z ≥ 40 dBZ
     max_refl = np.nanmax(refl, axis=0)
     active = np.argwhere(max_refl >= Z_THRESHOLD)
     count = 0
@@ -279,7 +256,6 @@ def process_gridrad_file(nc_path, daily_max, month):
         h_0c, h_m20c = get_freezing_levels_era5(lat, lon, month)
         z_profile = refl[:, j, k]
         shi = compute_shi_column(z_profile, alts, h_0c, h_m20c)
-
         if shi <= 0:
             continue
 
@@ -289,7 +265,6 @@ def process_gridrad_file(nc_path, daily_max, month):
 
         out_row = int((OUT_LAT_MAX - lat) / OUT_DX)
         out_col = int((lon - OUT_LON_MIN) / OUT_DX)
-
         if 0 <= out_row < OUT_NROWS and 0 <= out_col < OUT_NCOLS:
             if mesh75_mm > daily_max[out_row, out_col]:
                 daily_max[out_row, out_col] = mesh75_mm
@@ -297,7 +272,10 @@ def process_gridrad_file(nc_path, daily_max, month):
 
     return count
 
+
 def process_day(day):
+    load_era5_isotherms()
+
     out_path = OUT_DIR / f"{day.year}" / f"mesh_{day.strftime('%Y%m%d')}.tif"
     if out_path.exists():
         return {"skipped": True}
@@ -333,24 +311,43 @@ def process_day(day):
         "peak_mesh75_mm": round(peak, 1), "errors": errors,
     }
 
+
 def iter_dates(start, end):
     d = start
     while d <= end:
         yield d
         d += timedelta(days=1)
 
-def main():
+
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Fill 2012-2019 gap with GridRad MESH75 (ERA5 + GridRad-Severe).")
     parser.add_argument("--year", type=int, default=None)
     parser.add_argument("--month", type=int, default=None)
     parser.add_argument("--validate", action="store_true")
     parser.add_argument("--check-data", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="Parallel worker processes across days (default: 4; use 1 for sequential)",
+    )
+    return parser
+
+
+def _process_day_worker(day: date) -> tuple[str, dict]:
+    try:
+        return day.strftime("%Y%m%d"), process_day(day)
+    except Exception as e:
+        return day.strftime("%Y%m%d"), {"files": 0, "error": str(e)}
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_arg_parser().parse_args(argv)
 
     if args.validate:
         import rasterio
-        # Simple count and value QA check
         gap_tifs = sorted(p for p in OUT_DIR.rglob("mesh_????????.tif")
                           if "mesh_2012" <= p.stem <= "mesh_20201013")
         log(f"  Found {len(gap_tifs):,} GridRad gap-fill TIFFs")
@@ -379,18 +376,16 @@ def main():
         sys.exit(0)
 
     log(f"\n{'='*60}")
-    log(f"  GridRad Gap Fill (ERA5 + Severe Priority) — Stage 04b")
+    log("  GridRad Gap Fill (ERA5 + Severe Priority) — Stage 04c")
     log(f"{'='*60}")
     log(f"  MESH75: {MESH75_A} × SHI^{MESH75_B} (corrected 2021)")
 
-    # Load ERA5 isotherms
     load_era5_isotherms()
     if _era5_h0c is not None:
-        log(f"  Freezing levels: ERA5 gridded (0.25°, monthly)")
+        log("  Freezing levels: ERA5 gridded (0.25°, monthly)")
     else:
-        log(f"  Freezing levels: Climatological fallback (latitude-band)")
+        log("  Freezing levels: Climatological fallback (latitude-band)")
 
-    # Date range
     if args.year and args.month:
         import calendar
         d_start = date(args.year, args.month, 1)
@@ -406,13 +401,14 @@ def main():
         d_end = GAP_END
 
     log(f"  Period: {d_start} → {d_end}")
+    log(f"  Workers: {args.workers} process(es) across days")
 
     if args.check_data:
         log("\n  Checking data availability ...")
         total = sev = hourly = missing = 0
         for day in iter_dates(d_start, d_end):
             total += 1
-            files, src = find_gridrad_files(day)
+            _files, src = find_gridrad_files(day)
             if src == "gridrad-severe-5min":
                 sev += 1
             elif src == "gridrad-hourly":
@@ -422,7 +418,6 @@ def main():
         log(f"  {total} days: {sev} GridRad-Severe, {hourly} hourly, {missing} missing")
         sys.exit(0)
 
-    # Track which dates use GridRad (for cross-calibration in 04c)
     gridrad_days_file = OUT_DIR / "gridrad_days.txt"
     gridrad_days = []
 
@@ -434,38 +429,53 @@ def main():
 
     log(f"\n  Processing {len(all_days):,} days ...\n")
 
-    for day in all_days:
-        result = process_day(day)
+    w = max(1, int(args.workers))
+    if w == 1:
+        iter_results = ((day.strftime("%Y%m%d"), process_day(day)) for day in all_days)
+        pool = None
+    else:
+        pool = ProcessPoolExecutor(max_workers=w)
+        iter_results = pool.map(_process_day_worker, all_days)
 
-        if result.get("skipped"):
-            skipped += 1
-            continue
-        if result.get("no_data"):
-            no_data += 1
-            continue
+    try:
+        for ymd, result in iter_results:
+            if result.get("skipped"):
+                skipped += 1
+                continue
+            if result.get("no_data"):
+                no_data += 1
+                continue
+            if result.get("error"):
+                log(f"    WARN: {ymd}: {result['error']}")
+                no_data += 1
+                continue
 
-        done += 1
-        src = result.get("source", "")
-        if "severe" in src:
-            sev_count += 1
-        else:
-            hr_count += 1
+            done += 1
+            src = result.get("source", "")
+            if "severe" in src:
+                sev_count += 1
+            else:
+                hr_count += 1
 
-        peak = result.get("peak_mesh75_mm", 0.0)
-        peak_mesh = max(peak_mesh, peak)
-        gridrad_days.append(day.strftime("%Y%m%d"))
+            peak = result.get("peak_mesh75_mm", 0.0)
+            peak_mesh = max(peak_mesh, peak)
+            gridrad_days.append(ymd)
 
-        if done % 30 == 0 or peak > 50:
-            elapsed = time.time() - t0
-            rate = done / elapsed if elapsed > 0 else 0
-            eta = (len(all_days) - done - skipped - no_data) / rate if rate > 0 else 0
-            log(f"  [{day}] done={done:,}  src={src}  peak={peak:.0f}mm  "
-                f"ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}")
+            if done % 30 == 0 or peak > 50:
+                elapsed = time.time() - t0
+                rate = done / elapsed if elapsed > 0 else 0
+                eta = (len(all_days) - done - skipped - no_data) / rate if rate > 0 else 0
+                log(
+                    f"  [{ymd}] done={done:,}  src={src}  peak={peak:.0f}mm  "
+                    f"ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}"
+                )
+    finally:
+        if pool is not None:
+            pool.shutdown(cancel_futures=False)
 
-    # Write GridRad days list
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     with open(gridrad_days_file, "w") as f:
-        f.write("\n".join(gridrad_days))
+        f.write("\n".join(sorted(gridrad_days)))
 
     elapsed = time.time() - t0
     log(f"\n{'='*60}")
@@ -475,5 +485,7 @@ def main():
     log(f"  Peak MESH75: {peak_mesh:.1f} mm ({peak_mesh/25.4:.1f} in)")
     log(f"{'='*60}\n")
 
+
 if __name__ == "__main__":
     main()
+

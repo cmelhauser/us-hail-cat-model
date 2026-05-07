@@ -142,7 +142,7 @@ python scripts/01_download_myrorss.py --qa-only
 MRMS native products use conventions that differ from the final model grid. Stage 02 must:
 
 1. list available MRMS MESH products;
-2. download or stream source GRIB2 files;
+2. download or stream source GRIB2 files (optional `--workers N` parallel threads per day for S3 + decode; default 8);
 3. extract the CONUS subset;
 4. convert longitude convention where needed;
 5. flip south-to-north native orientation into north-to-south model orientation;
@@ -204,13 +204,23 @@ Stage 04a prepares monthly thermodynamic context for GridRad SHI computation and
 
 ---
 
-## 7. Stage 04b - GridRad Gap Fill
+## 7. Stage 04b - GridRad Download (NCAR RDA/GDEX)
 
-**Script:** `scripts/04b_fill_gridrad_gap.py`  
+**Script:** `scripts/04b_download_gridrad.py`  
+**Input:** NCAR RDA/GDEX GridRad datasets (authenticated download)
+**Output:** local NetCDF inputs under `data/historical/gridrad/` and `data/historical/gridrad_severe/`
+
+This stage retrieves the GridRad inputs used by the compute stage. It supports bounded concurrency via `--workers` and is resumable (skips existing files).
+
+---
+
+## 8. Stage 04c - GridRad Gap Fill
+
+**Script:** `scripts/04c_fill_gridrad_gap.py`  
 **Input:** GridRad or GridRad-Severe NetCDF files plus ERA5 isotherms
 **Output:** daily MESH75 GeoTIFFs and `gridrad_days.txt`
 
-### 7.1 Technical behavior
+### 8.1 Technical behavior
 
 1. Locate GridRad-Severe where available; otherwise fall back to hourly GridRad.
 2. Load three-dimensional reflectivity profiles.
@@ -226,12 +236,13 @@ MESH75 = 15.096 * SHI^0.206
 7. Apply the shared hail-value QA guard: finite, non-negative, and no larger
    than 300.0 mm.
 8. Write daily GeoTIFFs on the common grid.
+9. Optionally parallelize across calendar days with `--workers N` (process-based).
 
-### 7.2 Scientific notes
+### 8.2 Scientific notes
 
 GridRad is a gap-fill source. It should not be assumed exchangeable with MYRORSS or MRMS before calibration. Differences in temporal sampling, reflectivity processing, and vertical structure can affect high-percentile hail estimates.
 
-### 7.3 Validation
+### 8.3 Validation
 
 - GridRad day list exists.
 - Output rasters exist for available days.
@@ -241,7 +252,7 @@ GridRad is a gap-fill source. It should not be assumed exchangeable with MYRORSS
 
 ---
 
-## 8. Stage 05 - Bias Correction and Environmental Filtering
+## 9. Stage 05 - Bias Correction and Environmental Filtering
 
 **Script:** `scripts/05_apply_mesh_bias_correction.py`  
 **Input:** raw daily MESH rasters
@@ -346,6 +357,8 @@ annual_hail_days.tif
 ### 10.2 Technical behavior
 
 Stage 07 averages corrected daily MESH75 by day-of-year across available years. Zeros remain in the average because the output is expected daily hazard activity, not size conditional on hail occurrence.
+
+Stage 07 supports bounded concurrency via `--workers N` (threaded per-DOY raster reads). Use `--workers 1` for strictly sequential behavior.
 
 ### 10.3 Validation
 
@@ -582,6 +595,8 @@ factor = clip(factor, 1.0, 1.20)
 - Outside-CONUS cells are masked.
 - Correction does not introduce discontinuities along state or source boundaries.
 - Terrain correction is reviewed in mountainous regions.
+
+Stage 12 supports bounded concurrency via `--workers N` when applying the mask to independent rasters.
 
 ---
 

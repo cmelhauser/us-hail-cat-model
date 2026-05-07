@@ -26,13 +26,17 @@ Output
 Usage
 -----
   python scripts/07_build_hail_climo.py
+  python scripts/07_build_hail_climo.py --workers 8
   python scripts/07_build_hail_climo.py --validate
 """
+
+from __future__ import annotations
 
 import argparse
 import sys
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -47,17 +51,28 @@ try:
     from _io import write_geotiff
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from scripts._config import (
+        REPO_ROOT,
+        DATA_ROOT,
+        LOG_ROOT,
+        NROWS,
+        NCOLS,
+        DX,
+        LAT_MAX,
+        LON_MIN,
+        NODATA,
+    )
     from scripts._io import write_geotiff
     from scripts._logging import get_logger
 
-IN_DIR    = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
-OUT_DIR   = DATA_ROOT / "historical" / "mesh_0.05deg_climo"
-FIG_DIR   = REPO_ROOT / "docs" / "figures" / "historical"
-LOG_DIR   = LOG_ROOT
-LOG_FILE  = LOG_DIR / "07_build_hail_climo.log"
+IN_DIR = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
+OUT_DIR = DATA_ROOT / "historical" / "mesh_0.05deg_climo"
+FIG_DIR = REPO_ROOT / "docs" / "figures" / "historical"
+LOG_DIR = LOG_ROOT
+LOG_FILE = LOG_DIR / "07_build_hail_climo.log"
 
 log = get_logger("07_build_hail_climo", LOG_ROOT).info
+
 
 def build_doy_index() -> dict:
     """Map each DOY (1–366) to a list of corrected MESH75 raster paths."""
@@ -71,6 +86,7 @@ def build_doy_index() -> dict:
         except ValueError:
             continue
     return doy_files
+
 
 def build_climatology():
     import rasterio
@@ -87,6 +103,11 @@ def build_climatology():
     annual_mean = np.zeros((NROWS, NCOLS), dtype=np.float64)
     annual_p_occ = np.zeros((NROWS, NCOLS), dtype=np.float64)
 
+    def read_one(path: Path):
+        with rasterio.open(path) as src:
+            data = src.read(1).astype(np.float64)
+        return data, (data > 0).astype(np.float64)
+
     for doy in range(1, 367):
         out_path = OUT_DIR / f"climo_{doy:03d}.tif"
         files = doy_files.get(doy, [])
@@ -100,14 +121,32 @@ def build_climatology():
         count = np.zeros((NROWS, NCOLS), dtype=np.float64)
         n_years = len(files)
 
-        for fpath in files:
+        if n_years == 1:
             try:
-                with rasterio.open(fpath) as src:
-                    data = src.read(1).astype(np.float64)
+                data, occ = read_one(files[0])
                 total += data
-                count += (data > 0).astype(np.float64)
+                count += occ
             except Exception:
-                n_years -= 1
+                n_years = 0
+        else:
+            w = max(1, int(getattr(build_climatology, "_workers", 4)))
+            try:
+                with ThreadPoolExecutor(max_workers=w) as pool:
+                    for data, occ in pool.map(read_one, files):
+                        total += data
+                        count += occ
+            except Exception:
+                # Conservative fallback: if parallel read fails, process sequentially.
+                total[:] = 0.0
+                count[:] = 0.0
+                n_years = len(files)
+                for fpath in files:
+                    try:
+                        data, occ = read_one(fpath)
+                        total += data
+                        count += occ
+                    except Exception:
+                        n_years -= 1
 
         if n_years > 0:
             climo_mean = (total / n_years).astype(np.float32)
@@ -135,11 +174,14 @@ def build_climatology():
     elapsed = time.time() - t0
     log(f"  Climatology complete in {elapsed:.0f}s")
 
+
 def make_seasonal_figure():
     """Generate a seasonal hail activity summary figure."""
     import rasterio
+
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
@@ -150,6 +192,7 @@ def make_seasonal_figure():
     for m in range(1, 13):
         # DOY range for this month (approximate)
         from calendar import monthrange
+
         d_start = date(2000, m, 1).timetuple().tm_yday
         d_end = date(2000, m, monthrange(2000, m)[1]).timetuple().tm_yday
         total = 0.0
@@ -162,8 +205,7 @@ def make_seasonal_figure():
 
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(10, 5))
-    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     ax.bar(months, monthly_activity, color="#2196F3")
     ax.set_ylabel("Total MESH75 Activity (sum of daily climatology, mm)")
     ax.set_title("Monthly Hail Activity — MESH75 Climatology")
@@ -171,8 +213,10 @@ def make_seasonal_figure():
     plt.close()
     log(f"  Seasonal figure saved to {FIG_DIR}")
 
+
 def validate_outputs() -> bool:
     import rasterio
+
     errors = []
     if not OUT_DIR.exists():
         errors.append(f"Missing: {OUT_DIR}")
@@ -195,25 +239,41 @@ def validate_outputs() -> bool:
     log(f"Output validation passed ✓ ({len(list(OUT_DIR.glob('climo_???.tif')))} files)")
     return True
 
-def main():
+
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build daily MESH75 climatology.")
     parser.add_argument("--validate", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="Parallel raster reads per DOY (default: 4; use 1 for sequential)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_arg_parser().parse_args(argv)
 
     if args.validate:
         sys.exit(0 if validate_outputs() else 1)
 
-    log(f"\n{'='*60}")
+    log(f"\n{'=' * 60}")
     log(f"  Daily Climatology — Stage 07")
-    log(f"{'='*60}")
+    log(f"{'=' * 60}")
     log(f"  Input:  {IN_DIR}")
     log(f"  Output: {OUT_DIR}")
+    log(f"  Workers: {args.workers} thread(s) per DOY for raster reads")
 
+    # Stash worker count without plumbing through every call.
+    build_climatology._workers = args.workers  # type: ignore[attr-defined]
     build_climatology()
     make_seasonal_figure()
 
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
+
 
 if __name__ == "__main__":
     main()

@@ -206,7 +206,7 @@ MRMS is not assumed identical to MYRORSS. Differences in processing chain, radar
 
 ### 3.3 GridRad and GridRad-Severe
 
-GridRad fills the gap between MYRORSS and operational MRMS. Stage 04b computes Severe Hail Index (SHI) from three-dimensional radar reflectivity and ERA5 isotherm fields, then converts SHI to MESH75. GridRad-Severe is preferred where available because higher temporal sampling better resolves short-lived hail cores.
+GridRad fills the gap between MYRORSS and operational MRMS. Stage 04b downloads GridRad / GridRad-Severe inputs from NCAR RDA/GDEX. Stage 04c computes Severe Hail Index (SHI) from three-dimensional radar reflectivity and ERA5 isotherm fields, then converts SHI to MESH75. GridRad-Severe is preferred where available because higher temporal sampling better resolves short-lived hail cores.
 
 GridRad-derived hail estimates are treated as a gap-fill source, not as automatically homogeneous with MYRORSS or MRMS. The model therefore applies source-specific calibration and requires transition diagnostics.
 

@@ -44,7 +44,7 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 02_download_mrms_mesh.py        09_fit_cdf_regional.py
 03_download_spc.py              10_build_smooth_cdf.py
 04a_download_era5_isotherms.py  11_build_occurrence_probs.py
-04b_fill_gridrad_gap.py         11b_prepare_topography.py
+04b_download_gridrad.py         04c_fill_gridrad_gap.py
 12_apply_conus_mask.py
 05_apply_mesh_bias_correction.py 13_generate_stochastic_catalog.py
 06_validate_mesh_vs_spc.py      14_build_vulnerability.py
@@ -152,13 +152,14 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 | Stage 02 (MRMS) | ⏳ Running | Detached `screen` session `hail_stage02_mrms`. |
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. |
 | Stage 04a (ERA5) | ❌ Not run | Log file is empty. Must run after Stage 01. |
-| Stage 04b (GridRad) | ❌ Not run | Log file is empty. Stage 05 ran with identity calibration (no GridRad data). |
+| Stage 04b/04c (GridRad) | ❌ Not run | GridRad download + gap-fill not run. Stage 05 ran with identity calibration (no GridRad data). |
 | Stage 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 files only. All outputs invalid for production use. |
 
 **Re-run sequence once Stage 02 finishes:**
 ```bash
 .venv/bin/python run_pipeline.py --only 04a    # ERA5 isotherms
-.venv/bin/python run_pipeline.py --only 04b    # GridRad gap-fill (2012–2019)
+.venv/bin/python run_pipeline.py --only 04b    # GridRad download (inputs)
+.venv/bin/python run_pipeline.py --only 04c    # GridRad gap-fill compute (2012–2019)
 .venv/bin/python run_pipeline.py --from 05 --skip-ml   # Re-run all remaining stages
 # After Stage 13 smoke passes (default n_years=1000), do the full 50k run:
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000

@@ -27,6 +27,7 @@ Output
 Usage
 -----
   python scripts/12_apply_conus_mask.py
+  python scripts/12_apply_conus_mask.py --workers 8
   python scripts/12_apply_conus_mask.py --validate
 """
 
@@ -34,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -47,19 +49,30 @@ try:
     from _io import write_geotiff
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA
+    from scripts._config import (
+        REPO_ROOT,
+        DATA_ROOT,
+        LOG_ROOT,
+        NROWS,
+        NCOLS,
+        DX,
+        LAT_MAX,
+        LON_MIN,
+        NODATA,
+    )
     from scripts._io import write_geotiff
     from scripts._logging import get_logger
 
-CDF_DIR   = DATA_ROOT / "analysis" / "cdf"
-OCC_DIR   = DATA_ROOT / "analysis" / "occurrence"
+CDF_DIR = DATA_ROOT / "analysis" / "cdf"
+OCC_DIR = DATA_ROOT / "analysis" / "occurrence"
 STOCH_MAP_DIR = DATA_ROOT / "stochastic" / "maps"
-MASK_DIR  = DATA_ROOT / "analysis" / "conus_mask"
-TOPO_DIR  = DATA_ROOT / "analysis" / "topography"
-LOG_DIR   = LOG_ROOT
-LOG_FILE  = LOG_DIR / "12_apply_conus_mask.log"
+MASK_DIR = DATA_ROOT / "analysis" / "conus_mask"
+TOPO_DIR = DATA_ROOT / "analysis" / "topography"
+LOG_DIR = LOG_ROOT
+LOG_FILE = LOG_DIR / "12_apply_conus_mask.log"
 
 log = get_logger("12_apply_conus_mask", LOG_ROOT).info
+
 
 def build_conus_mask():
     """Build CONUS land mask from regionmask US states polygon."""
@@ -81,7 +94,10 @@ def build_conus_mask():
     write_geotiff(conus_mask.astype(np.float32), MASK_DIR / "conus_mask.tif")
     return conus_mask
 
-def compute_topo_factor(elevation_m: np.ndarray, freezing_level_km: np.ndarray | None = None) -> np.ndarray:
+
+def compute_topo_factor(
+    elevation_m: np.ndarray, freezing_level_km: np.ndarray | None = None
+) -> np.ndarray:
     """Compute bounded v2.1 hail-survival topographic factor.
 
     Preferred formula uses elevation relative to freezing-level height.
@@ -96,6 +112,7 @@ def compute_topo_factor(elevation_m: np.ndarray, freezing_level_km: np.ndarray |
         return np.clip(factor, 1.0, 1.25).astype(np.float32)
     factor = 1.0 + 0.05 * elev_km
     return np.clip(factor, 1.0, 1.20).astype(np.float32)
+
 
 def build_topo_correction():
     """
@@ -119,6 +136,7 @@ def build_topo_correction():
     dem_path = TOPO_DIR / "elevation_0.05deg.tif"
     if dem_path.exists():
         import rasterio
+
         with rasterio.open(dem_path) as src:
             elev = src.read(1)
         log(f"  Using existing DEM: {dem_path.name}")
@@ -139,10 +157,26 @@ def build_topo_correction():
     log(f"  Topo correction: min={correction.min():.3f} max={correction.max():.3f}")
     return correction
 
-def apply_mask_to_rasters(conus_mask, topo_correction):
-    """Apply CONUS mask and topo correction to all RP and p_occ rasters."""
+
+def _mask_one(tif_path: Path, outside_mask: np.ndarray, topo_correction: np.ndarray) -> None:
     import rasterio
 
+    with rasterio.open(tif_path) as src:
+        data = src.read(1)
+        profile = src.profile.copy()
+
+    is_rp = "rp_" in tif_path.name
+    if is_rp:
+        data = data * topo_correction
+
+    data[outside_mask] = 0.0
+    profile.update(compress="lzw")
+    with rasterio.open(tif_path, "w", **profile) as dst:
+        dst.write(data.astype(np.float32), 1)
+
+
+def apply_mask_to_rasters(conus_mask, topo_correction, workers: int = 4):
+    """Apply CONUS mask and topo correction to all RP and p_occ rasters."""
     # Find all RP and p_occ rasters
     targets = []
     targets.extend(sorted(CDF_DIR.glob("rp_*yr_hail*.tif")))
@@ -153,24 +187,17 @@ def apply_mask_to_rasters(conus_mask, topo_correction):
     log(f"  Applying mask to {len(targets)} rasters ...")
     outside_mask = ~conus_mask
 
-    for tif_path in targets:
-        with rasterio.open(tif_path) as src:
-            data = src.read(1)
-            profile = src.profile.copy()
-
-        # Apply topo correction to RP maps (not to p_occ)
-        is_rp = "rp_" in tif_path.name
-        if is_rp:
-            data = data * topo_correction
-
-        # Apply CONUS mask
-        data[outside_mask] = 0.0
-
-        profile.update(compress="lzw")
-        with rasterio.open(tif_path, "w", **profile) as dst:
-            dst.write(data.astype(np.float32), 1)
+    w = max(1, int(workers))
+    if w == 1 or len(targets) <= 1:
+        for tif_path in targets:
+            _mask_one(tif_path, outside_mask, topo_correction)
+    else:
+        with ThreadPoolExecutor(max_workers=w) as pool:
+            for _ in pool.map(lambda p: _mask_one(p, outside_mask, topo_correction), targets):
+                pass
 
     log(f"  Masked {len(targets)} rasters")
+
 
 def validate_outputs() -> bool:
     p = MASK_DIR / "conus_mask.tif"
@@ -180,25 +207,38 @@ def validate_outputs() -> bool:
     log("Output validation passed ✓")
     return True
 
-def main():
+
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Apply CONUS mask + topo correction.")
     parser.add_argument("--validate", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="Parallel raster masking threads (default: 4; use 1 for sequential)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_arg_parser().parse_args(argv)
 
     if args.validate:
         sys.exit(0 if validate_outputs() else 1)
 
-    log(f"\n{'='*60}")
+    log(f"\n{'=' * 60}")
     log(f"  CONUS Mask + Topography — Stage 12")
-    log(f"{'='*60}")
+    log(f"{'=' * 60}")
 
     conus_mask = build_conus_mask()
     topo_correction = build_topo_correction()
-    apply_mask_to_rasters(conus_mask, topo_correction)
+    apply_mask_to_rasters(conus_mask, topo_correction, workers=args.workers)
 
     log(f"\n  Complete")
     ok = validate_outputs()
     sys.exit(0 if ok else 1)
+
 
 if __name__ == "__main__":
     main()

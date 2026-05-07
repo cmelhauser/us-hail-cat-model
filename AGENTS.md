@@ -75,7 +75,8 @@ us-hail-cat-model/
 |   |-- 02_download_mrms_mesh.py
 |   |-- 03_download_spc.py
 |   |-- 04a_download_era5_isotherms.py
-|   |-- 04b_fill_gridrad_gap.py
+|   |-- 04b_download_gridrad.py
+|   |-- 04c_fill_gridrad_gap.py
 |   |-- 05_apply_mesh_bias_correction.py
 |   |-- 06_validate_mesh_vs_spc.py
 |   |-- 07_build_hail_climo.py
@@ -106,6 +107,7 @@ python run_pipeline.py --only 02
 python run_pipeline.py --only 03
 python run_pipeline.py --only 04a
 python run_pipeline.py --only 04b
+python run_pipeline.py --only 04c
 python run_pipeline.py --only 05 --skip-ml
 python run_pipeline.py --from 06 --skip-ml
 
@@ -123,6 +125,9 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --validate         # re-run output validation for all stages
 --skip-ml          # force deterministic fallback in Stage 05
 --retrain-models   # retrain optional ML artifacts in Stage 05
+
+# Stage 02 is often run directly (MRMS); optional throughput flag:
+# python scripts/02_download_mrms_mesh.py --workers 8
 ```
 
 ## Stage 01 Data Provenance
@@ -231,7 +236,7 @@ The remaining production sequence is:
 
 1. Let Stage 02 (MRMS) complete and validate.
 2. Run Stage 04a (ERA5) if CDS credentials are configured.
-3. Run Stage 04b (GridRad), or explicitly document fallback behavior if GridRad inputs remain unavailable.
+3. Run Stage 04b (GridRad download) and Stage 04c (GridRad gap-fill), or explicitly document fallback behavior if GridRad inputs remain unavailable.
 4. Re-run Stages 05-15 with `--skip-ml` against the full dataset.
 5. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
 6. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.

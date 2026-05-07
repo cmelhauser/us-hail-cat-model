@@ -90,6 +90,7 @@ python run_pipeline.py --only 02
 python run_pipeline.py --only 03
 python run_pipeline.py --only 04a
 python run_pipeline.py --only 04b
+python run_pipeline.py --only 04c
 python run_pipeline.py --only 05 --skip-ml
 python run_pipeline.py --only 06
 python run_pipeline.py --only 07
@@ -135,25 +136,34 @@ python run_pipeline.py --skip 14,15
 
 ---
 
-## 5. Stage 04b GridRad Setup
+## 5. Stage 04b/04c GridRad Setup
 
-GridRad files should be placed in:
+Stage 04c computes the GridRad gap-fill, but it does not download GridRad files.
+Stage 04b downloads the required NetCDF inputs from NCAR RDA/GDEX.
+
+GridRad files are stored under:
 
 ```text
 data/historical/gridrad/
 data/historical/gridrad_severe/
 ```
 
-Check availability:
+Check availability (after download):
 
 ```bash
-python scripts/04b_fill_gridrad_gap.py --check-data
+python scripts/04c_fill_gridrad_gap.py --check-data
 ```
 
-Run:
+Download (Stage 04b):
 
 ```bash
 python run_pipeline.py --only 04b
+```
+
+Gap-fill compute (Stage 04c):
+
+```bash
+python run_pipeline.py --only 04c
 ```
 
 ---

@@ -20,6 +20,7 @@ dist/
 build/
 .eggs/
 *.egg
+.cache/
 .venv/
 venv/
 env/
