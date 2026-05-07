@@ -75,8 +75,13 @@ GRIDRAD_DIR = DATA_ROOT / "historical" / "gridrad"
 GRIDRAD_SEV_DIR = DATA_ROOT / "historical" / "gridrad_severe"
 
 # Public THREDDS catalogs (listing is public; downloads may require auth).
-THREDDS_BASE = "https://thredds.rda.ucar.edu/thredds/catalog/files/g/"
-FILESERVER_BASE = "https://thredds.rda.ucar.edu/thredds/fileServer/files/g/"
+# GridRad hourly is under files/g/d841000/YYYYMM/.
+THREDDS_BASE_HOURLY = "https://thredds.rda.ucar.edu/thredds/catalog/files/g/"
+FILESERVER_BASE_HOURLY = "https://thredds.rda.ucar.edu/thredds/fileServer/files/g/"
+#
+# GridRad-Severe lives under files/d841006/volumes/YYYY/YYYYMMDD/.
+THREDDS_BASE_SEVERE = "https://thredds.rda.ucar.edu/thredds/catalog/files/d841006/volumes/"
+FILESERVER_BASE_SEVERE = "https://thredds.rda.ucar.edu/thredds/fileServer/files/d841006/volumes/"
 
 DS_HOURLY = "d841000"
 DS_SEVERE = "d841006"
@@ -119,14 +124,22 @@ def _day_out_dir(base: Path, day: date) -> Path:
 
 
 def _catalog_url(dsid: str, day: date) -> str:
-    # Catalogs for GridRad hourly are organized by YYYYMM under files/g/[dsid]/.
-    # (e.g. .../d841000/201505/catalog.xml). We discover filenames from that
-    # month catalog and then filter by day.
-    return f"{THREDDS_BASE}{dsid}/{day.year}{day.month:02d}/catalog.xml"
+    if dsid == DS_HOURLY:
+        # GridRad hourly: month catalogs under files/g/d841000/YYYYMM/catalog.xml
+        return f"{THREDDS_BASE_HOURLY}{dsid}/{day.year}{day.month:02d}/catalog.xml"
+    if dsid == DS_SEVERE:
+        # GridRad-Severe: day catalogs under files/d841006/volumes/YYYY/YYYYMMDD/catalog.xml
+        return f"{THREDDS_BASE_SEVERE}{day.year}/{_ymd(day)}/catalog.xml"
+    raise ValueError(f"Unknown dsid: {dsid}")
 
 
 def _fileserver_url(dsid: str, day: date, filename: str) -> str:
-    return f"{FILESERVER_BASE}{dsid}/{day.year}/{_ymd(day)}/{filename}"
+    if dsid == DS_HOURLY:
+        # Hourly files are stored under .../d841000/YYYYMM/
+        return f"{FILESERVER_BASE_HOURLY}{dsid}/{day.year}{day.month:02d}/{filename}"
+    if dsid == DS_SEVERE:
+        return f"{FILESERVER_BASE_SEVERE}{day.year}/{_ymd(day)}/{filename}"
+    raise ValueError(f"Unknown dsid: {dsid}")
 
 
 def _request_session() -> requests.Session:
@@ -150,25 +163,56 @@ def list_day_catalog_files(session: requests.Session, dsid: str, day: date) -> l
     Implementation note: for GridRad hourly (d841000), catalogs are month-level.
     We load the month catalog and then filter filenames by YYYYMMDD substring.
     """
-    url = _catalog_url(dsid, day)
-    r = session.get(url, timeout=60)
-    if r.status_code == 404:
-        return []
-    r.raise_for_status()
-
-    root = ET.fromstring(r.text)
     ns = {"t": "http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"}
-    ymd = _ymd(day)
 
-    out: list[str] = []
-    for el in root.findall(".//t:dataset", ns):
-        name = el.attrib.get("name", "")
-        if not name.endswith(".nc"):
-            continue
-        # Common GridRad naming embeds YYYYMMDD in the filename.
-        if ymd in name:
-            out.append(name)
-    return sorted(set(out))
+    if dsid == DS_HOURLY:
+        url = _catalog_url(dsid, day)
+        r = session.get(url, timeout=60)
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+
+        root = ET.fromstring(r.text)
+        ymd = _ymd(day)
+        out: list[str] = []
+        for el in root.findall(".//t:dataset", ns):
+            name = el.attrib.get("name", "")
+            if name.endswith(".nc") and ymd in name:
+                out.append(name)
+        return sorted(set(out))
+
+    if dsid == DS_SEVERE:
+        # Not every day exists; check whether the year catalog links to it.
+        year_url = f"{THREDDS_BASE_SEVERE}{day.year}/catalog.xml"
+        r = session.get(year_url, timeout=60)
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+        year_root = ET.fromstring(r.text)
+        ymd = _ymd(day)
+        # Find a catalogRef titled YYYYMMDD
+        href = None
+        for ref in year_root.findall(".//t:catalogRef", ns):
+            title = ref.attrib.get("{http://www.w3.org/1999/xlink}title", "")
+            if title == ymd:
+                href = ref.attrib.get("{http://www.w3.org/1999/xlink}href", "")
+                break
+        if not href:
+            return []
+        day_url = f"{THREDDS_BASE_SEVERE}{day.year}/{href}"
+        rr = session.get(day_url, timeout=60)
+        if rr.status_code == 404:
+            return []
+        rr.raise_for_status()
+        root = ET.fromstring(rr.text)
+        out = []
+        for el in root.findall(".//t:dataset", ns):
+            name = el.attrib.get("name", "")
+            if name.endswith(".nc"):
+                out.append(name)
+        return sorted(set(out))
+
+    raise ValueError(f"Unknown dsid: {dsid}")
 
 
 @dataclass(frozen=True)

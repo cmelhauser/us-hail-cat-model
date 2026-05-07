@@ -18,3 +18,8 @@ def test_stage04b_download_gridrad_catalog_url_shape(load_script):
     assert "2015" in url
     assert "201505" in url
 
+    sev_url = s._catalog_url(s.DS_SEVERE, d)
+    assert "d841006" in sev_url or "d841006" in s.THREDDS_BASE_SEVERE
+    assert "2015" in sev_url
+    assert "20150501" in sev_url
+
