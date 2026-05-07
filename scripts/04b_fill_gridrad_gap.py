@@ -35,13 +35,17 @@ Usage
 -----
   python scripts/04b_fill_gridrad_gap.py
   python scripts/04b_fill_gridrad_gap.py --year 2015 --month 5
+  python scripts/04b_fill_gridrad_gap.py --workers 4
   python scripts/04b_fill_gridrad_gap.py --check-data
   python scripts/04b_fill_gridrad_gap.py --validate
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -298,6 +302,9 @@ def process_gridrad_file(nc_path, daily_max, month):
     return count
 
 def process_day(day):
+    # Ensure each worker process has its own ERA5 cache (if available).
+    load_era5_isotherms()
+
     out_path = OUT_DIR / f"{day.year}" / f"mesh_{day.strftime('%Y%m%d')}.tif"
     if out_path.exists():
         return {"skipped": True}
@@ -339,14 +346,34 @@ def iter_dates(start, end):
         yield d
         d += timedelta(days=1)
 
-def main():
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Fill 2012-2019 gap with GridRad MESH75 (ERA5 + GridRad-Severe).")
     parser.add_argument("--year", type=int, default=None)
     parser.add_argument("--month", type=int, default=None)
     parser.add_argument("--validate", action="store_true")
     parser.add_argument("--check-data", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="Parallel worker processes across days (default: 4; use 1 for sequential)",
+    )
+    return parser
+
+
+def _process_day_worker(day: date) -> tuple[str, dict]:
+    """Top-level worker wrapper (picklable) for process pools."""
+    try:
+        return day.strftime("%Y%m%d"), process_day(day)
+    except Exception as e:
+        # Keep the parent loop robust: return a sentinel error payload.
+        return day.strftime("%Y%m%d"), {"files": 0, "error": str(e)}
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_arg_parser().parse_args(argv)
 
     if args.validate:
         import rasterio
@@ -406,6 +433,7 @@ def main():
         d_end = GAP_END
 
     log(f"  Period: {d_start} → {d_end}")
+    log(f"  Workers: {args.workers} process(es) across days")
 
     if args.check_data:
         log("\n  Checking data availability ...")
@@ -434,38 +462,56 @@ def main():
 
     log(f"\n  Processing {len(all_days):,} days ...\n")
 
-    for day in all_days:
-        result = process_day(day)
+    w = max(1, int(args.workers))
 
-        if result.get("skipped"):
-            skipped += 1
-            continue
-        if result.get("no_data"):
-            no_data += 1
-            continue
+    if w == 1:
+        iter_results = ((day.strftime("%Y%m%d"), process_day(day)) for day in all_days)
+    else:
+        # Run per-day work in separate processes (best fit for Python loops + netCDF I/O).
+        pool = ProcessPoolExecutor(max_workers=w)
+        iter_results = pool.map(_process_day_worker, all_days)
 
-        done += 1
-        src = result.get("source", "")
-        if "severe" in src:
-            sev_count += 1
-        else:
-            hr_count += 1
+    try:
+        for ymd, result in iter_results:
+            if result.get("skipped"):
+                skipped += 1
+                continue
+            if result.get("no_data"):
+                no_data += 1
+                continue
+            if result.get("error"):
+                # This is a worker-level failure outside the script's per-file try/except.
+                log(f"    WARN: {ymd}: {result['error']}")
+                no_data += 1
+                continue
 
-        peak = result.get("peak_mesh75_mm", 0.0)
-        peak_mesh = max(peak_mesh, peak)
-        gridrad_days.append(day.strftime("%Y%m%d"))
+            done += 1
+            src = result.get("source", "")
+            if "severe" in src:
+                sev_count += 1
+            else:
+                hr_count += 1
 
-        if done % 30 == 0 or peak > 50:
-            elapsed = time.time() - t0
-            rate = done / elapsed if elapsed > 0 else 0
-            eta = (len(all_days) - done - skipped - no_data) / rate if rate > 0 else 0
-            log(f"  [{day}] done={done:,}  src={src}  peak={peak:.0f}mm  "
-                f"ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}")
+            peak = result.get("peak_mesh75_mm", 0.0)
+            peak_mesh = max(peak_mesh, peak)
+            gridrad_days.append(ymd)
+
+            if done % 30 == 0 or peak > 50:
+                elapsed = time.time() - t0
+                rate = done / elapsed if elapsed > 0 else 0
+                eta = (len(all_days) - done - skipped - no_data) / rate if rate > 0 else 0
+                log(
+                    f"  [{ymd}] done={done:,}  src={src}  peak={peak:.0f}mm  "
+                    f"ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}"
+                )
+    finally:
+        if w != 1:
+            pool.shutdown(cancel_futures=False)
 
     # Write GridRad days list
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     with open(gridrad_days_file, "w") as f:
-        f.write("\n".join(gridrad_days))
+        f.write("\n".join(sorted(gridrad_days)))
 
     elapsed = time.time() - t0
     log(f"\n{'='*60}")

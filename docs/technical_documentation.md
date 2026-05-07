@@ -226,6 +226,7 @@ MESH75 = 15.096 * SHI^0.206
 7. Apply the shared hail-value QA guard: finite, non-negative, and no larger
    than 300.0 mm.
 8. Write daily GeoTIFFs on the common grid.
+9. Optionally parallelize across calendar days with `--workers N` (process-based).
 
 ### 7.2 Scientific notes
 
