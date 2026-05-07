@@ -358,6 +358,8 @@ annual_hail_days.tif
 
 Stage 07 averages corrected daily MESH75 by day-of-year across available years. Zeros remain in the average because the output is expected daily hazard activity, not size conditional on hail occurrence.
 
+Stage 07 supports bounded concurrency via `--workers N` (threaded per-DOY raster reads). Use `--workers 1` for strictly sequential behavior.
+
 ### 10.3 Validation
 
 - 366 climatology files exist.
@@ -593,6 +595,8 @@ factor = clip(factor, 1.0, 1.20)
 - Outside-CONUS cells are masked.
 - Correction does not introduce discontinuities along state or source boundaries.
 - Terrain correction is reviewed in mountainous regions.
+
+Stage 12 supports bounded concurrency via `--workers N` when applying the mask to independent rasters.
 
 ---
 
