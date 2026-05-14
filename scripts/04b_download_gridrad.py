@@ -5,14 +5,30 @@
 Downloads the GridRad NetCDF inputs required by Stage 04c (gap-fill SHI → MESH75).
 
 This stage exists because GridRad is hosted behind NCAR RDA / GDEX, unlike the
-public NOAA S3 radar sources used by Stages 01–02. Stage 04c is *compute-only* and
-expects files to already exist on disk; Stage 04b populates the required local
-directory structure under `data/historical/`.
+public NOAA S3 radar sources used by Stages 01–02. Stage 04c reads those inputs
+from `data/historical/` (or you can chain **04b → 04c** in one pass with
+``04c_fill_gridrad_gap.py --with-04b-download``).
+
+**Default behavior (disk / memory friendly):** catalogs and downloads are driven
+**one calendar day at a time** so THREDDS planning and local NetCDF staging never
+cover the full 2012–2019 range at once. Use ``--plan-all-days-first`` only if you
+need the legacy “plan everything, then download” schedule (higher peak RAM / disk
+for the plan list).
 
 Data Sources
 -----------
   GridRad (hourly):       NCAR RDA d841000
   GridRad-Severe (5-min): NCAR RDA d841006
+
+  Files are discovered via THREDDS catalogs and fetched from the matching
+  THREDDS ``fileServer`` endpoints on ``thredds.rda.ucar.edu``. NCAR also lists
+  **GDEX** (interactive/API) and **Globus** for bulk transfers on the dataset
+  pages; those use different workflows — this script only automates THREDDS.
+
+  If THREDDS is flaky (503 / read timeouts), this stage retries with backoff and
+  exposes longer timeouts on the CLI. You may override the THREDDS host with
+  ``RDA_THREDDS_ORIGIN`` (rare; default ``https://thredds.rda.ucar.edu``) if
+  NCAR documents an alternate mirror with the same path layout.
 
 Local Layout (expected by Stage 04c)
 ------------------------------------
@@ -34,15 +50,18 @@ files are downloaded from the corresponding fileServer endpoints.
 
 Concurrency / throughput
 ------------------------
-Uses a bounded thread pool (`--workers`, default 4). Respect NCAR guidance:
-keep concurrent download streams <= 10.
+Within each day, file downloads use a bounded thread pool (``--workers``,
+default **1** for minimum memory / open handles). Respect NCAR guidance: keep
+concurrent download streams ≤ 10.
 
 Usage
 -----
   python scripts/04b_download_gridrad.py --check-data
   python scripts/04b_download_gridrad.py --year 2015 --month 5 --workers 4
+  python scripts/04b_download_gridrad.py --plan-all-days-first --workers 4
   python scripts/04b_download_gridrad.py --hourly-only
   python scripts/04b_download_gridrad.py --severe-only
+  python scripts/04b_download_gridrad.py --connect-timeout 45 --read-timeout 900
 """
 
 from __future__ import annotations
@@ -50,15 +69,18 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from collections.abc import Iterable
-from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree as ET
 
 import requests
+from requests.adapters import HTTPAdapter
+from requests.exceptions import ChunkedEncodingError
+from urllib3.util.retry import Retry
 
 _REPO_ROOT_FOR_IMPORTS = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
@@ -74,14 +96,33 @@ except ImportError:  # pragma: no cover
 GRIDRAD_DIR = DATA_ROOT / "historical" / "gridrad"
 GRIDRAD_SEV_DIR = DATA_ROOT / "historical" / "gridrad_severe"
 
-# Public THREDDS catalogs (listing is public; downloads may require auth).
-# GridRad hourly is under files/g/d841000/YYYYMM/.
-THREDDS_BASE_HOURLY = "https://thredds.rda.ucar.edu/thredds/catalog/files/g/"
-FILESERVER_BASE_HOURLY = "https://thredds.rda.ucar.edu/thredds/fileServer/files/g/"
-#
-# GridRad-Severe lives under files/d841006/volumes/YYYY/YYYYMMDD/.
-THREDDS_BASE_SEVERE = "https://thredds.rda.ucar.edu/thredds/catalog/files/d841006/volumes/"
-FILESERVER_BASE_SEVERE = "https://thredds.rda.ucar.edu/thredds/fileServer/files/d841006/volumes/"
+
+def _rda_thredds_origin() -> str:
+    """THREDDS origin (scheme + host, no path). Override with RDA_THREDDS_ORIGIN."""
+    return os.environ.get("RDA_THREDDS_ORIGIN", "https://thredds.rda.ucar.edu").rstrip("/")
+
+
+def _thredds_base_hourly() -> str:
+    return f"{_rda_thredds_origin()}/thredds/catalog/files/g/"
+
+
+def _fileserver_base_hourly() -> str:
+    return f"{_rda_thredds_origin()}/thredds/fileServer/files/g/"
+
+
+def _thredds_base_severe() -> str:
+    return f"{_rda_thredds_origin()}/thredds/catalog/files/d841006/volumes/"
+
+
+def _fileserver_base_severe() -> str:
+    return f"{_rda_thredds_origin()}/thredds/fileServer/files/d841006/volumes/"
+
+
+# Back-compat for tests / introspection (evaluated at import; matches default origin).
+THREDDS_BASE_HOURLY = _thredds_base_hourly()
+FILESERVER_BASE_HOURLY = _fileserver_base_hourly()
+THREDDS_BASE_SEVERE = _thredds_base_severe()
+FILESERVER_BASE_SEVERE = _fileserver_base_severe()
 
 DS_HOURLY = "d841000"
 DS_SEVERE = "d841006"
@@ -103,7 +144,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Download GridRad inputs for Stage 04c.")
     p.add_argument("--year", type=int, default=None)
     p.add_argument("--month", type=int, default=None)
-    p.add_argument("--workers", type=int, default=4, metavar="N")
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Parallel download threads per day (default: 1; max 10 per NCAR)",
+    )
+    p.add_argument(
+        "--plan-all-days-first",
+        action="store_true",
+        help="Legacy: build one global download plan for all days, then download "
+        "(higher peak memory). Default is one-day-at-a-time planning + download.",
+    )
     p.add_argument("--hourly-only", action="store_true", help="Download only d841000 hourly")
     p.add_argument("--severe-only", action="store_true", help="Download only d841006 severe (5-min)")
     p.add_argument("--check-data", action="store_true", help="Only check what is present/missing")
@@ -111,6 +164,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="List what would be downloaded, but do not download",
+    )
+    p.add_argument(
+        "--connect-timeout",
+        type=float,
+        default=30.0,
+        metavar="SEC",
+        help="HTTP connect timeout in seconds (default: 30)",
+    )
+    p.add_argument(
+        "--read-timeout",
+        type=float,
+        default=180.0,
+        metavar="SEC",
+        help="HTTP read timeout for THREDDS catalog GETs (default: 180)",
+    )
+    p.add_argument(
+        "--download-read-timeout",
+        type=float,
+        default=900.0,
+        metavar="SEC",
+        help="HTTP read timeout for NetCDF downloads (default: 900)",
     )
     return p
 
@@ -126,27 +200,73 @@ def _day_out_dir(base: Path, day: date) -> Path:
 def _catalog_url(dsid: str, day: date) -> str:
     if dsid == DS_HOURLY:
         # GridRad hourly: month catalogs under files/g/d841000/YYYYMM/catalog.xml
-        return f"{THREDDS_BASE_HOURLY}{dsid}/{day.year}{day.month:02d}/catalog.xml"
+        return f"{_thredds_base_hourly()}{dsid}/{day.year}{day.month:02d}/catalog.xml"
     if dsid == DS_SEVERE:
         # GridRad-Severe: day catalogs under files/d841006/volumes/YYYY/YYYYMMDD/catalog.xml
-        return f"{THREDDS_BASE_SEVERE}{day.year}/{_ymd(day)}/catalog.xml"
+        return f"{_thredds_base_severe()}{day.year}/{_ymd(day)}/catalog.xml"
     raise ValueError(f"Unknown dsid: {dsid}")
 
 
 def _fileserver_url(dsid: str, day: date, filename: str) -> str:
     if dsid == DS_HOURLY:
         # Hourly files are stored under .../d841000/YYYYMM/
-        return f"{FILESERVER_BASE_HOURLY}{dsid}/{day.year}{day.month:02d}/{filename}"
+        return f"{_fileserver_base_hourly()}{dsid}/{day.year}{day.month:02d}/{filename}"
     if dsid == DS_SEVERE:
-        return f"{FILESERVER_BASE_SEVERE}{day.year}/{_ymd(day)}/{filename}"
+        return f"{_fileserver_base_severe()}{day.year}/{_ymd(day)}/{filename}"
     raise ValueError(f"Unknown dsid: {dsid}")
 
 
 def _request_session() -> requests.Session:
     s = requests.Session()
-    # Allow user to use ~/.netrc automatically if present.
     s.trust_env = True
+    # Retry slow connections and HTTP 429/5xx before any response body is consumed.
+    # read=0 avoids re-issuing partial streaming downloads at the urllib3 layer.
+    retry = Retry(
+        total=12,
+        connect=12,
+        read=0,
+        backoff_factor=1.8,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET"]),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_maxsize=32)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
     return s
+
+
+def _retryable_http_error(exc: BaseException) -> bool:
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout, ChunkedEncodingError)):
+        return True
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return exc.response.status_code in (429, 500, 502, 503, 504)
+    return False
+
+
+def _sleep_backoff(attempt: int) -> None:
+    time.sleep(min(120.0, 2.0 * (2**attempt)))
+
+
+def _catalog_get(session: requests.Session, url: str, *, timeout: tuple[float, float]) -> requests.Response:
+    """GET catalog XML with exponential backoff on transient errors."""
+    for attempt in range(10):
+        try:
+            r = session.get(url, timeout=timeout, stream=False)
+            if r.status_code == 404:
+                return r
+            if r.status_code in (429, 500, 502, 503, 504):
+                r.raise_for_status()
+            r.raise_for_status()
+            return r
+        except requests.HTTPError as e:
+            if not _retryable_http_error(e) or attempt >= 9:
+                raise
+        except (requests.ConnectionError, requests.Timeout, ChunkedEncodingError):
+            if attempt >= 9:
+                raise
+        _sleep_backoff(attempt)
+    raise RuntimeError("_catalog_get exhausted retries")
 
 
 def _auth_params() -> dict:
@@ -156,7 +276,13 @@ def _auth_params() -> dict:
     return {}
 
 
-def list_day_catalog_files(session: requests.Session, dsid: str, day: date) -> list[str]:
+def list_day_catalog_files(
+    session: requests.Session,
+    dsid: str,
+    day: date,
+    *,
+    timeout: tuple[float, float],
+) -> list[str]:
     """
     Return list of `.nc` filenames present in the THREDDS catalog for this day.
 
@@ -167,10 +293,9 @@ def list_day_catalog_files(session: requests.Session, dsid: str, day: date) -> l
 
     if dsid == DS_HOURLY:
         url = _catalog_url(dsid, day)
-        r = session.get(url, timeout=60)
+        r = _catalog_get(session, url, timeout=timeout)
         if r.status_code == 404:
             return []
-        r.raise_for_status()
 
         root = ET.fromstring(r.text)
         ymd = _ymd(day)
@@ -183,11 +308,11 @@ def list_day_catalog_files(session: requests.Session, dsid: str, day: date) -> l
 
     if dsid == DS_SEVERE:
         # Not every day exists; check whether the year catalog links to it.
-        year_url = f"{THREDDS_BASE_SEVERE}{day.year}/catalog.xml"
-        r = session.get(year_url, timeout=60)
+        year_url = f"{_thredds_base_severe()}{day.year}/catalog.xml"
+        r = _catalog_get(session, year_url, timeout=timeout)
         if r.status_code == 404:
             return []
-        r.raise_for_status()
+
         year_root = ET.fromstring(r.text)
         ymd = _ymd(day)
         # Find a catalogRef titled YYYYMMDD
@@ -199,11 +324,11 @@ def list_day_catalog_files(session: requests.Session, dsid: str, day: date) -> l
                 break
         if not href:
             return []
-        day_url = f"{THREDDS_BASE_SEVERE}{day.year}/{href}"
-        rr = session.get(day_url, timeout=60)
+        day_url = f"{_thredds_base_severe()}{day.year}/{href}"
+        rr = _catalog_get(session, day_url, timeout=timeout)
         if rr.status_code == 404:
             return []
-        rr.raise_for_status()
+
         root = ET.fromstring(rr.text)
         out = []
         for el in root.findall(".//t:dataset", ns):
@@ -229,18 +354,20 @@ def plan_downloads_for_day(
     day: date,
     hourly: bool,
     severe: bool,
+    *,
+    catalog_timeout: tuple[float, float],
 ) -> list[DownloadItem]:
     items: list[DownloadItem] = []
 
     if severe:
-        for fn in list_day_catalog_files(session, DS_SEVERE, day):
+        for fn in list_day_catalog_files(session, DS_SEVERE, day, timeout=catalog_timeout):
             out_dir = _day_out_dir(GRIDRAD_SEV_DIR, day)
             out_path = out_dir / fn
             url = _fileserver_url(DS_SEVERE, day, fn)
             items.append(DownloadItem(DS_SEVERE, day, fn, url, out_path))
 
     if hourly:
-        for fn in list_day_catalog_files(session, DS_HOURLY, day):
+        for fn in list_day_catalog_files(session, DS_HOURLY, day, timeout=catalog_timeout):
             out_dir = _day_out_dir(GRIDRAD_DIR, day)
             out_path = out_dir / fn
             url = _fileserver_url(DS_HOURLY, day, fn)
@@ -249,27 +376,133 @@ def plan_downloads_for_day(
     return items
 
 
-def _download_one(session: requests.Session, item: DownloadItem) -> tuple[DownloadItem, str]:
+def _download_one(
+    session: requests.Session,
+    item: DownloadItem,
+    *,
+    connect_timeout: float,
+    read_timeout: float,
+) -> tuple[DownloadItem, str]:
     """
     Download one file if needed. Returns (item, status_string).
+    Retries transient THREDDS errors and read timeouts (clears partial .tmp).
     """
     if item.out_path.exists() and item.out_path.stat().st_size > 0:
         return item, "skipped"
 
     item.out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = item.out_path.with_suffix(item.out_path.suffix + ".tmp")
-
+    timeout = (connect_timeout, read_timeout)
     params = _auth_params()
-    with session.get(item.url, params=params, stream=True, timeout=180) as r:
-        if r.status_code == 404:
-            return item, "missing"
-        r.raise_for_status()
-        with open(tmp, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    f.write(chunk)
+
+    for attempt in range(8):
+        try:
+            if tmp.exists():
+                tmp.unlink(missing_ok=True)
+            with session.get(item.url, params=params, stream=True, timeout=timeout) as r:
+                if r.status_code == 404:
+                    if tmp.exists():
+                        tmp.unlink(missing_ok=True)
+                    return item, "missing"
+                if r.status_code in (429, 500, 502, 503, 504):
+                    r.raise_for_status()
+                r.raise_for_status()
+                with open(tmp, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+            break
+        except requests.HTTPError as e:
+            if tmp.exists():
+                tmp.unlink(missing_ok=True)
+            if not _retryable_http_error(e) or attempt >= 7:
+                raise
+            _sleep_backoff(attempt)
+        except (requests.ConnectionError, requests.Timeout, ChunkedEncodingError):
+            if tmp.exists():
+                tmp.unlink(missing_ok=True)
+            if attempt >= 7:
+                raise
+            _sleep_backoff(attempt)
     tmp.replace(item.out_path)
     return item, "downloaded"
+
+
+def download_planned_items(
+    session: requests.Session,
+    planned: list[DownloadItem],
+    *,
+    connect_timeout: float,
+    read_timeout: float,
+    max_workers: int,
+) -> dict[str, int]:
+    """Download a list of items (typically one day). Returns count dict."""
+    downloaded = skipped = missing = errors = 0
+    w = max(1, int(max_workers))
+    if not planned:
+        return {
+            "downloaded": 0,
+            "skipped": 0,
+            "missing": 0,
+            "errors": 0,
+        }
+    with ThreadPoolExecutor(max_workers=w) as ex:
+        for item, status in ex.map(
+            lambda it: _download_one(
+                session,
+                it,
+                connect_timeout=connect_timeout,
+                read_timeout=read_timeout,
+            ),
+            planned,
+        ):
+            if status == "downloaded":
+                downloaded += 1
+            elif status == "skipped":
+                skipped += 1
+            elif status == "missing":
+                missing += 1
+            else:
+                errors += 1
+    return {
+        "downloaded": downloaded,
+        "skipped": skipped,
+        "missing": missing,
+        "errors": errors,
+    }
+
+
+def download_for_day(
+    session: requests.Session,
+    day: date,
+    *,
+    hourly: bool,
+    severe: bool,
+    catalog_timeout: tuple[float, float],
+    connect_timeout: float,
+    read_timeout: float,
+    max_workers: int,
+) -> dict[str, int]:
+    """
+    Plan and download all GridRad / GridRad-Severe files for one calendar day.
+
+    Intended for tight disk/memory budgets: call once per day, then run Stage 04c
+    for that day and optionally delete local NetCDF inputs.
+    """
+    planned = plan_downloads_for_day(
+        session,
+        day,
+        hourly=hourly,
+        severe=severe,
+        catalog_timeout=catalog_timeout,
+    )
+    return download_planned_items(
+        session,
+        planned,
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        max_workers=max_workers,
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -305,53 +538,109 @@ def main(argv: list[str] | None = None) -> None:
     log("  GridRad Download (RDA/GDEX) — Stage 04b")
     log(f"{'='*60}")
     log(f"  Period:   {d_start} → {d_end}")
-    log(f"  Workers:  {w}")
+    log(f"  Workers:  {w} (per-day download threads)")
+    log(f"  Schedule: {'legacy global plan' if args.plan_all_days_first else 'one day at a time'}")
     log(f"  Hourly:   {hourly} ({DS_HOURLY})  → {GRIDRAD_DIR}")
     log(f"  Severe:   {severe} ({DS_SEVERE})  → {GRIDRAD_SEV_DIR}")
     if os.environ.get("GDEX_TOKEN") or os.environ.get("GDEX_API_TOKEN"):
         log("  Auth:     GDEX token (env var)")
     else:
         log("  Auth:     requests default (supports ~/.netrc if configured)")
+    co = float(args.connect_timeout)
+    cr = float(args.read_timeout)
+    dr = float(args.download_read_timeout)
+    catalog_timeout = (co, cr)
+    log(f"  THREDDS:  {_rda_thredds_origin()}")
+    log(f"  Timeouts: connect={co:g}s  catalog_read={cr:g}s  download_read={dr:g}s")
 
     session = _request_session()
 
-    # Plan downloads by querying per-day catalogs.
-    planned: list[DownloadItem] = []
-    missing_days = 0
-    for day in iter_dates(d_start, d_end):
-        items = plan_downloads_for_day(session, day, hourly=hourly, severe=severe)
-        if not items:
-            missing_days += 1
-        planned.extend(items)
+    if args.plan_all_days_first:
+        planned: list[DownloadItem] = []
+        missing_days = 0
+        for day in iter_dates(d_start, d_end):
+            items = plan_downloads_for_day(
+                session,
+                day,
+                hourly=hourly,
+                severe=severe,
+                catalog_timeout=catalog_timeout,
+            )
+            if not items:
+                missing_days += 1
+            planned.extend(items)
 
-    log(f"\n  Planned files: {len(planned):,}  |  Days with empty catalogs: {missing_days:,}\n")
+        log(f"\n  Planned files: {len(planned):,}  |  Days with empty catalogs: {missing_days:,}\n")
 
-    if args.check_data or args.dry_run:
-        # Minimal presence summary.
-        have = 0
-        for it in planned:
-            if it.out_path.exists() and it.out_path.stat().st_size > 0:
-                have += 1
-        log(f"  Present locally: {have:,}/{len(planned):,}")
-        sys.exit(0)
+        if args.check_data or args.dry_run:
+            have = 0
+            for it in planned:
+                if it.out_path.exists() and it.out_path.stat().st_size > 0:
+                    have += 1
+            log(f"  Present locally: {have:,}/{len(planned):,}")
+            sys.exit(0)
 
-    downloaded = skipped = missing = errors = 0
-    with ThreadPoolExecutor(max_workers=w) as ex:
-        for item, status in ex.map(lambda it: _download_one(session, it), planned):
-            if status == "downloaded":
-                downloaded += 1
-            elif status == "skipped":
-                skipped += 1
-            elif status == "missing":
-                missing += 1
-            else:
-                errors += 1
+        stats = download_planned_items(
+            session,
+            planned,
+            connect_timeout=co,
+            read_timeout=dr,
+            max_workers=w,
+        )
+    else:
+        if args.check_data or args.dry_run:
+            planned_count = 0
+            missing_days = 0
+            have = 0
+            for day in iter_dates(d_start, d_end):
+                items = plan_downloads_for_day(
+                    session,
+                    day,
+                    hourly=hourly,
+                    severe=severe,
+                    catalog_timeout=catalog_timeout,
+                )
+                planned_count += len(items)
+                if not items:
+                    missing_days += 1
+                for it in items:
+                    if it.out_path.exists() and it.out_path.stat().st_size > 0:
+                        have += 1
+            log(
+                f"\n  One-day-at-a-time mode (dry check): {planned_count:,} file rows catalogued "
+                f"across {(d_end - d_start).days + 1:,} days  |  empty catalog days: {missing_days:,}\n"
+            )
+            log(f"  Present locally: {have:,}/{planned_count:,}")
+            sys.exit(0)
+
+        downloaded = skipped = missing = errors = 0
+        for day in iter_dates(d_start, d_end):
+            st = download_for_day(
+                session,
+                day,
+                hourly=hourly,
+                severe=severe,
+                catalog_timeout=catalog_timeout,
+                connect_timeout=co,
+                read_timeout=dr,
+                max_workers=w,
+            )
+            downloaded += st["downloaded"]
+            skipped += st["skipped"]
+            missing += st["missing"]
+            errors += st["errors"]
+        stats = {
+            "downloaded": downloaded,
+            "skipped": skipped,
+            "missing": missing,
+            "errors": errors,
+        }
 
     log(f"\n{'='*60}")
-    log(f"  Downloaded: {downloaded:,}")
-    log(f"  Skipped:    {skipped:,}")
-    log(f"  Missing:    {missing:,}")
-    log(f"  Errors:     {errors:,}")
+    log(f"  Downloaded: {stats['downloaded']:,}")
+    log(f"  Skipped:    {stats['skipped']:,}")
+    log(f"  Missing:    {stats['missing']:,}")
+    log(f"  Errors:     {stats['errors']:,}")
     log(f"{'='*60}\n")
 
 

@@ -4,18 +4,31 @@
 ==================================================================================
 Fills the 2012–2019 gap using GridRad NEXRAD composite reflectivity.
 
-This stage is compute-only. It assumes GridRad inputs already exist locally under:
+Inputs are read from:
 
 - `data/historical/gridrad/`
 - `data/historical/gridrad_severe/`
 
-Use Stage 04b (`scripts/04b_download_gridrad.py`) to retrieve those inputs from
-NCAR RDA/GDEX.
+**Default run shape (memory / disk):** days are processed **sequentially** (``--workers 1``).
+After each calendar day finishes (written, skipped, no-data, or error), local GridRad
+NetCDF trees for that day are removed unless you pass ``--keep-gridrad-inputs`` (useful
+for debugging).
+
+**Single-pass pipeline:** ``--with-04b-download`` runs Stage 04b’s per-day download
+immediately before processing each day, then deletes the staged NetCDFs (unless
+``--keep-gridrad-inputs``). With ``--workers 1`` this is strictly sequential. With
+``--workers N`` and ``N > 1``, up to ``N`` calendar days run in parallel worker
+processes (04b is loaded once per worker; each day uses a fresh HTTP session); tune
+``--04b-download-workers`` so ``N × download_workers`` stays within NCAR throttling guidance.
+
+Stage 04a (``era5_monthly_isotherms_conus.nc``) must exist before SHI computation.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import shutil
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -79,6 +92,9 @@ _era5_lats = None
 _era5_lons = None
 
 log = get_logger("04c_fill_gridrad_gap", LOG_ROOT).info
+
+# Populated in ProcessPool worker processes when using --with-04b-download with --workers > 1.
+_worker_04b_mod = None
 
 
 def load_era5_isotherms():
@@ -145,6 +161,15 @@ def _get_freezing_levels_climo(lat: float, month: int) -> tuple:
         if lo <= lat < hi:
             return h0, hm20
     return 3.5, 6.0
+
+
+def delete_gridrad_inputs_for_day(day: date) -> None:
+    """Remove local GridRad / GridRad-Severe NetCDF trees for one calendar day."""
+    ymd = day.strftime("%Y%m%d")
+    for base in (GRIDRAD_DIR, GRIDRAD_SEV):
+        d = base / f"{day.year}" / ymd
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def compute_shi_column(z_profile, heights_km, h_0c, h_m20c):
@@ -329,11 +354,43 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers",
         type=int,
-        default=4,
+        default=1,
         metavar="N",
-        help="Parallel worker processes across days (default: 4; use 1 for sequential)",
+        help="Parallel worker processes across days (default: 1; use 4+ only if RAM allows)",
+    )
+    parser.add_argument(
+        "--keep-gridrad-inputs",
+        action="store_true",
+        help="Do not delete local GridRad / GridRad-Severe NetCDF trees after each day.",
+    )
+    parser.add_argument(
+        "--with-04b-download",
+        action="store_true",
+        help=(
+            "For each day: run Stage 04b download, then process this day. "
+            "Compatible with --workers > 1 (each worker process uses its own session)."
+        ),
+    )
+    parser.add_argument(
+        "--04b-download-workers",
+        type=int,
+        default=1,
+        metavar="N",
+        dest="download_workers",
+        help="With --with-04b-download: parallel download threads per day (default: 1).",
     )
     return parser
+
+
+def _load_04b_module():
+    """Load Stage 04b without a package import path (matches run_pipeline subprocess style)."""
+    p = Path(__file__).resolve().parent / "04b_download_gridrad.py"
+    spec = importlib.util.spec_from_file_location("b04_gridrad_dl", p)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Cannot load 04b_download_gridrad.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def _process_day_worker(day: date) -> tuple[str, dict]:
@@ -341,6 +398,47 @@ def _process_day_worker(day: date) -> tuple[str, dict]:
         return day.strftime("%Y%m%d"), process_day(day)
     except Exception as e:
         return day.strftime("%Y%m%d"), {"files": 0, "error": str(e)}
+
+
+def _04c_pool_init_load_04b() -> None:
+    """ProcessPool initializer: load Stage 04b once per worker process."""
+    global _worker_04b_mod
+    _worker_04b_mod = _load_04b_module()
+
+
+def _run_one_day_download_then_process(
+    spec: tuple[date, bool, int],
+) -> tuple[str, dict]:
+    """
+    ProcessPool entry: ``(day, with_04b_download, download_workers)``.
+
+    With ``--workers > 1``, the pool initializer sets ``_worker_04b_mod`` so each
+    worker process loads 04b once. Each day still uses a fresh ``requests.Session``.
+    """
+    day, with_04b_download, download_workers = spec
+    ymd = day.strftime("%Y%m%d")
+    out_path = OUT_DIR / f"{day.year}" / f"mesh_{ymd}.tif"
+    try:
+        if with_04b_download and not out_path.exists():
+            b04 = _worker_04b_mod if _worker_04b_mod is not None else _load_04b_module()
+            sess = b04._request_session()
+            try:
+                cat_t = (30.0, 180.0)
+                b04.download_for_day(
+                    sess,
+                    day,
+                    hourly=True,
+                    severe=True,
+                    catalog_timeout=cat_t,
+                    connect_timeout=30.0,
+                    read_timeout=900.0,
+                    max_workers=max(1, int(download_workers)),
+                )
+            finally:
+                sess.close()
+        return ymd, process_day(day)
+    except Exception as e:
+        return ymd, {"files": 0, "error": str(e)}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -402,6 +500,8 @@ def main(argv: list[str] | None = None) -> None:
 
     log(f"  Period: {d_start} → {d_end}")
     log(f"  Workers: {args.workers} process(es) across days")
+    log(f"  With 04b: {args.with_04b_download}")
+    log(f"  Delete GridRad inputs after each day: {not args.keep_gridrad_inputs}")
 
     if args.check_data:
         log("\n  Checking data availability ...")
@@ -430,37 +530,40 @@ def main(argv: list[str] | None = None) -> None:
     log(f"\n  Processing {len(all_days):,} days ...\n")
 
     w = max(1, int(args.workers))
-    if w == 1:
-        iter_results = ((day.strftime("%Y%m%d"), process_day(day)) for day in all_days)
-        pool = None
-    else:
-        pool = ProcessPoolExecutor(max_workers=w)
-        iter_results = pool.map(_process_day_worker, all_days)
+    if args.with_04b_download and w > 1:
+        dw = max(1, int(args.download_workers))
+        est = w * dw
+        log(
+            "  NOTE: --with-04b-download with multiple day workers: each worker uses "
+            "its own HTTP session. Rough peak in-flight GETs ≈ "
+            f"(--workers) × (--04b-download-workers) = {w} × {dw} = {est}. "
+            "Stay within NCAR/GDEX throttling (often ≤10 concurrent streams per account)."
+        )
 
-    try:
-        for ymd, result in iter_results:
-            if result.get("skipped"):
-                skipped += 1
-                continue
-            if result.get("no_data"):
-                no_data += 1
-                continue
-            if result.get("error"):
-                log(f"    WARN: {ymd}: {result['error']}")
-                no_data += 1
-                continue
+    b04 = b_sess = None
+    if args.with_04b_download and w == 1:
+        b04 = _load_04b_module()
+        b_sess = b04._request_session()
 
+    def _finalize_day(day: date, ymd: str, result: dict) -> None:
+        nonlocal done, skipped, no_data, peak_mesh, sev_count, hr_count
+        if result.get("skipped"):
+            skipped += 1
+        elif result.get("no_data"):
+            no_data += 1
+        elif result.get("error"):
+            log(f"    WARN: {ymd}: {result['error']}")
+            no_data += 1
+        else:
             done += 1
             src = result.get("source", "")
             if "severe" in src:
                 sev_count += 1
             else:
                 hr_count += 1
-
             peak = result.get("peak_mesh75_mm", 0.0)
             peak_mesh = max(peak_mesh, peak)
             gridrad_days.append(ymd)
-
             if done % 30 == 0 or peak > 50:
                 elapsed = time.time() - t0
                 rate = done / elapsed if elapsed > 0 else 0
@@ -469,9 +572,52 @@ def main(argv: list[str] | None = None) -> None:
                     f"  [{ymd}] done={done:,}  src={src}  peak={peak:.0f}mm  "
                     f"ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}"
                 )
+        if not args.keep_gridrad_inputs:
+            delete_gridrad_inputs_for_day(day)
+
+    try:
+        if w == 1:
+            for day in all_days:
+                ymd = day.strftime("%Y%m%d")
+                out_path = OUT_DIR / f"{day.year}" / f"mesh_{ymd}.tif"
+                try:
+                    if args.with_04b_download and not out_path.exists():
+                        cat_t = (30.0, 180.0)
+                        b04.download_for_day(
+                            b_sess,
+                            day,
+                            hourly=True,
+                            severe=True,
+                            catalog_timeout=cat_t,
+                            connect_timeout=30.0,
+                            read_timeout=900.0,
+                            max_workers=max(1, int(args.download_workers)),
+                        )
+                    result = process_day(day)
+                except Exception as e:
+                    result = {"files": 0, "error": str(e)}
+                _finalize_day(day, ymd, result)
+        else:
+            if args.with_04b_download:
+                pool = ProcessPoolExecutor(
+                    max_workers=w,
+                    initializer=_04c_pool_init_load_04b,
+                )
+                specs = [
+                    (day, True, int(args.download_workers)) for day in all_days
+                ]
+                pairs = pool.map(_run_one_day_download_then_process, specs)
+            else:
+                pool = ProcessPoolExecutor(max_workers=w)
+                pairs = pool.map(_process_day_worker, all_days)
+            try:
+                for day, (ymd, result) in zip(all_days, pairs):
+                    _finalize_day(day, ymd, result)
+            finally:
+                pool.shutdown(cancel_futures=False)
     finally:
-        if pool is not None:
-            pool.shutdown(cancel_futures=False)
+        if b_sess is not None:
+            b_sess.close()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     with open(gridrad_days_file, "w") as f:

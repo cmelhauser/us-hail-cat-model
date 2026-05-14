@@ -6,7 +6,7 @@ from datetime import date
 def test_stage04b_download_gridrad_workers_default(load_script):
     s = load_script("04b_download_gridrad.py")
     p = s.build_arg_parser()
-    assert p.parse_args([]).workers == 4
+    assert p.parse_args([]).workers == 1
 
 
 def test_stage04b_download_gridrad_catalog_url_shape(load_script):
@@ -19,7 +19,7 @@ def test_stage04b_download_gridrad_catalog_url_shape(load_script):
     assert "201505" in url
 
     sev_url = s._catalog_url(s.DS_SEVERE, d)
-    assert "d841006" in sev_url or "d841006" in s.THREDDS_BASE_SEVERE
+    assert "d841006" in sev_url
     assert "2015" in sev_url
     assert "20150501" in sev_url
 
@@ -40,7 +40,7 @@ def test_stage04b_download_gridrad_list_day_catalog_files_hourly_filters_by_day(
         def __init__(self, text):
             self._text = text
 
-        def get(self, url, timeout=60):
+        def get(self, url, timeout=60, stream=False):
             return Resp(self._text)
 
     # Month catalog contains many datasets; only ones with 20150501 should be kept.
@@ -55,7 +55,7 @@ def test_stage04b_download_gridrad_list_day_catalog_files_hourly_filters_by_day(
 </catalog>
 """
     fs = FakeSession(xml)
-    out = s.list_day_catalog_files(fs, s.DS_HOURLY, date(2015, 5, 1))
+    out = s.list_day_catalog_files(fs, s.DS_HOURLY, date(2015, 5, 1), timeout=(10.0, 10.0))
     assert out == ["nexrad_3d_v4_2_20150501T000000Z.nc"]
 
 
@@ -74,7 +74,7 @@ def test_stage04b_download_gridrad_list_day_catalog_files_severe_uses_year_catal
         def __init__(self, mapping):
             self._mapping = mapping
 
-        def get(self, url, timeout=60):
+        def get(self, url, timeout=60, stream=False):
             return Resp(self._mapping[url])
 
     year_xml = """<?xml version="1.0" encoding="UTF-8"?>
@@ -93,12 +93,13 @@ def test_stage04b_download_gridrad_list_day_catalog_files_severe_uses_year_catal
 </catalog>
 """
     y = 2015
+    base = s._thredds_base_severe()
     mapping = {
-        f"{s.THREDDS_BASE_SEVERE}{y}/catalog.xml": year_xml,
-        f"{s.THREDDS_BASE_SEVERE}{y}/20150508/catalog.xml": day_xml,
+        f"{base}{y}/catalog.xml": year_xml,
+        f"{base}{y}/20150508/catalog.xml": day_xml,
     }
     fs = FakeSession(mapping)
-    out = s.list_day_catalog_files(fs, s.DS_SEVERE, date(2015, 5, 8))
+    out = s.list_day_catalog_files(fs, s.DS_SEVERE, date(2015, 5, 8), timeout=(10.0, 10.0))
     assert out == [
         "nexrad_3d_v4_2_20150508T120000Z.nc",
         "nexrad_3d_v4_2_20150508T120500Z.nc",

@@ -158,8 +158,10 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 **Re-run sequence once Stage 02 finishes:**
 ```bash
 .venv/bin/python run_pipeline.py --only 04a    # ERA5 isotherms
-.venv/bin/python run_pipeline.py --only 04b    # GridRad download (inputs)
-.venv/bin/python run_pipeline.py --only 04c    # GridRad gap-fill compute (2012–2019)
+# GridRad: use run_pipeline 04c only (streams 04b download inside 04c, 4 parallel days).
+.venv/bin/python run_pipeline.py --only 04c    # 04b auto-skipped; see docs/reproduce.md §4
+# Legacy full GridRad archive first: `run_pipeline.py --only 04b` then gap-fill with
+# `python scripts/04c_fill_gridrad_gap.py --workers N` (no --with-04b-download).
 .venv/bin/python run_pipeline.py --from 05 --skip-ml   # Re-run all remaining stages
 # After Stage 13 smoke passes (default n_years=1000), do the full 50k run:
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
@@ -174,7 +176,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 ## Immediate Next Priorities (in order)
 
 1. **Wait for Stage 01 to finish.** Do NOT re-run Stage 01 while it is active.
-2. **Run Stages 02, 04a, 04b** in order. (Stage 03 is already complete.)
+2. **Run Stages 02, 04a**, then **`run_pipeline.py --only 04c`** (streaming GridRad; 04b skipped). (Stage 03 is already complete.)
 3. **Re-run Stages 05–15** (`--from 05 --skip-ml`) against the full dataset.
 4. **Full 50,000-year stochastic catalog** — re-run Stage 13 after Stage 12 completes.
 5. **Regression tests** — freeze golden outputs; add checksum tests.

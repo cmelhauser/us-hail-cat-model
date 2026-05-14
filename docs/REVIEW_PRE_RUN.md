@@ -255,6 +255,7 @@ Before full execution:
 
 ```bash
 python -m py_compile run_pipeline.py scripts/*.py
+ruff check .
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
 python run_pipeline.py --dry-run
 ```

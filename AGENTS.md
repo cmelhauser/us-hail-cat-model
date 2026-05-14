@@ -106,8 +106,7 @@ python run_pipeline.py --only 01
 python run_pipeline.py --only 02
 python run_pipeline.py --only 03
 python run_pipeline.py --only 04a
-python run_pipeline.py --only 04b
-python run_pipeline.py --only 04c
+python run_pipeline.py --only 04c   # auto: --with-04b-download --workers 4; 04b skipped on full runs
 python run_pipeline.py --only 05 --skip-ml
 python run_pipeline.py --from 06 --skip-ml
 
@@ -129,6 +128,25 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 # Stage 02 is often run directly (MRMS); optional throughput flag:
 # python scripts/02_download_mrms_mesh.py --workers 8
 ```
+
+**GridRad via `run_pipeline.py`:** full runs (and resumes starting before **04b**)
+auto-**skip** standalone **04b** and run **04c** with **`--with-04b-download --workers 4`**
+(streaming download + four parallel days; per-day staging deleted by default). Use
+**`--only 04b`** or **`--from 04b`** for the legacy NCAR-only downloader.
+
+## Stages 04b / 04c (GridRad)
+
+- **04b** (`scripts/04b_download_gridrad.py`): default is **one calendar day at a time**
+  (plan + download per day). **`--plan-all-days-first`** restores the legacy global
+  plan-then-download flow. **`--workers`** defaults to **1** (parallel HTTP GETs *within*
+  the current day only; respect NCAR throttling guidance).
+- **04c** (`scripts/04c_fill_gridrad_gap.py`): default **`--workers 1`** (sequential days).
+  After each day finishes, **`delete_gridrad_inputs_for_day`** removes that day’s trees
+  under `data/historical/gridrad/` and `data/historical/gridrad_severe/` unless
+  **`--keep-gridrad-inputs`**. **`--with-04b-download`** chains **04b**’s
+  **`download_for_day`** before **`process_day`**; with **`--workers > 1`**, each worker
+  process uses its own HTTP session (04b is loaded once per worker via a pool
+  initializer; mind **`workers × --04b-download-workers`** vs NCAR throttling).
 
 ## Stage 01 Data Provenance
 
@@ -178,6 +196,7 @@ Before any full pipeline execution:
 
 ```bash
 python -m py_compile run_pipeline.py scripts/*.py
+ruff check .
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
 python run_pipeline.py --dry-run
 ```

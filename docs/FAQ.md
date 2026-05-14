@@ -48,7 +48,7 @@ The original MESH (Witt et al. 1998) was designed for warning support, not clima
 
 **Q: What is ERA5 used for?**
 
-Monthly ERA5 0°C and −20°C isotherm heights are used in Stage 04b to compute Severe Hail Index (SHI) from GridRad reflectivity profiles. They may also support optional environmental filtering in Stage 05. ERA5 is not used as a hazard input — it provides thermodynamic context.
+Monthly ERA5 0°C and −20°C isotherm heights are used in Stage 04c to compute Severe Hail Index (SHI) from GridRad reflectivity profiles. They may also support optional environmental filtering in Stage 05. ERA5 is not used as a hazard input — it provides thermodynamic context.
 
 ---
 
@@ -64,8 +64,8 @@ See `docs/technical_documentation.md` for per-stage implementation notes. In bri
 | 02 | Download MRMS MESH GRIB2, write daily GeoTIFFs |
 | 03 | Download SPC hail reports |
 | 04a | Download ERA5 isotherms |
-| 04b | Download GridRad / GridRad-Severe inputs (NCAR RDA/GDEX) |
-| 04c | Compute SHI/MESH75 from GridRad reflectivity + ERA5 |
+| 04b | Download GridRad / GridRad-Severe inputs (NCAR RDA/GDEX); default is one day at a time with `--workers 1` per day |
+| 04c | Compute SHI/MESH75 from GridRad reflectivity + ERA5; default sequential days; optional per-day input cleanup unless `--keep-gridrad-inputs` |
 | 05 | Calibrate all sources, apply environmental filter |
 | 06 | Validate corrected MESH vs SPC reports |
 | 07 | Build hail climatology (annual exceedance frequency) |
@@ -93,6 +93,7 @@ python run_pipeline.py --validate      # re-validate all outputs
 Always run the pre-run checks before a full execution:
 ```bash
 python -m py_compile run_pipeline.py scripts/*.py
+ruff check .
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
 python run_pipeline.py --dry-run
 ```
@@ -100,6 +101,10 @@ python run_pipeline.py --dry-run
 **Q: What is `--skip-ml` for?**
 
 Stage 05 has optional machine-learning components for conditional GridRad calibration (`gridrad_cqm_model.pkl`) and probabilistic environmental filtering (`hail_filter_model.pkl`). These artifacts may not exist on a fresh installation. `--skip-ml` forces Stage 05 to use deterministic quantile mapping and hard-threshold filtering. This is the recommended mode for first runs and for reproducible baselines.
+
+**Q: Stage 04c: what is the difference between `--workers` and `--04b-download-workers`?**
+
+On **`04c_fill_gridrad_gap.py`**, **`--workers`** is how many **calendar days** run in parallel (separate processes when `N > 1`). **`--04b-download-workers`** only applies with **`--with-04b-download`**: it parallelizes **HTTP GETs within one day’s** `download_for_day` call. For throttling, think **`04c_workers × 04b_download_workers`** (see `docs/reproduce.md` §5 table). Stage **04b**’s own **`--workers`** flag is unrelated—it only affects within-day GETs when you run **04b** as a standalone script.
 
 **Q: Why must Stage 13 be "sparse-safe"?**
 
