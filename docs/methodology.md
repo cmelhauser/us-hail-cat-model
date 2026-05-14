@@ -208,6 +208,8 @@ MRMS is not assumed identical to MYRORSS. Differences in processing chain, radar
 
 GridRad fills the gap between MYRORSS and operational MRMS. Stage 04b downloads GridRad / GridRad-Severe inputs from NCAR RDA/GDEX. Stage 04c computes Severe Hail Index (SHI) from three-dimensional radar reflectivity and ERA5 isotherm fields, then converts SHI to MESH75. GridRad-Severe is preferred where available because higher temporal sampling better resolves short-lived hail cores.
 
+In production-oriented runs, **04b** defaults to planning and downloading **one calendar day at a time** (with optional parallel GETs *within* that day), and **04c** defaults to **sequential** day processing. Unless **`--keep-gridrad-inputs`** is set, **04c** deletes the staged NetCDF trees for each day after that day completes, so `data/historical/gridrad/` and `data/historical/gridrad_severe/` may hold only a short-lived working set rather than a full multi-year archive. **`--with-04b-download`** on **04c** performs the per-day download immediately before gap-fill for the same day, which minimizes peak local GridRad storage; **`--workers > 1`** on **04c** is allowed with **`--with-04b-download`** (separate worker processes and sessions), subject to NCAR connection limits.
+
 GridRad-derived hail estimates are treated as a gap-fill source, not as automatically homogeneous with MYRORSS or MRMS. The model therefore applies source-specific calibration and requires transition diagnostics.
 
 ### 3.4 ERA5 environmental fields

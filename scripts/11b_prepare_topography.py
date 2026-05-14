@@ -134,16 +134,15 @@ def build_model_grid_dem(source_path: Path = SOURCE_TIF, out_path: Path = ELEVAT
     transform = target_transform()
 
     log("  Resampling DEM to 0.05° model grid ...")
-    with rasterio.open(source_path) as src:
-        with WarpedVRT(
-            src,
-            crs=CRS,
-            transform=transform,
-            width=NCOLS,
-            height=NROWS,
-            resampling=Resampling.average,
-        ) as vrt:
-            elev = vrt.read(1, out_shape=(NROWS, NCOLS)).astype(np.float32)
+    with rasterio.open(source_path) as src, WarpedVRT(
+        src,
+        crs=CRS,
+        transform=transform,
+        width=NCOLS,
+        height=NROWS,
+        resampling=Resampling.average,
+    ) as vrt:
+        elev = vrt.read(1, out_shape=(NROWS, NCOLS)).astype(np.float32)
 
     elev = sanitize_elevation_m(elev)
 

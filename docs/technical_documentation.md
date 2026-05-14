@@ -204,50 +204,124 @@ Stage 04a prepares monthly thermodynamic context for GridRad SHI computation and
 
 ---
 
-## 7. Stage 04b - GridRad Download (NCAR RDA/GDEX)
+## 7. Stage 04b — GridRad download (NCAR RDA / THREDDS)
 
 **Script:** `scripts/04b_download_gridrad.py`  
-**Input:** NCAR RDA/GDEX GridRad datasets (authenticated download)
-**Output:** local NetCDF inputs under `data/historical/gridrad/` and `data/historical/gridrad_severe/`
+**Input:** NCAR RDA THREDDS catalogs + `fileServer` URLs (GridRad **d841000** hourly, GridRad-Severe **d841006** 5-minute). Optional `GDEX_TOKEN` / `GDEX_API_TOKEN` or `~/.netrc` for authenticated GETs.  
+**Output:** NetCDF files under:
 
-This stage retrieves the GridRad inputs used by the compute stage. It supports bounded concurrency via `--workers` and is resumable (skips existing files).
+```text
+data/historical/gridrad/YYYY/YYYYMMDD/*.nc
+data/historical/gridrad_severe/YYYY/YYYYMMDD/*.nc
+```
+
+### 7.1 Default schedule (disk- and memory-friendly)
+
+By default the script **does not** build one giant download list for the whole
+2012–01–01 … 2020–10–13 range. Instead, for **each calendar day** it:
+
+1. Queries THREDDS for that day’s filenames (month catalog for hourly; year + day catalog for severe).
+2. Downloads only that day’s files (resumable: existing non-empty `.nc` files are skipped).
+
+This caps the in-memory plan to **one day’s file list** and avoids holding hundreds of thousands of `DownloadItem` rows at once.
+
+### 7.2 Concurrency and legacy mode
+
+- **`--workers` (default `1`):** number of **parallel HTTP streams within a single day’s** download batch. NCAR guidance: keep total concurrent streams **≤ 10** across anything you run in parallel.
+- **`--plan-all-days-first`:** restores the legacy workflow (catalog **all** days into one list, then download). Use only if you intentionally want that higher peak RAM footprint.
+
+### 7.3 Reliability and tuning
+
+- HTTP **retries / backoff** for transient 5xx, timeouts, and chunked read issues.
+- **`--connect-timeout`**, **`--read-timeout`** (catalog XML), **`--download-read-timeout`** (NetCDF streams).
+- Optional **`RDA_THREDDS_ORIGIN`** if NCAR ever documents an alternate THREDDS host with the same path layout.
+
+### 7.4 Public helpers (for Stage 04c)
+
+- **`download_for_day(...)`** — plan + download all files for one `date`.
+- **`download_planned_items(...)`** — download a pre-built list (used internally).
 
 ---
 
-## 8. Stage 04c - GridRad Gap Fill
+## 8. Stage 04c — GridRad gap fill (SHI → MESH75)
 
 **Script:** `scripts/04c_fill_gridrad_gap.py`  
-**Input:** GridRad or GridRad-Severe NetCDF files plus ERA5 isotherms
-**Output:** daily MESH75 GeoTIFFs and `gridrad_days.txt`
+**Input:** GridRad or GridRad-Severe NetCDF files on disk **and/or** live downloads when `--with-04b-download` is set; plus `data/historical/era5/era5_monthly_isotherms_conus.nc` from Stage 04a (or climatological fallback if missing).  
+**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif` for gap days and `data/historical/mesh_0.05deg/gridrad_days.txt`.
 
-### 8.1 Technical behavior
+### 8.1 Default run shape (disk- and memory-friendly)
 
-1. Locate GridRad-Severe where available; otherwise fall back to hourly GridRad.
-2. Load three-dimensional reflectivity profiles.
-3. Identify active columns above reflectivity threshold.
-4. Integrate Severe Hail Index above the freezing level and through the hail-growth layer.
-5. Convert SHI to MESH75:
+1. **Sequential calendar days by default:** `--workers` defaults to **`1`** (one Python process; no `ProcessPoolExecutor` fan-out). Increase only if you have RAM headroom and want parallel days.
+2. **Per-day NetCDF handling:** each file is opened, processed column-by-column, and closed before the next file; the daily accumulator is a single **520×1180** `float32` array (same order of magnitude as other daily stages).
+3. **Automatic cleanup of GridRad staging:** after **each** calendar day is handled (whether the GeoTIFF was written, skipped because it already existed, marked no-data, or ended in error), the directories  
+   `data/historical/gridrad/YYYY/YYYYMMDD/` and `data/historical/gridrad_severe/YYYY/YYYYMMDD/`  
+   are removed with `shutil.rmtree` **unless** you pass **`--keep-gridrad-inputs`**.  
+   - **Why:** keeps the GridRad tree from occupying a full multi-year archive on disk when you only need the derived `mesh_*.tif` products.  
+   - **Re-runs / debugging:** pass **`--keep-gridrad-inputs`** so NetCDF inputs remain for inspection or so you can re-run 04c without re-downloading.
 
-```text
-MESH75 = 15.096 * SHI^0.206
+### 8.2 Single-pass download + gap fill
+
+```bash
+python scripts/04c_fill_gridrad_gap.py --with-04b-download
 ```
 
-6. Accumulate daily maximum MESH75.
-7. Apply the shared hail-value QA guard: finite, non-negative, and no larger
-   than 300.0 mm.
-8. Write daily GeoTIFFs on the common grid.
-9. Optionally parallelize across calendar days with `--workers N` (process-based).
+**`run_pipeline.py`:** when it runs stage **04c** (not in **`--validate`** mode), it
+passes **`--with-04b-download --workers 4`** by default. It also **auto-skips
+standalone stage 04b** on full runs and on **`--from`** resumes that start before
+**04b**, so GridRad is not staged twice. Use **`python run_pipeline.py --only 04b`**
+or **`--from 04b`** for the legacy NCAR-only downloader.
 
-### 8.2 Scientific notes
+This loads Stage **04b** in-process. With **`--workers 1`**, the parent holds one
+`requests.Session` for all days. With **`--workers N`** and **`N > 1`**, worker
+processes use a pool initializer so **04b** is loaded **once per worker** (not once
+per day); each calendar day still opens a **new** `requests.Session`, runs
+**`download_for_day`** when the output GeoTIFF is absent, then **`process_day`**.
+Expect roughly **`N × (--04b-download-workers)`** peak concurrent HTTP GETs unless
+downloads skip quickly—stay within NCAR/GDEX throttling.
+
+#### Quick reference (mental model)
+
+| Goal | Typical pattern |
+|---|---|
+| Parallel **gap-fill only** (inputs already downloaded) | `04c` with `--workers N` and **no** `--with-04b-download` |
+| One calendar day at a time; maximize **within-day** download concurrency | `04c --workers 1 --with-04b-download --04b-download-workers M` |
+| Many calendar days at once; each day may **download then process** | `04c --workers N --with-04b-download` — watch **`N × M`** against NCAR/GDEX limits |
+| Keep a full local GridRad tree between stages | Run **`04b`** then **`04c`** separately; use **`--keep-gridrad-inputs`** on **04c** if you need to retain trees after each day |
+
+On **04c**, **`--workers`** counts **processes across days**. **`--04b-download-workers`**
+counts **parallel GETs inside** `download_for_day` for the day assigned to that process.
+They multiply for throttling purposes. Stage **04b**’s own CLI **`--workers`** is
+unrelated: it only parallelizes GETs **within** each day when you run **04b** as its
+own stage.
+
+### 8.3 Technical behavior (per day)
+
+1. Prefer GridRad-Severe when files exist; else hourly GridRad.
+2. Load 3-D reflectivity; find columns above threshold.
+3. Integrate SHI (Witt et al. 1998) using ERA5 0 °C / −20 °C heights from Stage 04a when available.
+4. Convert SHI → MESH75: `MESH75 = 15.096 * SHI^0.206` (2021 corrigendum coefficients).
+5. Take daily maxima on the canonical 0.05° grid; apply shared `MAX_HAIL_MM` QA via `sanitize_hail_values`.
+6. Write GeoTIFF; append `YYYYMMDD` to `gridrad_days.txt` when the day produced data.
+
+### 8.4 Parallel days (`--workers` > 1)
+
+Optional **process-based** parallelism across days. **`--with-04b-download`** is
+allowed with **`--workers > 1`**: each worker runs download-then-process for its
+assigned days (separate calendar days, separate on-disk trees). **Do not** set
+`workers × 04b-download-workers` so high that NCAR rate limits trigger. When
+`workers > 1`, **deletion of GridRad inputs** still runs in the **parent** process
+after each worker result returns.
+
+### 8.5 Scientific notes
 
 GridRad is a gap-fill source. It should not be assumed exchangeable with MYRORSS or MRMS before calibration. Differences in temporal sampling, reflectivity processing, and vertical structure can affect high-percentile hail estimates.
 
-### 8.3 Validation
+### 8.6 Validation
 
-- GridRad day list exists.
-- Output rasters exist for available days.
+- `gridrad_days.txt` exists after a successful run.
+- Output rasters exist for processed days.
 - Peak values fall within plausible hail-size bounds.
-- ERA5 fallback usage is logged.
+- ERA5 fallback usage is logged if isotherms are missing.
 - Source-era distribution checks are available downstream.
 
 ---
@@ -258,7 +332,7 @@ GridRad is a gap-fill source. It should not be assumed exchangeable with MYRORSS
 **Input:** raw daily MESH rasters
 **Output:** corrected daily MESH75 rasters
 
-### 8.1 Required logic
+### 9.1 Required logic
 
 For MYRORSS and MRMS:
 
@@ -284,18 +358,18 @@ else:
     apply deterministic environmental filters
 ```
 
-### 8.2 Optional artifacts
+### 9.2 Optional artifacts
 
 ```text
 data/analysis/calibration/gridrad_cqm_model.pkl
 data/analysis/calibration/hail_filter_model.pkl
 ```
 
-### 8.3 Hard requirement
+### 9.3 Hard requirement
 
 Stage 05 must run successfully without optional artifacts. The `--skip-ml` flag must force deterministic behavior.
 
-### 8.4 Validation
+### 9.4 Validation
 
 - Corrected rasters exist.
 - Output count is close to input count after expected date filters.
@@ -307,12 +381,12 @@ Stage 05 must run successfully without optional artifacts. The `--skip-ml` flag 
 
 ---
 
-## 9. Stage 06 - Validation Against SPC
+## 10. Stage 06 - Validation Against SPC
 
 **Script:** `scripts/06_validate_mesh_vs_spc.py`  
 **Output directory:** `data/historical/validation/`
 
-### 9.1 Required outputs
+### 10.1 Required outputs
 
 ```text
 mesh_vs_spc_pairs.csv
@@ -321,18 +395,18 @@ spatial_bias_1deg.csv
 validation_summary.txt
 ```
 
-### 9.2 Required figures
+### 10.2 Required figures
 
 ```text
 docs/figures/analysis/mesh_vs_spc_scatter.png
 docs/figures/analysis/detection_by_size.png
 ```
 
-### 9.3 Interpretation
+### 10.3 Interpretation
 
 SPC validation is a consistency exercise, not a perfect error calculation. False-alarm and miss metrics should be labelled as proxies because either the radar field or the report record can be incomplete at a given time and location.
 
-### 9.4 Validation
+### 10.4 Validation
 
 - Pairing logic uses documented spatial and temporal tolerances.
 - Report-size bins are stable.
@@ -341,12 +415,12 @@ SPC validation is a consistency exercise, not a perfect error calculation. False
 
 ---
 
-## 10. Stage 07 - Climatology
+## 11. Stage 07 - Climatology
 
 **Script:** `scripts/07_build_hail_climo.py`  
 **Output:** `data/historical/mesh_0.05deg_climo/`
 
-### 10.1 Required outputs
+### 11.1 Required outputs
 
 ```text
 climo_001.tif ... climo_366.tif
@@ -354,13 +428,13 @@ annual_mean_mesh75.tif
 annual_hail_days.tif
 ```
 
-### 10.2 Technical behavior
+### 11.2 Technical behavior
 
 Stage 07 averages corrected daily MESH75 by day-of-year across available years. Zeros remain in the average because the output is expected daily hazard activity, not size conditional on hail occurrence.
 
 Stage 07 supports bounded concurrency via `--workers N` (threaded per-DOY raster reads). Use `--workers 1` for strictly sequential behavior.
 
-### 10.3 Validation
+### 11.3 Validation
 
 - 366 climatology files exist.
 - Annual summaries exist.
@@ -370,19 +444,19 @@ Stage 07 supports bounded concurrency via `--workers N` (threaded per-DOY raster
 
 ---
 
-## 11. Stage 08 - Event Catalog
+## 12. Stage 08 - Event Catalog
 
 **Script:** `scripts/08_build_event_catalog.py`  
 **Output:** `data/historical/events/`
 
-### 11.1 Required outputs
+### 12.1 Required outputs
 
 ```text
 event_catalog.csv
 event_peaks.npz
 ```
 
-### 11.2 Event grouping constraints
+### 12.2 Event grouping constraints
 
 ```text
 temporal gap <= 2 days
@@ -392,7 +466,7 @@ centroid displacement <= configured limit
 peak intensity jump <= configured limit
 ```
 
-### 11.3 Sparse storage requirement
+### 12.3 Sparse storage requirement
 
 `event_peaks.npz` stores event arrays by event ID:
 
@@ -404,7 +478,7 @@ vals_<event_id>
 
 Dense event cubes are prohibited as production event storage. They are memory-inefficient and can make Stage 13 infeasible at full catalog length.
 
-### 11.4 Validation
+### 12.4 Validation
 
 - CSV exists and has events.
 - NPZ exists and event IDs align with CSV.
@@ -416,12 +490,12 @@ Dense event cubes are prohibited as production event storage. They are memory-in
 
 ---
 
-## 12. Stage 09 - Regional CDF Fitting
+## 13. Stage 09 - Regional CDF Fitting
 
 **Script:** `scripts/09_fit_cdf_regional.py`  
 **Output:** `data/analysis/cdf/`
 
-### 12.1 Required outputs
+### 13.1 Required outputs
 
 ```text
 cdf_parameters.npz
@@ -432,7 +506,7 @@ threshold_selection.csv
 mrl_diagnostics/
 ```
 
-### 12.2 Statistical model
+### 13.2 Statistical model
 
 At each grid cell, annual maxima are modeled as a zero-inflated positive distribution:
 
@@ -450,7 +524,7 @@ estimate regional xi
 estimate cell-specific scale where possible
 ```
 
-### 12.3 Threshold diagnostics
+### 13.3 Threshold diagnostics
 
 `threshold_selection.csv` should contain:
 
@@ -468,7 +542,7 @@ selected
 
 Threshold selection is a model-risk control. Long return-period maps should not be interpreted without reviewing these diagnostics.
 
-### 12.4 Validation
+### 13.4 Validation
 
 - Parameter arrays exist.
 - Return-period maps exist.
@@ -479,20 +553,20 @@ Threshold selection is a model-risk control. Long return-period maps should not 
 
 ---
 
-## 13. Stage 10 - Spatially Pooled CDF
+## 14. Stage 10 - Spatially Pooled CDF
 
 **Script:** `scripts/10_build_smooth_cdf.py`  
 **Output:** smoothed return-period maps
 
-### 13.1 Technical behavior
+### 14.1 Technical behavior
 
 Stage 10 pools nearby annual maxima or fitted parameters within a configured radius and applies distance-decay weights. The goal is to reduce noisy cell-level artifacts while preserving broad hail corridors.
 
-### 13.2 Methodological caution
+### 14.2 Methodological caution
 
 Spatial smoothing is not a full spatial extremes model. It improves marginal maps but does not estimate extremal dependence. Aggregate risk and multi-cell joint exceedance behavior must be checked through event-based stochastic outputs.
 
-### 13.3 Validation
+### 14.3 Validation
 
 - Smoothed return-period maps exist.
 - `p_occurrence_smooth.tif` exists.
@@ -502,11 +576,11 @@ Spatial smoothing is not a full spatial extremes model. It improves marginal map
 
 ---
 
-## 14. Stage 11 - Occurrence Probabilities
+## 15. Stage 11 - Occurrence Probabilities
 
 **Script:** `scripts/11_build_occurrence_probs.py`
 
-### 14.1 Outputs
+### 15.1 Outputs
 
 ```text
 p_occ_0p25in.tif
@@ -519,7 +593,7 @@ p_occ_4p00in.tif
 p_occ_5p00in.tif
 ```
 
-### 14.2 Validation
+### 15.2 Validation
 
 - Values are in `[0, 1]`.
 - Higher thresholds have lower or equal probability than lower thresholds.
@@ -528,7 +602,7 @@ p_occ_5p00in.tif
 
 ---
 
-## 15. Stage 11b - Public DEM Preparation
+## 16. Stage 11b - Public DEM Preparation
 
 **Script:** `scripts/11b_prepare_topography.py`
 
@@ -540,7 +614,7 @@ small enough for a reproducible pipeline stage.
 
 **Source DOI:** https://doi.org/10.25921/fd45-gt74
 
-### 15.1 Outputs
+### 16.1 Outputs
 
 ```text
 data/analysis/topography/source/ETOPO_2022_v1_60s_N90W180_surface.tif
@@ -551,7 +625,7 @@ Negative ocean elevations are clipped to 0 m because Stage 12 uses the raster
 only for land topographic correction. The output GeoTIFF stores source URL, DOI,
 reference, and processing metadata tags.
 
-### 15.2 Validation
+### 16.2 Validation
 
 - Raster shape matches the canonical model grid.
 - CRS is EPSG:4326.
@@ -560,11 +634,11 @@ reference, and processing metadata tags.
 
 ---
 
-## 16. Stage 12 - CONUS Mask and Topographic Correction
+## 17. Stage 12 - CONUS Mask and Topographic Correction
 
 **Script:** `scripts/12_apply_conus_mask.py`
 
-### 16.1 Outputs
+### 17.1 Outputs
 
 ```text
 data/analysis/conus_mask/conus_mask.tif
@@ -572,7 +646,7 @@ data/analysis/topography/elevation_0.05deg.tif
 data/analysis/topography/topo_correction.tif
 ```
 
-### 16.2 v2.1 correction
+### 17.2 v2.1 correction
 
 Preferred:
 
@@ -588,7 +662,7 @@ factor = 1 + 0.05 * elevation_km
 factor = clip(factor, 1.0, 1.20)
 ```
 
-### 15.3 Validation
+### 17.3 Validation
 
 - Mask exists.
 - Correction factor is within configured bounds.
@@ -600,11 +674,11 @@ Stage 12 supports bounded concurrency via `--workers N` when applying the mask t
 
 ---
 
-## 16. Stage 13 - Stochastic Catalog
+## 18. Stage 13 - Stochastic Catalog
 
 **Script:** `scripts/13_generate_stochastic_catalog.py`
 
-### 16.1 Outputs
+### 18.1 Outputs
 
 ```text
 data/stochastic/catalog/stochastic_event_summary.parquet
@@ -613,7 +687,7 @@ data/stochastic/pet/pet_occurrence.csv
 data/stochastic/pet/pet_aggregate.csv
 ```
 
-### 16.2 Critical implementation rule
+### 18.2 Critical implementation rule
 
 Do not reconstruct the event catalog as dense event rasters. The stochastic loop operates on:
 
@@ -621,7 +695,7 @@ Do not reconstruct the event catalog as dense event rasters. The stochastic loop
 rows, cols, vals
 ```
 
-### 16.3 Stochastic steps
+### 18.3 Stochastic steps
 
 1. Draw annual event count from `Poisson(lambda)`.
 2. Draw event date from the smoothed seasonal distribution.
@@ -633,7 +707,7 @@ rows, cols, vals
 8. Update compact annual maxima.
 9. Write empirical return-period maps and PET tables.
 
-### 16.4 Validation
+### 18.4 Validation
 
 - Smoke test with `--n-years 1000`.
 - Full catalog run completes without memory blowup.
@@ -644,22 +718,22 @@ rows, cols, vals
 
 ---
 
-## 17. Stage 14 - Vulnerability
+## 19. Stage 14 - Vulnerability
 
 **Script:** `scripts/14_build_vulnerability.py`
 
-### 17.1 Outputs
+### 19.1 Outputs
 
 ```text
 mdr_curves.csv
 mdr_parameters.npz
 ```
 
-### 17.2 Important caveat
+### 19.2 Important caveat
 
 These curves are placeholders. They are suitable for pipeline integration and demonstration, but they are not production loss curves and should not be used for financial decisions without claims calibration.
 
-### 17.3 Validation
+### 19.3 Validation
 
 - Curves are monotonic with hail size.
 - Mean damage ratios remain in `[0, 1]`.
@@ -667,11 +741,11 @@ These curves are placeholders. They are suitable for pipeline integration and de
 
 ---
 
-## 18. Stage 15 - Figures
+## 20. Stage 15 - Figures
 
 **Script:** `scripts/15_render_figures.py`
 
-### 18.1 Output directories
+### 20.1 Output directories
 
 ```text
 docs/figures/historical/
@@ -679,7 +753,7 @@ docs/figures/stochastic/
 docs/figures/analysis/
 ```
 
-### 18.2 Required categories
+### 20.2 Required categories
 
 - analytical return-period maps;
 - stochastic return-period maps;
@@ -690,7 +764,7 @@ docs/figures/analysis/
 - vulnerability curves;
 - GPD and tail diagnostics.
 
-### 18.3 Figure QA
+### 20.3 Figure QA
 
 Figures are scientific diagnostics, not decoration. Review for:
 
@@ -704,7 +778,7 @@ Figures are scientific diagnostics, not decoration. Review for:
 
 ---
 
-## 19. Validation Commands
+## 21. Validation Commands
 
 Before a full run:
 
@@ -724,7 +798,7 @@ Stage-specific validation commands should be run before advancing after any fail
 
 ---
 
-## 20. Run Manifest
+## 22. Run Manifest
 
 Recommended manifest path:
 
@@ -751,7 +825,7 @@ The run manifest should be considered part of reproducibility, but generated man
 
 ---
 
-## 21. Pre-Run Hardening Summary
+## 23. Pre-Run Hardening Summary
 
 The v2.1 hardening pass emphasizes:
 
@@ -766,7 +840,7 @@ The v2.1 hardening pass emphasizes:
 
 ---
 
-## 22. Failure Handling
+## 24. Failure Handling
 
 If a stage fails:
 
@@ -781,7 +855,7 @@ Never infer success from file existence alone. Use validation checks, logs, mani
 
 ---
 
-## 23. References
+## 25. References
 
 This section lists the technical and scientific references that define the pipeline's data formats, gridded processing assumptions, radar products, statistical machinery, and reproducibility expectations.
 
