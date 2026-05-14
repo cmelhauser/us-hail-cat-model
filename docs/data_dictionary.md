@@ -66,6 +66,17 @@ List of dates whose daily raster was generated from GridRad or GridRad-Severe.
 | Format | one `YYYYMMDD` date per line |
 | Used by | Stage 05 source-specific calibration |
 
+### `data/historical/gridrad/` and `data/historical/gridrad_severe/`
+
+Staging directories for GridRad / GridRad-Severe NetCDF trees downloaded in Stage **04b**
+(or by **04c** when run with **`--with-04b-download`**).
+
+| Attribute | Value |
+|---|---|
+| Type | nested directories by calendar day |
+| Ephemeral by default | After Stage **04c** processes a day, both trees for that `YYYYMMDD` are deleted unless **`--keep-gridrad-inputs`** is passed |
+| Meaning | Not a required long-term archive path in the default pipeline; keep inputs only when debugging or reprocessing without re-downloading |
+
 ### `data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif`
 
 Bias-corrected and filtered MESH75 raster.

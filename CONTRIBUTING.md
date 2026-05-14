@@ -98,6 +98,12 @@ The project uses `pytest`. Run the full suite from the repo root:
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
 ```
 
+Lint (from repo root; `scripts/archive/` is excluded in `pyproject.toml`):
+
+```bash
+ruff check .
+```
+
 Run with coverage:
 
 ```bash

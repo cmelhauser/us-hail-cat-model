@@ -66,11 +66,17 @@ running; after it completes, continue with:
 ```bash
 .venv/bin/python run_pipeline.py --only 03
 .venv/bin/python run_pipeline.py --only 04a
-.venv/bin/python run_pipeline.py --only 04b
 .venv/bin/python run_pipeline.py --only 04c
 .venv/bin/python run_pipeline.py --only 05 --skip-ml
 .venv/bin/python run_pipeline.py --from 06 --skip-ml
 ```
+
+**`run_pipeline.py` GridRad:** stage **04c** is run with **`--with-04b-download --workers 4`**
+(per-day staging removed after each day by default). Standalone **04b** is **auto-skipped**
+when **04c** is in the plan (full run or resume before **04b**). Use **`--only 04b`** /
+**`--from 04b`** for the legacy downloader. See **`docs/reproduce.md` §4–§5** for the
+mental model and direct **`scripts/04c_fill_gridrad_gap.py`** usage when NetCDFs
+are already on disk.
 
 Stage 11b is included in `--from 06`; it downloads NOAA/NCEI ETOPO 2022
 surface elevation and writes `data/analysis/topography/elevation_0.05deg.tif`

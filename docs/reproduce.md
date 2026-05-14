@@ -89,7 +89,7 @@ python run_pipeline.py --only 01
 python run_pipeline.py --only 02
 python run_pipeline.py --only 03
 python run_pipeline.py --only 04a
-python run_pipeline.py --only 04b
+# GridRad: run_pipeline skips 04b and streams downloads inside 04c (see paragraph below).
 python run_pipeline.py --only 04c
 python run_pipeline.py --only 05 --skip-ml
 python run_pipeline.py --only 06
@@ -104,6 +104,16 @@ python run_pipeline.py --only 13
 python run_pipeline.py --only 14
 python run_pipeline.py --only 15
 ```
+
+**`run_pipeline.py` and GridRad:** on a default full run (and on resumes that start
+before stage **04b**), the runner **auto-skips stage 04b** whenever **04c** is in the
+plan and calls **04c** with **`--with-04b-download --workers 4`** (per-day download,
+four calendar days in parallel; GridRad staging removed after each day by default).
+Use **`python run_pipeline.py --only 04b`** or **`--from 04b`** for the legacy standalone
+NCAR downloader. If you already populated **`gridrad/`** with **04b**, gap-fill from
+disk without redundant downloads via **`python scripts/04c_fill_gridrad_gap.py --workers N`**
+without **`--with-04b-download`** — **`run_pipeline.py --only 04c`** always passes
+**`--with-04b-download`**.
 
 After Stage 01, inspect the MYRORSS source manifest before continuing:
 
@@ -138,10 +148,39 @@ python run_pipeline.py --skip 14,15
 
 ## 5. Stage 04b/04c GridRad Setup
 
-Stage 04c computes the GridRad gap-fill, but it does not download GridRad files.
-Stage 04b downloads the required NetCDF inputs from NCAR RDA/GDEX.
+By default, **04b** plans and downloads **one calendar day at a time** (lower peak RAM
+and a smaller in-flight download plan than the legacy global planner). Use
+`--plan-all-days-first` only if you need the old “catalog everything, then download”
+schedule. Per-day download threads default to **`--workers 1`**; raise cautiously (NCAR
+asks for ≤10 concurrent streams total).
 
-GridRad files are stored under:
+**04c** processes days **sequentially by default** (`--workers 1`). After each day’s
+run finishes (output written, skipped, no-data, or error), local GridRad NetCDF trees
+for that calendar day are **removed** unless you pass **`--keep-gridrad-inputs`**.
+
+**Single-pass (tight disk):** chain 04b’s per-day download inside 04c. With default
+**`--workers 1`**, days are strictly sequential. You may set **`--workers N`** with
+**`N > 1`** for parallel calendar days (each worker has its own session); keep
+**`N × --04b-download-workers`** within NCAR throttling guidance.
+
+**Mental model (04b vs 04c workers):** `--workers` on **04c** is the number of **parallel
+calendar days** (separate processes when `N > 1`). **`--04b-download-workers`** applies
+only with **`--with-04b-download`**: it is **within-day** parallel HTTP GETs for that
+day’s NetCDF pulls. Rough peak in-flight downloads scale as **`04c_workers × 04b_download_workers`**
+(before skips). Stage **04b** alone uses its own `--workers` for within-day GETs only.
+
+| What you want | Command pattern |
+|---|---|
+| Gap-fill only; GridRad files already on disk | `python scripts/04c_fill_gridrad_gap.py --workers N` (no `--with-04b-download`) |
+| Download + gap-fill; one day at a time, max within-day download speed | `--workers 1 --with-04b-download --04b-download-workers M` |
+| Download + gap-fill; many days at once | `--workers N --with-04b-download` (keep `N × M` within NCAR limits; often ≤10 concurrent streams) |
+| Two-stage pipeline (full 04b archive, then 04c) | `run_pipeline.py --only 04b` then **`python scripts/04c_fill_gridrad_gap.py --workers N`** without `--with-04b-download` (``run_pipeline.py --only 04c`` always streams downloads) |
+
+```bash
+python scripts/04c_fill_gridrad_gap.py --with-04b-download
+```
+
+GridRad files are staged under (and deleted from, unless `--keep-gridrad-inputs`):
 
 ```text
 data/historical/gridrad/
@@ -160,13 +199,15 @@ Download (Stage 04b):
 python run_pipeline.py --only 04b
 ```
 
-Gap-fill compute (Stage 04c):
+Gap-fill compute (Stage 04c via **`run_pipeline.py`**):
 
 ```bash
 python run_pipeline.py --only 04c
 ```
 
----
+This invokes **`04c_fill_gridrad_gap.py`** with **`--with-04b-download --workers 4`**
+by default (see §4). To gap-fill from an existing **`gridrad/`** tree without embedded
+download, call the script directly (for example **`python scripts/04c_fill_gridrad_gap.py --workers 4`**).
 
 ## 6. Stage 05 Modes
 

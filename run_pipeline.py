@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 run_pipeline.py — CONUS Hail Cat Model v2.1: Full Pipeline Runner
 ==================================================================
@@ -12,6 +14,13 @@ Usage:
     python run_pipeline.py --skip 14,15 # Skip stages
     python run_pipeline.py --validate   # Validate outputs only
     python run_pipeline.py --skip-ml    # Use deterministic v2.1 fallbacks
+
+Stage 04c is invoked with ``--with-04b-download --workers 4`` (per-day download,
+four calendar days in parallel; GridRad inputs deleted after each day unless
+``--keep-gridrad-inputs`` is passed to 04c manually). When 04c is not skipped,
+standalone stage 04b is skipped automatically for full or early-resume runs so
+GridRad is not staged twice—use ``--only 04b`` or ``--from 04b`` to run the
+legacy NCAR download stage alone.
 """
 
 import argparse
@@ -63,7 +72,7 @@ STAGES = [
     ("03",  "03_download_spc.py",              "Download SPC hail reports (validation)",           "~5 min"),
     ("04a", "04a_download_era5_isotherms.py",  "Download ERA5 monthly isotherm heights",           "~30 min"),
     ("04b", "04b_download_gridrad.py",         "Download GridRad inputs from NCAR RDA/GDEX",       "~varies"),
-    ("04c", "04c_fill_gridrad_gap.py",         "Compute MESH75 from GridRad (2012–2019)",          "~8–24 hrs"),
+    ("04c", "04c_fill_gridrad_gap.py",         "GridRad MESH75 (embedded 04b dl, 4-day workers)",   "~8–24 hrs"),
     ("05",  "05_apply_mesh_bias_correction.py","v2.1 bias correction + optional ML filtering",     "~1 hr"),
     ("06",  "06_validate_mesh_vs_spc.py",      "Validate corrected MESH vs SPC reports",           "~15 min"),
     ("07",  "07_build_hail_climo.py",          "Build 366-day daily climatology",                  "~10 min"),
@@ -77,6 +86,33 @@ STAGES = [
     ("14",  "14_build_vulnerability.py",       "MDR vulnerability curves [placeholder]",           "~5 min"),
     ("15",  "15_render_figures.py",            "Render all figures + validation report",            "~45 min"),
 ]
+
+
+def apply_streaming_gridrad_skip_defaults(
+    skip: set[str],
+    *,
+    only_stage: str | None,
+    from_stage: str | None,
+    all_ids: list[str],
+) -> set[str]:
+    """
+    When stage 04c runs with embedded GridRad download, skip standalone 04b for
+    full or early-resume runs so years of NetCDF are not staged twice on disk.
+
+    Users can still run ``--only 04b`` or ``--from 04b`` to use the legacy
+    download-only stage.
+    """
+    out = set(skip)
+    if "04c" in out:
+        return out
+    if only_stage == "04b":
+        return out
+    if only_stage is None and (
+        from_stage is None or all_ids.index(from_stage) < all_ids.index("04b")
+    ):
+        out.add("04b")
+    return out
+
 
 GREEN  = "\033[92m"
 RED    = "\033[91m"
@@ -128,6 +164,10 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
     cmd = [sys.executable, str(script_path)]
     if validate_only:
         cmd.append("--validate")
+    elif stage_id == "04c":
+        # Stream GridRad: download inside 04c, parallel days, delete staging after each day
+        # (04c default; no --keep-gridrad-inputs) to avoid multi-TB full-archive staging.
+        cmd.extend(["--with-04b-download", "--workers", "4"])
     elif stage_id == "05":
         if retrain_models:
             cmd.append("--retrain-models")
@@ -173,7 +213,7 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
 def main():
     parser = argparse.ArgumentParser(description="Run the CONUS hail cat model v2.1 pipeline.")
     parser.add_argument("--from",   dest="from_stage", type=str, default=None,
-                        help="Start from this stage ID (e.g., 05 or 04b)")
+                        help="Start from this stage ID (e.g., 05 or 04b). Auto-skips 04b when resuming before 04b if 04c will run.")
     parser.add_argument("--only",   dest="only_stage", type=str, default=None,
                         help="Run only this stage ID")
     parser.add_argument("--skip",   dest="skip_stages", type=str, default="",
@@ -193,8 +233,23 @@ def main():
     skip = set()
     if args.skip_stages:
         skip = {s.strip() for s in args.skip_stages.split(",")}
+    manual_skip = set(skip)
+
+    all_ids = [s[0] for s in STAGES]
+    skip = apply_streaming_gridrad_skip_defaults(
+        skip,
+        only_stage=args.only_stage,
+        from_stage=args.from_stage,
+        all_ids=all_ids,
+    )
 
     print_header()
+
+    if "04b" in skip and "04b" not in manual_skip:
+        print(
+            f"  {YELLOW}Skipping stage 04b — GridRad download runs inside stage 04c "
+            f"(streaming). Use --only 04b or --from 04b for the standalone downloader.{RESET}\n"
+        )
 
     if args.retrain_models:
         print(f"  {YELLOW}Mode: RETRAIN OPTIONAL v2.1 MODELS{RESET}")
@@ -205,8 +260,6 @@ def main():
         print(f"  {YELLOW}Mode: VALIDATE ONLY{RESET}\n")
 
     # Determine stages to run
-    all_ids = [s[0] for s in STAGES]
-
     if args.only_stage:
         stages_to_run = [s for s in STAGES if s[0] == args.only_stage]
         if not stages_to_run:
