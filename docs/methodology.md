@@ -96,8 +96,8 @@ This glossary defines symbols and abbreviations used throughout the document. Va
 | Abbreviation | Definition |
 |-------------|-----------|
 | MYRORSS | Multi-Year Reanalysis of Remotely Sensed Storms — radar reanalysis, Apr 1998–Dec 2011 |
-| GridRad | Three-dimensional radar analysis from NCAR — gap-fill source, Jan 2012–Oct 2019 |
-| MRMS | Multi-Radar Multi-Sensor — operational NOAA product, Oct 2020–present |
+| GridRad | Three-dimensional radar analysis from NCAR — gap-fill source, Jan 2012–13 Oct 2020 |
+| MRMS | Multi-Radar Multi-Sensor — operational NOAA product, 14 Oct 2020–present |
 | ERA5 | ECMWF Reanalysis v5 — monthly 0°C / −20°C isotherms |
 | SPC | Storm Prediction Center — hail reports used for validation only |
 | CONUS | Continental United States |
@@ -206,7 +206,9 @@ MRMS is not assumed identical to MYRORSS. Differences in processing chain, radar
 
 ### 3.3 GridRad and GridRad-Severe
 
-GridRad fills the gap between MYRORSS and operational MRMS. Stage 04b downloads GridRad / GridRad-Severe inputs from NCAR RDA/GDEX. Stage 04c computes Severe Hail Index (SHI) from three-dimensional radar reflectivity and ERA5 isotherm fields, then converts SHI to MESH75. GridRad-Severe is preferred where available because higher temporal sampling better resolves short-lived hail cores.
+GridRad fills the gap between MYRORSS and operational MRMS. Stage 04b downloads GridRad / GridRad-Severe inputs from NCAR RDA/GDEX. Stage 04c computes Severe Hail Index (SHI) from three-dimensional **radar reflectivity in dBZ** and ERA5 isotherm fields, then converts SHI to MESH75. GridRad-Severe is preferred where available because higher temporal sampling better resolves short-lived hail cores.
+
+**Reflectivity ingestion (Stage 04c):** NCAR GridRad NetCDF files (hourly v3 and severe v4) typically expose reflectivity as sparse `Reflectivity(Index)`; the stage reconstructs a dense vertical profile per grid column from `Reflectivity` and `index`. The 3-D field `Nradecho` is an echo mask, not dBZ, and must not be substituted for reflectivity in SHI. Longitudes given in 0–360° are normalized before mapping to the CONUS 0.05° grid.
 
 In production-oriented runs, **04b** defaults to planning and downloading **one calendar day at a time** (with optional parallel GETs *within* that day), and **04c** defaults to **sequential** day processing. Unless **`--keep-gridrad-inputs`** is set, **04c** deletes the staged NetCDF trees for each day after that day completes, so `data/historical/gridrad/` and `data/historical/gridrad_severe/` may hold only a short-lived working set rather than a full multi-year archive. **`--with-04b-download`** on **04c** performs the per-day download immediately before gap-fill for the same day, which minimizes peak local GridRad storage; **`--workers > 1`** on **04c** is allowed with **`--with-04b-download`** (separate worker processes and sessions), subject to NCAR connection limits.
 

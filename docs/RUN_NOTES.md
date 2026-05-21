@@ -3,9 +3,9 @@
 ## Run Context
 
 - Date started: 2026-05-01 14:47 EDT
-- Active branch: `main`
-- Current commit: `e4c9331`
-- Remote sync: `main`, `origin/main`, and `upstream/main` are aligned at `e4c9331`
+- Active branch: `v2.1.2` (aligned with `main`)
+- Current commit: `c0b35b8`
+- Remote sync: `v2.1.2`, `main`, and `origin` are aligned at `c0b35b8`
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active
   development.
@@ -14,7 +14,16 @@
 
 ## Current Run Status
 
-Snapshot taken 2026-05-04 02:25 EDT:
+Snapshot taken 2026-05-20:
+
+- **Stage 04c** reflectivity reader fixed (`Nradecho` → sparse **`Reflectivity`** + lon normalization). Bad **2012** gap TIFFs from the old reader were deleted before restart.
+- **04c paused:** run stopped after **`[Errno 28] No space left on device`**. Stale `data/historical/gridrad/2013/` and `gridrad_severe/2013/` staging trees were removed (~35 GB freed). Gap TIFFs already written were kept; example dates still missing TIFFs: **20130612**, **20130616**, **20130617**.
+- **Restart command (recommended):** `.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2` — avoids `run_pipeline.py` default of **`--workers 4`**, which can hold ~4 concurrent day trees (~8–12 GB each) under `gridrad_severe/`.
+- Monitor: `tail -f logs/04c_fill_gridrad_gap.run.log` (per-day peak hail and `ACTIVE_CELLS`; GDAL tags on gap-fill GeoTIFFs).
+- **Re-process rule:** **04c** skips existing `mesh_*.tif`; delete gap-era files that need redo before re-running dates.
+- **Mesh era QA (optional):** `.venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py` → `data/analysis/mesh_daily_peaks/`.
+
+Earlier snapshot (2026-05-04 02:25 EDT):
 
 - Stage 01 completed successfully through 2011-12-31 and validated.
 - Stage 01 QA was rerun with the 300.0 mm physical cap: 0 files and 0
@@ -72,11 +81,10 @@ running; after it completes, continue with:
 ```
 
 **`run_pipeline.py` GridRad:** stage **04c** is run with **`--with-04b-download --workers 4`**
-(per-day staging removed after each day by default). Standalone **04b** is **auto-skipped**
-when **04c** is in the plan (full run or resume before **04b**). Use **`--only 04b`** /
-**`--from 04b`** for the legacy downloader. See **`docs/reproduce.md` §4–§5** for the
-mental model and direct **`scripts/04c_fill_gridrad_gap.py`** usage when NetCDFs
-are already on disk.
+(per-day staging removed after each day by default). On disks under ~250 GiB free, prefer the
+direct script with **`--workers 2`** (see snapshot above). Standalone **04b** is **auto-skipped**
+when **04c** is in the plan. Use **`--only 04b`** / **`--from 04b`** for the legacy downloader.
+See **`docs/reproduce.md` §4–§5**.
 
 Stage 11b is included in `--from 06`; it downloads NOAA/NCEI ETOPO 2022
 surface elevation and writes `data/analysis/topography/elevation_0.05deg.tif`
@@ -118,12 +126,11 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 
 ## Next Actions
 
-When Stage 02 completes:
+When Stage 02 completes, finish **04c** then continue:
 
 ```bash
 .venv/bin/python run_pipeline.py --only 04a
-.venv/bin/python run_pipeline.py --only 04b
-.venv/bin/python run_pipeline.py --only 04c
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
 .venv/bin/python run_pipeline.py --from 05 --skip-ml
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000

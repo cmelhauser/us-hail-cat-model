@@ -48,7 +48,7 @@ v2.0 changes the model from report-first to radar-first.
 Major v2.0 additions:
 
 - MYRORSS historical radar reanalysis for 1998-2011;
-- GridRad / GridRad-Severe gap-fill support for 2012-2019;
+- GridRad / GridRad-Severe gap-fill (Stage 04b download + 04c SHI/MESH75) for 2012-2020-10-13;
 - operational MRMS support for 2020-present;
 - ERA5 0 C and -20 C isotherm support;
 - MESH75 calibration;

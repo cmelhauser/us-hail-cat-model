@@ -206,8 +206,31 @@ python run_pipeline.py --only 04c
 ```
 
 This invokes **`04c_fill_gridrad_gap.py`** with **`--with-04b-download --workers 4`**
-by default (see §4). To gap-fill from an existing **`gridrad/`** tree without embedded
-download, call the script directly (for example **`python scripts/04c_fill_gridrad_gap.py --workers 4`**).
+by default (see §4). On constrained disks, call the script directly with fewer parallel
+days instead — for example **`python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`**
+(~2 concurrent day trees under `gridrad_severe/`, typically ~8–12 GB each before per-day cleanup).
+To gap-fill from an existing **`gridrad/`** tree without embedded download, omit
+**`--with-04b-download`** (for example **`python scripts/04c_fill_gridrad_gap.py --workers 2`**).
+
+**Monitor gap-fill progress (optional):**
+
+```bash
+tail -f logs/04c_fill_gridrad_gap.log
+# or logs/04c_fill_gridrad_gap.run.log when started via nohup
+```
+
+Gap-fill GeoTIFFs include GDAL tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`) for daily QA.
+After any 04c reflectivity-reader fix, delete affected gap-era `mesh_*.tif` files and
+re-run 04c for those dates (see `docs/technical_documentation.md` §8.3).
+
+**Daily peak summaries (optional diagnostic):**
+
+```bash
+.venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py
+```
+
+Writes `data/analysis/mesh_daily_peaks/` (`mesh_daily_peaks.csv`, percentiles, ECDF plot).
+Re-run while Stages 02 or 04c are in progress to compare hail distributions by radar era.
 
 ## 6. Stage 05 Modes
 

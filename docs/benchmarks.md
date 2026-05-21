@@ -50,7 +50,7 @@ All comparison figures are saved to `docs/figures/analysis/benchmarks/`.
 
 **Expected pattern:** Broad hail maximum across the Great Plains and central US, 5–15 hail days per year at the climatological core. Reduced frequency along western mountain ranges and coastlines.
 
-**Known differences:** GridRad is one of three sources in v2.1; the other two (MYRORSS, MRMS) are not part of the Murillo (2021) climatology. The comparison is most meaningful for the 2012–2019 overlap period.
+**Known differences:** GridRad is one of three sources in v2.1; the other two (MYRORSS, MRMS) are not part of the Murillo (2021) climatology. The comparison is most meaningful for the **2012–2019** overlap with Murillo et al. (2021); v2.1 gap-fill extends through **2020-10-13** before MRMS begins **2020-10-14**.
 
 ---
 
@@ -147,9 +147,9 @@ Divergence above the flag threshold at RP ≤ 500 yr is a P0 model-risk item req
 
 **Diagnostic:** Stage 06 produces a year-by-year source-stratified summary. Extract the annual P90 MESH75 series and run a Kolmogorov-Smirnov test on the two-year windows bracketing 2012. Flag if p < 0.05.
 
-### 4.2 2019/2020 transition (GridRad → MRMS)
+### 4.2 2020-10-14 transition (GridRad → MRMS)
 
-Same as 4.1 for the 2019–2020 boundary.
+Same as 4.1 for the **2020-10-13** (last GridRad gap day) vs **2020-10-14** (first MRMS day) boundary.
 
 ---
 

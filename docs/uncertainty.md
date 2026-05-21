@@ -89,7 +89,7 @@ isolated convective cells dominate (e.g., Pacific coast, high plains).
 
 ### 2.2 Source-transition bias
 
-Stages 01–05 merge three radar sources (MYRORSS 1998–2011, GridRad 2012–2019,
+Stages 01–05 merge three radar sources (MYRORSS 1998–2011, GridRad 2012–2020-10-13,
 MRMS 2020–present). Despite quantile-mapping calibration in Stage 05, residual
 bias at the transition boundaries may exist. Stage 06 performs a source-
 homogeneity check (KS test between MYRORSS and calibrated GridRad distributions

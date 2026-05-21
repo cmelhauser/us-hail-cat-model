@@ -1,14 +1,14 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.1
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-05-04 (main branch, Stage 02 running via Codex).
+> Last updated: 2026-05-20 (`v2.1.2` / `main` at `c0b35b8`; Stage 04c gap-fill paused for disk cleanup).
 
 ---
 
 ## Repository
 
 - **Local:** `/Users/melhauserc/GitHub/us-hail-cat-model`
-- **Branch:** `main` — synced with `origin/main` at commit `2228d54`
+- **Branch:** `v2.1.2` / `main` — synced with `origin` at commit `c0b35b8`
 - **Working tree:** should be kept clean except for intentional documentation or
   code edits in the current session
 - **Historical note:** `v2.1` has been merged and is no longer the active
@@ -50,9 +50,11 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 06_validate_mesh_vs_spc.py      14_build_vulnerability.py
 07_build_hail_climo.py          15_render_figures.py
 
+scripts/diagnostics/summarize_mesh_daily_peaks.py  ← optional mesh-era peak CSV/ECDF
+
 scripts/_config.py   ← all grid constants, paths, EVT defaults (wired into all stage scripts)
 scripts/_logging.py  ← get_logger() factory (wired into all stage scripts)
-scripts/_io.py       ← shared write_geotiff, haversine_km, latlon_to_grid (wired where needed)
+scripts/_io.py       ← shared write_geotiff (optional GDAL tags), haversine_km, latlon_to_grid
 ```
 
 Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--retrain-models]`
@@ -66,7 +68,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 3. **SPC = validation only.** Never a hazard input.
 4. **`event_peaks.npz`** (rows/cols/vals per event_id) is the authoritative event store.
 5. **0.05° grid is fixed.** No other resolutions in v2.1.
-6. **Never commit data files.** `.tif`, `.npy`, `.npz`, `.grib2`, `.parquet`, `.csv` outputs are gitignored.
+6. **Never commit data files.** `.tif`, `.npy`, `.npz`, `.grib2`, `.parquet`, and most `.csv` outputs are gitignored. **Exception:** `data/analysis/mesh_daily_peaks/` (tracked diagnostic summaries).
 7. **`scripts/_config.py` is the single source of truth for grid constants.** Never define `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` inline in a stage script.
 8. **Stage 01 manifest is authoritative** for distinguishing missing-source days from true no-hail days. Do not infer source availability from GeoTIFF values alone.
 
@@ -116,7 +118,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 - `scripts/_logging.py` — `get_logger()` factory; **15/15 stage scripts import from it**
 - `scripts/_io.py` — `write_geotiff`, `haversine_km`, `latlon_to_grid`; imported by stage scripts where needed
 
-**Tests:** 28 pytest files cover all 15 stages (test_01 through test_15, test_run_pipeline, test_stage\*); integration smoke test and no-dup-constants test written. GitHub Actions is green on Python 3.10, 3.11, and 3.12 at commit `2228d54`.
+**Tests:** 28 pytest files cover all 15 stages (test_01 through test_15, test_run_pipeline, test_stage\*); integration smoke test and no-dup-constants test written. GitHub Actions is green on Python 3.10, 3.11, and 3.12 at commit `c0b35b8`.
 
 **README.md** — professional rewrite: Python badge corrected to 3.10+, Mermaid removed, pipeline table with exact filenames
 
@@ -140,7 +142,11 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ---
 
-## Pipeline Run Status (as of 2026-05-03 16:46 EDT)
+## Pipeline Run Status (as of 2026-05-20)
+
+**Stage 04c (2026-05-20):** Reflectivity reader fixed (sparse `Reflectivity`, not `Nradecho`; 0–360° lon fix). Bad 2012 gap TIFFs from the old reader were deleted and **04c** restarted with `--with-04b-download --workers 4` (`logs/04c_fill_gridrad_gap.run.log`). Run later hit **disk full** (`[Errno 28]`): process stopped, stale `gridrad/` / `gridrad_severe/` trees under **2013** removed (~35 GB). **Restart** with direct script and **`--workers 2`** (or `1`) — `run_pipeline.py` still defaults to `--workers 4`. Days without gap TIFF after the stop (example): `20130612`, `20130616`, `20130617`.
+
+**Mesh peak diagnostic:** `scripts/diagnostics/summarize_mesh_daily_peaks.py` writes tracked summaries under `data/analysis/mesh_daily_peaks/` (see `docs/data_dictionary.md`).
 
 The Codex-run pipeline on 2026-05-01 ran **Stages 05–15 prematurely** before Stage 01 finished.
 All Stages 05–15 output is **placeholder, not production** — built on 31 events from May 2011 only.
@@ -152,16 +158,16 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 | Stage 02 (MRMS) | ⏳ Running | Detached `screen` session `hail_stage02_mrms`. |
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. |
 | Stage 04a (ERA5) | ❌ Not run | Log file is empty. Must run after Stage 01. |
-| Stage 04b/04c (GridRad) | ❌ Not run | GridRad download + gap-fill not run. Stage 05 ran with identity calibration (no GridRad data). |
+| Stage 04b/04c (GridRad) | ⏸ Paused (2026-05-20) | **04c** reflectivity fix applied; run stopped for disk cleanup. Restart: `scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`. Re-delete any gap TIFFs from the old reader before trusting distributions. |
 | Stage 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 files only. All outputs invalid for production use. |
 
 **Re-run sequence once Stage 02 finishes:**
 ```bash
 .venv/bin/python run_pipeline.py --only 04a    # ERA5 isotherms
-# GridRad: use run_pipeline 04c only (streams 04b download inside 04c, 4 parallel days).
-.venv/bin/python run_pipeline.py --only 04c    # 04b auto-skipped; see docs/reproduce.md §4
-# Legacy full GridRad archive first: `run_pipeline.py --only 04b` then gap-fill with
-# `python scripts/04c_fill_gridrad_gap.py --workers N` (no --with-04b-download).
+# GridRad gap-fill (prefer --workers 2 on constrained disks; run_pipeline defaults to 4):
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
+# Or: run_pipeline.py --only 04c  (always passes --with-04b-download --workers 4)
+# Legacy full GridRad archive first: run_pipeline.py --only 04b, then 04c without --with-04b-download.
 .venv/bin/python run_pipeline.py --from 05 --skip-ml   # Re-run all remaining stages
 # After Stage 13 smoke passes (default n_years=1000), do the full 50k run:
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
@@ -175,9 +181,9 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 ## Immediate Next Priorities (in order)
 
-1. **Wait for Stage 01 to finish.** Do NOT re-run Stage 01 while it is active.
-2. **Run Stages 02, 04a**, then **`run_pipeline.py --only 04c`** (streaming GridRad; 04b skipped). (Stage 03 is already complete.)
-3. **Re-run Stages 05–15** (`--from 05 --skip-ml`) against the full dataset.
+1. **Restart Stage 04c** with `--workers 2` after disk cleanup; let Stage 02 (MRMS) finish. Do not re-run Stage 01 unless explicitly requested (`--qa-only` for repair only).
+2. **Run Stage 04a** (ERA5 isotherms) if not already complete; confirm CDS licences.
+3. **Re-run Stages 05–15** (`--from 05 --skip-ml`) after Stages 02 and 04c complete.
 4. **Full 50,000-year stochastic catalog** — re-run Stage 13 after Stage 12 completes.
 5. **Regression tests** — freeze golden outputs; add checksum tests.
 6. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`.
@@ -215,6 +221,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 | `docs/technical_documentation.md` | Per-stage implementation notes |
 | `docs/data_dictionary.md` | All output file schemas |
 | `docs/reproduce.md` | Reproduction guide |
+| `docs/RUN_NOTES.md` | Live run status and restart commands |
 | `docs/uncertainty.md` | Six-category uncertainty budget |
 | `docs/ai_instructions.md` | AI operating instructions |
 | `docs/project_memory.md` | Canonical project state (this file's parent) |
@@ -233,6 +240,6 @@ python run_pipeline.py --dry-run
 
 Recommended first-run stage order:
 ```
-01 → 02 → 03 → 04a → 04b → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
+01 → 02 → 03 → 04a → 04c → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
 → 13 (--n-years 1000 smoke first) → 13 (full 50k) → 14 → 15
 ```

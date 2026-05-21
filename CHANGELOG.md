@@ -7,16 +7,24 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased] — 2026-05-03
+## [Unreleased] — 2026-05-20
 
 ### Fixed
 
+- **Stage 04c:** GridRad gap-fill now reads **sparse `Reflectivity(Index)`** (reconstructed to 3-D dBZ) instead of treating **`Nradecho`** as reflectivity. The previous reader produced all-zero daily rasters on most **hourly-only** days.
+- **Stage 04c:** Normalize GridRad longitudes from 0–360° before CONUS masking and 0.05° indexing.
+- **Stage 04c:** Register Stage **04b** in `sys.modules` before `exec_module` so `ProcessPoolExecutor` workers load the downloader without dataclass errors.
 - **Stage 08:** `MAX_CENTROID_KM_DAY` corrected from `100.0` to `150.0` to match
   `scripts/_config.py` and `docs/methodology.md §8.2`. Canonical value is 150 km/day.
 - **`tests/test_no_duplicated_constants.py`:** Converted `MAX_CENTROID_KM_DAY` xfail
   to a normal passing assertion.
 - **`CITATION.cff`:** Repository URL corrected (`melhauserc` → `cmelhauser`);
   Cintineo et al. (2012) reference title, author initial, and page range corrected.
+
+### Changed
+
+- **Documentation:** Era boundaries (GridRad through **2020-10-13**, MRMS from **2020-10-14**), Stage **04c** sparse reflectivity ingestion, disk/workers guidance, and run status synced across `AGENTS.md`, `docs/HANDOFF.md`, `docs/RUN_NOTES.md`, `docs/project_memory.md`, `docs/technical_documentation.md`, `docs/reproduce.md`, `docs/FAQ.md`, and related methodology/data docs.
+- **`.gitignore`:** Allow versioned `data/analysis/mesh_daily_peaks/` only; all other `data/**` remains ignored.
 
 ### Added
 
@@ -33,6 +41,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sequential I/O. Thread-local boto3 clients avoid sharing one client across threads.
 - **`scripts/_io.py`:** Shared I/O helpers (`write_geotiff`, `haversine_km`,
   `latlon_to_grid`) extracted from stage scripts and wired into all stages that need them.
+- **Stage 04c:** GDAL diagnostic tags on gap-fill GeoTIFFs (`MAX_MESH75_MM`, `ACTIVE_CELLS`, `SOURCE`, `DATE`) and per-day progress logging with peak hail.
+- **`docs/pnas_article_ai_hail_model.md`:** GridRad era dates, 04b/04c split, sparse Reflectivity SHI ingestion, AI audit examples.
+- **`scripts/diagnostics/summarize_mesh_daily_peaks.py`:** Daily mesh peak CSV, percentiles, and ECDF under `data/analysis/mesh_daily_peaks/`.
 - **Stage refactor:** All 15 stage scripts now import shared constants from `_config.py`
   and shared logging from `_logging.py`.
 - **`docs/methodology.md §0`:** Notation glossary (grid, hazard, occurrence, EVT,

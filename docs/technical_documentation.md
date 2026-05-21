@@ -247,7 +247,8 @@ This caps the in-memory plan to **one day’s file list** and avoids holding hun
 
 **Script:** `scripts/04c_fill_gridrad_gap.py`  
 **Input:** GridRad or GridRad-Severe NetCDF files on disk **and/or** live downloads when `--with-04b-download` is set; plus `data/historical/era5/era5_monthly_isotherms_conus.nc` from Stage 04a (or climatological fallback if missing).  
-**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif` for gap days and `data/historical/mesh_0.05deg/gridrad_days.txt`.
+**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif` for gap days and `data/historical/mesh_0.05deg/gridrad_days.txt`.  
+**Calendar span:** 2012-01-01 through **2020-10-13** (`GAP_END` in script); MRMS begins **2020-10-14**.
 
 ### 8.1 Default run shape (disk- and memory-friendly)
 
@@ -271,10 +272,12 @@ standalone stage 04b** on full runs and on **`--from`** resumes that start befor
 **04b**, so GridRad is not staged twice. Use **`python run_pipeline.py --only 04b`**
 or **`--from 04b`** for the legacy NCAR-only downloader.
 
-This loads Stage **04b** in-process. With **`--workers 1`**, the parent holds one
-`requests.Session` for all days. With **`--workers N`** and **`N > 1`**, worker
-processes use a pool initializer so **04b** is loaded **once per worker** (not once
-per day); each calendar day still opens a **new** `requests.Session`, runs
+This loads Stage **04b** in-process via `importlib` (module registered in `sys.modules`
+before `exec_module` so dataclasses resolve correctly in worker processes). With
+**`--workers 1`**, the parent holds one `requests.Session` for all days. With
+**`--workers N`** and **`N > 1`**, worker processes use a pool initializer so **04b**
+is loaded **once per worker** (not once per day); each calendar day still opens a
+**new** `requests.Session`, runs
 **`download_for_day`** when the output GeoTIFF is absent, then **`process_day`**.
 Expect roughly **`N × (--04b-download-workers)`** peak concurrent HTTP GETs unless
 downloads skip quickly—stay within NCAR/GDEX throttling.
@@ -297,11 +300,19 @@ own stage.
 ### 8.3 Technical behavior (per day)
 
 1. Prefer GridRad-Severe when files exist; else hourly GridRad.
-2. Load 3-D reflectivity; find columns above threshold.
-3. Integrate SHI (Witt et al. 1998) using ERA5 0 °C / −20 °C heights from Stage 04a when available.
-4. Convert SHI → MESH75: `MESH75 = 15.096 * SHI^0.206` (2021 corrigendum coefficients).
-5. Take daily maxima on the canonical 0.05° grid; apply shared `MAX_HAIL_MM` QA via `sanitize_hail_values`.
-6. Write GeoTIFF; append `YYYYMMDD` to `gridrad_days.txt` when the day produced data.
+2. **Load reflectivity (dBZ) for SHI:**
+   - GridRad v3/v4 NetCDF files usually store physical reflectivity as **sparse** `Reflectivity(Index)` plus an `index` vector, not as a dense `(Altitude, Latitude, Longitude)` array.
+   - Stage 04c reconstructs a dense 3-D reflectivity grid from sparse `Reflectivity` + `index` when needed.
+   - **`Nradecho` is not used for SHI.** It is a 3-D echo mask/count field (typical range ~0–35), not dBZ. Using it as reflectivity produced all-zero gap-fill rasters on most hourly-only days before v2.1.1.
+   - Longitudes in 0–360° form are converted to −180…180 before the CONUS mask and grid indexing.
+3. Find columns with column-max reflectivity ≥ `Z_THRESHOLD` (40 dBZ).
+4. Integrate SHI (Witt et al. 1998) using ERA5 0 °C / −20 °C heights from Stage 04a when available.
+5. Convert SHI → MESH75: `MESH75 = 15.096 * SHI^0.206` (2021 corrigendum coefficients).
+6. Take daily maxima on the canonical 0.05° grid; apply shared `MAX_HAIL_MM` QA via `sanitize_hail_values`.
+7. Write GeoTIFF with optional GDAL diagnostic tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`, `SOURCE`, `DATE`); log one line per day with peak hail and active-cell count.
+8. Append `YYYYMMDD` to `gridrad_days.txt` when the day produced data.
+
+**Re-run after reflectivity-reader fixes:** delete affected `mesh_YYYYMMDD.tif` files under `data/historical/mesh_0.05deg/` for gap days that were produced with the old reader (log lines showing `src=gridrad-hourly` and `active_cells=0` on storm days are a strong indicator), then re-run 04c for those dates.
 
 ### 8.4 Parallel days (`--workers` > 1)
 
@@ -311,6 +322,14 @@ assigned days (separate calendar days, separate on-disk trees). **Do not** set
 `workers × 04b-download-workers` so high that NCAR rate limits trigger. When
 `workers > 1`, **deletion of GridRad inputs** still runs in the **parent** process
 after each worker result returns.
+
+**Disk headroom:** With **`--with-04b-download`** and **`--workers 4`**, up to four
+full day trees may exist concurrently under `data/historical/gridrad_severe/` (often
+~8–12 GB each on severe-hail days). A production run that filled the volume with
+`[Errno 28] No space left on device` was recovered by stopping **04c**, deleting
+stale staging for the active year, and restarting with **`--workers 2`**. Prefer
+**`scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`** over
+`run_pipeline.py --only 04c` when free space is under ~250 GiB.
 
 ### 8.5 Scientific notes
 
@@ -323,6 +342,7 @@ GridRad is a gap-fill source. It should not be assumed exchangeable with MYRORSS
 - Peak values fall within plausible hail-size bounds.
 - ERA5 fallback usage is logged if isotherms are missing.
 - Source-era distribution checks are available downstream.
+- During gap-fill runs, inspect stage logs and GDAL tags on output GeoTIFFs to confirm non-zero peaks on hail days.
 
 ---
 

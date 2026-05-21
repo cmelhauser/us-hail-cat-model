@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.1**
-**Last updated: 2026-05-04 (main branch, Stage 02 running)**
+**Last updated: 2026-05-20 (`v2.1.2` / `main` at `c0b35b8`; Stage 04c paused for disk cleanup)**
 
 ---
 
@@ -20,25 +20,20 @@
 
 ---
 
-## 2. Current State (as of 2026-05-04)
+## 2. Current State (as of 2026-05-20)
 
-Branch `main` is synced with `origin/main` and `upstream/main` at commit
-`e4c9331`. The historical `v2.1` branch has been merged and is no longer the
-active development branch.
+Branch `v2.1.2` is aligned with `main` at commit `c0b35b8`. The historical
+`v2.1` branch has been merged.
 
-First full pipeline run started 2026-05-01 via Codex. Stage 01 completed and
-validated on 2026-05-03, then Stage 01 QA repair was added and run on
-2026-05-04:
+First full pipeline run started 2026-05-01. Production progress:
 
-- Stage 01 manifest rows: 5,023, covering 1998-04-01 through 2011-12-31;
-- status counts: 4,981 `ok`, 30 `missing_source`, 11 `ok_with_read_errors`, 1 `no_hail_pixels`;
-- QA repair: earlier 250.0 mm pass repaired 199 files and 3,852 cells; 300.0 mm rescan found 0 files or cells requiring repair;
-- Stage 02 is running in detached `screen` session `hail_stage02_mrms`;
-- free disk: about 373 GiB;
-- Stage 03 is complete;
-- Stages 02, 04a, and 04b still need to run;
-- Stages 05–15 outputs from the earlier May-2011 smoke path are placeholders,
-  not production outputs.
+- Stage 01: complete (5,023 MYRORSS days through 2011-12-31; manifest QA at 300.0 mm cap);
+- Stage 02: MRMS download in progress (`screen` session `hail_stage02_mrms`);
+- Stage 03: complete;
+- Stage 04a: not run (empty log);
+- Stage 04c: gap-fill in progress with sparse **`Reflectivity`** reader; **paused 2026-05-20** after disk-full — restart with `--workers 2` (see `docs/RUN_NOTES.md`);
+- Stages 05–15: placeholder outputs from May-2011 smoke only — not production.
+- **Mesh peak diagnostic:** `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/`.
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -139,6 +134,14 @@ Generates the stochastic catalog. Must remain sparse-safe. Must not reconstruct 
 
 ## 7. Work Log
 
+### 2026-05-20 ✅ Stage 04c reflectivity fix + mesh diagnostic
+
+- **04c** now reconstructs sparse **`Reflectivity(Index)`** (dBZ) instead of using **`Nradecho`** for SHI; longitudes normalized from 0–360°.
+- Gap-fill GeoTIFFs carry GDAL tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`, …) for operational QA.
+- **04c** run stopped for disk full; 2013 GridRad staging removed; restart with `--workers 2` documented in `RUN_NOTES.md` / `HANDOFF.md`.
+- **`scripts/diagnostics/summarize_mesh_daily_peaks.py`** and tracked **`data/analysis/mesh_daily_peaks/`** added; `.gitignore` exception for that path only.
+- Documentation synchronized across `technical_documentation.md`, `methodology.md`, `data_dictionary.md`, `FAQ.md`, `reproduce.md`, `RUN_NOTES.md`, `HANDOFF.md`, `README.md`, `AGENTS.md`, `CHANGELOG.md`, `pnas_article_ai_hail_model.md`.
+
 ### 2026-05-01 ✅ Completed
 
 First full pipeline run started via Codex (Python 3.9.6, originally coordinated
@@ -222,8 +225,8 @@ Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instruction
 
 In order:
 
-1. **Let Stage 02 finish** and validate MRMS outputs.
-2. **Run Stage 04a and Stage 04b** after Stage 02; Stage 04a requires CDS credentials and accepted Copernicus ERA5 monthly pressure-level plus single-level dataset licences.
+1. **Restart Stage 04c** with `--workers 2` after disk cleanup; let Stage 02 finish and validate MRMS outputs.
+2. **Run Stage 04a** when CDS credentials and ERA5 licences are ready.
 3. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset; this includes Stage 11b DEM preparation before Stage 12.
 4. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
 5. **Review Stage 15 figures** once production outputs exist.
@@ -255,9 +258,10 @@ Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
-Active branch: main, synced with origin/main at 2228d54.
-Stage 01 is currently running; do not rerun it unless it fails.
-Stage 01 produces a source manifest — use it to distinguish missing-source days from no-hail days.
+Active branch: v2.1.2 / main at c0b35b8.
+Stage 01 complete; Stage 04c gap-fill paused 2026-05-20 — restart with --workers 2.
+Stage 01 manifest distinguishes missing-source days from no-hail days.
+Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.
 scripts/_config.py = single source of truth for all grid constants and is imported by all stage scripts.
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 MAX_CENTROID_KM_DAY=150.0 canonical (stage 08 corrected 2026-05-03; matches _config.py and methodology.md §8.2).

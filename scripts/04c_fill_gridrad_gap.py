@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-04c_fill_gridrad_gap.py — Compute MESH75 from GridRad 3D Reflectivity (2012–2019)
-==================================================================================
-Fills the 2012–2019 gap using GridRad NEXRAD composite reflectivity.
+04c_fill_gridrad_gap.py — Compute MESH75 from GridRad 3D reflectivity (2012–2020-10-13)
+========================================================================================
+Fills the MYRORSS–MRMS gap using GridRad NEXRAD composite reflectivity (dBZ).
+Uses sparse Reflectivity(Index) + index; Nradecho is not used for SHI.
 
 Inputs are read from:
 
@@ -220,6 +221,57 @@ def find_gridrad_files(day: date) -> tuple:
     return [], "none"
 
 
+def _read_var_array(ds, name: str) -> np.ndarray:
+    data = ds.variables[name][:]
+    return data.filled(np.nan) if hasattr(data, "filled") else np.asarray(data)
+
+
+def _load_reflectivity_3d(ds) -> np.ndarray | None:
+    """
+    Load reflectivity (dBZ) on (altitude, lat, lon).
+
+    GridRad v3/v4 store the physical field as sparse ``Reflectivity(Index)``.
+    ``Nradecho`` is a 3-D mask/count (typically 0–35), not dBZ — do not use it here.
+    """
+    if "Reflectivity" in ds.variables:
+        dense = _read_var_array(ds, "Reflectivity")
+        if dense.ndim == 3:
+            return dense
+
+    if "Reflectivity" not in ds.variables or "index" not in ds.variables:
+        return None
+
+    sparse = _read_var_array(ds, "Reflectivity")
+    if sparse.ndim != 1:
+        return None
+
+    idx = _read_var_array(ds, "index").astype(np.int64)
+    alts = _read_var_array(ds, "Altitude")
+    lats = _read_var_array(ds, "Latitude")
+    lons = _read_var_array(ds, "Longitude")
+    na, nlat, nlon = len(alts), len(lats), len(lons)
+    n = min(len(idx), len(sparse))
+    if n == 0:
+        return None
+
+    flat = idx[:n]
+    vals = sparse[:n].astype(np.float32)
+    i = flat % nlon
+    jj = (flat // nlon) % nlat
+    kk = flat // (nlon * nlat)
+    valid = (
+        (kk >= 0) & (kk < na) & (jj >= 0) & (jj < nlat) & (i >= 0) & (i < nlon) & np.isfinite(vals)
+    )
+    if not np.any(valid):
+        return None
+
+    grid = np.full((na, nlat, nlon), -np.inf, dtype=np.float32)
+    np.maximum.at(grid, (kk[valid], jj[valid], i[valid]), vals[valid])
+    grid[~np.isfinite(grid)] = np.nan
+    grid[grid == -np.inf] = np.nan
+    return grid
+
+
 def process_gridrad_file(nc_path, daily_max, month):
     """Process a single GridRad NetCDF: compute SHI → MESH75, update daily_max."""
     import netCDF4
@@ -250,21 +302,12 @@ def process_gridrad_file(nc_path, daily_max, month):
             ds.close()
             return 0
 
-        for refl_name in ["Reflectivity", "reflectivity", "refl"]:
-            if refl_name in ds.variables:
-                refl = ds.variables[refl_name][:]
-                break
-        else:
+        refl = _load_reflectivity_3d(ds)
+        if refl is None:
             ds.close()
             return 0
-
-        if hasattr(refl, "filled"):
-            refl = refl.filled(np.nan)
     finally:
         ds.close()
-
-    if refl.ndim != 3:
-        return 0
 
     max_refl = np.nanmax(refl, axis=0)
     active = np.argwhere(max_refl >= Z_THRESHOLD)
@@ -274,6 +317,8 @@ def process_gridrad_file(nc_path, daily_max, month):
         j, k = int(idx[0]), int(idx[1])
         lat = float(lats[j])
         lon = float(lons[k])
+        if lon > 180.0:
+            lon -= 360.0
 
         if not (24.0 <= lat <= 50.0 and -125.0 <= lon <= -66.0):
             continue
@@ -328,12 +373,29 @@ def process_day(day):
     )
     if n_repaired:
         log(f"    WARN: removed {n_repaired:,} non-finite/out-of-bound cells for {day}")
-    write_geotiff(out_data, out_path)
     active = out_data[(out_data > 0) & np.isfinite(out_data)]
     peak = float(active.max()) if active.size else 0.0
+    n_active = int(active.size)
+    write_geotiff(
+        out_data,
+        out_path,
+        tags={
+            "PRODUCT": "MESH75",
+            "DATE": day.isoformat(),
+            "SOURCE": source,
+            "MAX_MESH75_MM": f"{peak:.2f}",
+            "MAX_MESH75_IN": f"{peak / 25.4:.3f}",
+            "ACTIVE_CELLS": str(n_active),
+        },
+    )
     return {
-        "files": len(nc_files), "source": source, "active_cols": total_cols,
-        "peak_mesh75_mm": round(peak, 1), "errors": errors,
+        "files": len(nc_files),
+        "source": source,
+        "active_cols": total_cols,
+        "active_cells": n_active,
+        "peak_mesh75_mm": round(peak, 1),
+        "errors": errors,
+        "tif": str(out_path),
     }
 
 
@@ -389,6 +451,9 @@ def _load_04b_module():
     if spec is None or spec.loader is None:
         raise RuntimeError("Cannot load 04b_download_gridrad.py")
     mod = importlib.util.module_from_spec(spec)
+    # Required so dataclasses / typing can resolve cls.__module__ when 04b is
+    # exec'd in worker processes (importlib does not auto-register until post-exec).
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -545,14 +610,41 @@ def main(argv: list[str] | None = None) -> None:
         b04 = _load_04b_module()
         b_sess = b04._request_session()
 
+    def _peak_from_tif(tif_path: Path) -> tuple[float, int]:
+        """Read daily max hail diagnostic from GeoTIFF tags or raster values."""
+        try:
+            import rasterio
+            with rasterio.open(tif_path) as src:
+                tags = src.tags() or {}
+                if "MAX_MESH75_MM" in tags:
+                    peak = float(tags["MAX_MESH75_MM"])
+                    active = int(tags.get("ACTIVE_CELLS", 0))
+                    return peak, active
+                data = src.read(1)
+            active = data[(data > 0) & np.isfinite(data)]
+            return (float(active.max()) if active.size else 0.0, int(active.size))
+        except Exception:
+            return 0.0, 0
+
     def _finalize_day(day: date, ymd: str, result: dict) -> None:
         nonlocal done, skipped, no_data, peak_mesh, sev_count, hr_count
+        tif_path = OUT_DIR / f"{day.year}" / f"mesh_{ymd}.tif"
         if result.get("skipped"):
             skipped += 1
+            if tif_path.exists():
+                peak, n_active = _peak_from_tif(tif_path)
+                peak_mesh = max(peak_mesh, peak)
+                log(
+                    f"  [{ymd}] skipped (exists)  max_mesh75={peak:.1f} mm "
+                    f"({peak / 25.4:.2f} in)  active_cells={n_active:,}"
+                )
+            else:
+                log(f"  [{ymd}] skipped")
         elif result.get("no_data"):
             no_data += 1
+            log(f"  [{ymd}] no_data (no GridRad inputs)")
         elif result.get("error"):
-            log(f"    WARN: {ymd}: {result['error']}")
+            log(f"  [{ymd}] ERROR: {result['error']}")
             no_data += 1
         else:
             done += 1
@@ -561,17 +653,19 @@ def main(argv: list[str] | None = None) -> None:
                 sev_count += 1
             else:
                 hr_count += 1
-            peak = result.get("peak_mesh75_mm", 0.0)
+            peak = float(result.get("peak_mesh75_mm", 0.0))
+            n_active = int(result.get("active_cells", 0))
             peak_mesh = max(peak_mesh, peak)
             gridrad_days.append(ymd)
-            if done % 30 == 0 or peak > 50:
-                elapsed = time.time() - t0
-                rate = done / elapsed if elapsed > 0 else 0
-                eta = (len(all_days) - done - skipped - no_data) / rate if rate > 0 else 0
-                log(
-                    f"  [{ymd}] done={done:,}  src={src}  peak={peak:.0f}mm  "
-                    f"ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}"
-                )
+            elapsed = time.time() - t0
+            rate = done / elapsed if elapsed > 0 else 0
+            remaining = len(all_days) - done - skipped - no_data
+            eta = remaining / rate if rate > 0 else 0.0
+            log(
+                f"  [{ymd}] wrote {tif_path.name}  max_mesh75={peak:.1f} mm "
+                f"({peak / 25.4:.2f} in)  active_cells={n_active:,}  "
+                f"src={src}  done={done:,}  ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}"
+            )
         if not args.keep_gridrad_inputs:
             delete_gridrad_inputs_for_day(day)
 
