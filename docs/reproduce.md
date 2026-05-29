@@ -1,6 +1,6 @@
 # Reproduction Guide
 
-**CONUS Hail Catastrophe Model v2.1**
+**CONUS Hail Catastrophe Model v2.2**
 
 ---
 
@@ -108,7 +108,7 @@ python run_pipeline.py --only 15
 **`run_pipeline.py` and GridRad:** on a default full run (and on resumes that start
 before stage **04b**), the runner **auto-skips stage 04b** whenever **04c** is in the
 plan and calls **04c** with **`--with-04b-download --workers 4`** (per-day download,
-four calendar days in parallel; GridRad staging removed after each day by default).
+four convective days in parallel; GridRad staging removed after each day by default).
 Use **`python run_pipeline.py --only 04b`** or **`--from 04b`** for the legacy standalone
 NCAR downloader. If you already populated **`gridrad/`** with **04b**, gap-fill from
 disk without redundant downloads via **`python scripts/04c_fill_gridrad_gap.py --workers N`**
@@ -148,7 +148,7 @@ python run_pipeline.py --skip 14,15
 
 ## 5. Stage 04b/04c GridRad Setup
 
-By default, **04b** plans and downloads **one calendar day at a time** (lower peak RAM
+By default, **04b** plans and downloads **one convective day at a time** (12 UTC → 12 UTC; lower peak RAM
 and a smaller in-flight download plan than the legacy global planner). Use
 `--plan-all-days-first` only if you need the old “catalog everything, then download”
 schedule. Per-day download threads default to **`--workers 1`**; raise cautiously (NCAR
@@ -156,15 +156,15 @@ asks for ≤10 concurrent streams total).
 
 **04c** processes days **sequentially by default** (`--workers 1`). After each day’s
 run finishes (output written, skipped, no-data, or error), local GridRad NetCDF trees
-for that calendar day are **removed** unless you pass **`--keep-gridrad-inputs`**.
+for that convective day are **removed** unless you pass **`--keep-gridrad-inputs`**.
 
 **Single-pass (tight disk):** chain 04b’s per-day download inside 04c. With default
 **`--workers 1`**, days are strictly sequential. You may set **`--workers N`** with
-**`N > 1`** for parallel calendar days (each worker has its own session); keep
+**`N > 1`** for parallel convective days (each worker has its own session); keep
 **`N × --04b-download-workers`** within NCAR throttling guidance.
 
 **Mental model (04b vs 04c workers):** `--workers` on **04c** is the number of **parallel
-calendar days** (separate processes when `N > 1`). **`--04b-download-workers`** applies
+convective days** (separate processes when `N > 1`). **`--04b-download-workers`** applies
 only with **`--with-04b-download`**: it is **within-day** parallel HTTP GETs for that
 day’s NetCDF pulls. Rough peak in-flight downloads scale as **`04c_workers × 04b_download_workers`**
 (before skips). Stage **04b** alone uses its own `--workers` for within-day GETs only.
@@ -206,8 +206,31 @@ python run_pipeline.py --only 04c
 ```
 
 This invokes **`04c_fill_gridrad_gap.py`** with **`--with-04b-download --workers 4`**
-by default (see §4). To gap-fill from an existing **`gridrad/`** tree without embedded
-download, call the script directly (for example **`python scripts/04c_fill_gridrad_gap.py --workers 4`**).
+by default (see §4). On constrained disks, call the script directly with fewer parallel
+days instead — for example **`python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`**
+(~2 concurrent day trees under `gridrad_severe/`, typically ~8–12 GB each before per-day cleanup).
+To gap-fill from an existing **`gridrad/`** tree without embedded download, omit
+**`--with-04b-download`** (for example **`python scripts/04c_fill_gridrad_gap.py --workers 2`**).
+
+**Monitor gap-fill progress (optional):**
+
+```bash
+tail -f logs/04c_fill_gridrad_gap.log
+# or logs/04c_fill_gridrad_gap.run.log when started via nohup
+```
+
+Gap-fill GeoTIFFs include GDAL tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`) for daily QA.
+After any 04c reflectivity-reader fix, delete affected gap-era `mesh_*.tif` files and
+re-run 04c for those dates (see `docs/technical_documentation.md` §8.3).
+
+**Daily peak summaries (optional diagnostic):**
+
+```bash
+.venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py
+```
+
+Writes `data/analysis/mesh_daily_peaks/` (`mesh_daily_peaks.csv`, percentiles, ECDF plot).
+Re-run while Stages 02 or 04c are in progress to compare hail distributions by radar era.
 
 ## 6. Stage 05 Modes
 
@@ -335,7 +358,7 @@ Example:
 
 ```json
 {
-  "model_version": "2.1",
+  "model_version": "2.2",
   "run_date": "YYYY-MM-DD",
   "random_seed": 42,
   "stages_run": ["01", "02", "03", "04a", "04b", "05", "06", "07", "08", "09", "10", "11", "11b", "12", "13", "14", "15"],

@@ -98,15 +98,17 @@ The model uses radar-derived hail information as the primary hazard field. Human
 
 ### MYRORSS
 
-MYRORSS provides the early historical radar reanalysis period from April 1998 through December 2011. The pipeline reads both plain `.netcdf` and `.netcdf.gz` archive objects, decodes sparse source files, accumulates daily maximum MESH, aggregates to a 0.05 degree grid, and writes GeoTIFF outputs. A daily manifest records source availability, source file counts, read errors, active cells, maximum MESH, and processing status.
+MYRORSS provides the early historical radar reanalysis period from April 1998 through December 2011. The pipeline reads both plain `.netcdf` and `.netcdf.gz` archive objects, decodes sparse source files, and accumulates the cell-wise maximum MESH over **convective days** defined as **12 UTC → 12 UTC** (label = date at window start), then aggregates to a 0.05 degree grid and writes GeoTIFF outputs. A daily manifest records source availability, source file counts, read errors, active cells, maximum MESH, and processing status.
 
 ### GridRad and GridRad-Severe
 
-GridRad or GridRad-Severe is used to fill the gap between MYRORSS and operational MRMS. Severe Hail Index is derived from three-dimensional reflectivity and ERA5 isotherm fields, then converted to MESH75.
+GridRad or GridRad-Severe fills the gap from January 2012 through 13 October 2020 (inclusive). Stage **04b** downloads timesteps that fall in each 12 UTC → 12 UTC convective window; Stage **04c** computes daily MESH75 on the canonical 0.05° grid. GridRad-Severe is preferred when available because higher temporal sampling better resolves short-lived hail cores.
+
+Severe Hail Index is derived from three-dimensional **reflectivity in dBZ** and ERA5 isotherm fields, then converted to MESH75 using the Murillo and Homeyer (2021) corrigendum coefficients. NCAR GridRad v3/v4 files typically store reflectivity as sparse `Reflectivity(Index)` with an `index` vector; the pipeline reconstructs a dense vertical profile per grid column. The 3-D field `Nradecho` is an echo mask, not dBZ, and is excluded from SHI. Longitudes given in 0–360° form are normalized before CONUS masking. Gap-fill GeoTIFFs carry GDAL metadata tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`, `SOURCE`, `DATE`) for operational QA.
 
 ### MRMS
 
-Operational MRMS supplies the recent radar era from 2020 onward. The pipeline handles native orientation and longitude conventions before writing daily model-grid MESH rasters.
+Operational MRMS supplies the recent radar era from **14 October 2020** onward. The pipeline handles native orientation and longitude conventions before writing convective-day model-grid MESH rasters (same 12 UTC → 12 UTC definition as MYRORSS and GridRad).
 
 ### ERA5
 
@@ -191,6 +193,7 @@ AI assistance was used for:
 - enforcing sparse-safe constraints throughout Stage 13 stochastic simulation;
 - adding a Stage 01 source-coverage manifest;
 - diagnosing archive-format issues (plain `.netcdf` vs. gzipped `.netcdf.gz` in MYRORSS);
+- diagnosing GridRad gap-fill defects (incorrect use of `Nradecho` instead of sparse `Reflectivity` for SHI, producing all-zero gap days on hourly-only archives);
 - writing pre-run review documentation and audit checklists;
 - writing and running targeted unit, integration, and smoke tests;
 - expanding methodology, benchmark, sensitivity, vulnerability, and FAQ documentation;
@@ -202,30 +205,49 @@ All git operations (commit, push, merge) were performed by the human operator; A
 
 ### Development-process evidence
 
-The AI-assisted development process is reported through quantitative repository and workflow metrics. Final values will be inserted after the full model run and manuscript freeze:
+The AI-assisted development process is reported through quantitative repository and workflow metrics (GitHub repository `cmelhauser/us-hail-cat-model`, snapshot through **2026-05-20**; production hazard run still in progress).
 
 ```text
-Repository start date:
-Repository freeze date for submission:
-Total commits:
-Commits substantially assisted by AI:
-Pull requests opened and merged:
-Files changed by category: code, tests, docs, configuration
-Lines of code and documentation added:
-Automated test count before and after AI-assisted hardening:
-CI runs passed / failed / rerun:
-Pipeline stages monitored by AI:
-Detected defects attributable to AI-assisted audit:
-Human interventions and methodological decisions:
-Approximate wall-clock development time:
-Approximate model/API cost, if available and appropriate:
+Repository start date:                    2026-03-17
+Repository freeze date for submission:    Not frozen (draft; full-pipeline hazard run ongoing)
+Total commits (all branches):             90
+Commits on main since 2026-05-01:         50 (v2.1 hardening and run-prep pass)
+Pull requests opened / merged to main:    9 / 6
+Tracked files at HEAD (by category):      37 stage/helper Python modules; 36 test files;
+                                          24 documentation markdown files; 10 CI/config files
+Current Python + docs line count (wc):    ~8,500 lines in scripts/; ~7,600 lines in docs/
+Cumulative git diffstat (all history):    +146,092 / −120,636 lines
+Automated tests (v2.1 merge → HEAD):      26 → 33 test modules; 115 test functions collected
+Recent CI workflow runs (tests.yml):      18 sampled runs, 18 success, 0 failure
+Pipeline stages in scope:                 15 (01–15 plus 11b)
+AI-audit defects fixed pre-production:    ≥7 (see table below)
+Human-retained decisions (examples):      fixed 0.05° grid; SPC validation-only; Stage 13
+                                          sparse-safe; deterministic Stage 05 fallback (--skip-ml);
+                                          three-source splice dates; human-only git push/merge
+Approximate wall-clock repository life:     ~9 weeks (2026-03-17 to 2026-05-20)
+Intensive AI-assisted hardening window:     ~3 weeks (2026-05-01 to 2026-05-20)
+Approximate model/API cost:               Not logged in repository (not reported here)
 ```
 
-Representative AI-assisted interventions are summarized in Table [X], with each intervention tied to a concrete repository artifact: issue discovered, evidence, patch, validation, and residual risk.
+Representative AI-assisted interventions are summarized in Table 1.
+
+| # | Issue discovered (AI-assisted audit) | Evidence | Patch / artifact | Validation | Residual risk |
+|---|--------------------------------------|----------|----------------|------------|---------------|
+| 1 | Early MYRORSS days read as empty | Zero GeoTIFFs despite S3 objects; plain `.netcdf` not `.gz` | Stage 01 dual-suffix reader; `manifest_stage01_myrorss.csv` | Rebuilt 1998 canary days; manifest status codes | Remaining MYRORSS `missing_source` days documented |
+| 2 | Missing-source vs no-hail conflated | Raster zeros alone ambiguous | Manifest distinguishes `missing_source` / `no_hail_pixels` / `ok` | Stage 01 QA + `--qa-only` repair pass | Users must consult manifest, not raster alone |
+| 3 | Event-merge constant drift | `MAX_CENTROID_KM_DAY` 100 km in Stage 08 vs 150 km in config/docs | Corrected to 150 km; test guard in `test_no_duplicated_constants.py` | pytest; methodology §8.2 aligned | Other constants still require drift tests |
+| 4 | Duplicated grid constants across stages | Review grep across 15 scripts | `scripts/_config.py`, `_logging.py`, `_io.py` | `test_no_duplicated_constants.py`; ruff/mypy CI | New stages must import shared helpers |
+| 5 | GridRad gap-fill silent zeros | Hourly days with NetCDFs but `active_cells=0` | Stage 04c sparse `Reflectivity` reader; lon fix; GDAL QA tags | Reprocessed 2012 canary day; log peak hail | GridRad–MRMS calibration still required at Stage 05 |
+| 6 | Parallel 04c worker import failure | `ProcessPoolExecutor` dataclass error loading 04b | Register 04b in `sys.modules` before `exec_module` | Multi-worker 04c restart | NCAR download throttling at high worker count |
+| 7 | Physical hail QA ceiling | 250 mm cap vs later 300 mm policy | Shared `sanitize_hail_values`; Stage 01–05 wired | 300 mm rescan: 0 cells after prior 250 mm repair | Values >300 mm still truncated to zero |
 
 ### Example: source manifest discovery
 
 During a pre-run review, many apparently empty daily GeoTIFFs were found. AI-assisted investigation showed that some early MYRORSS archive files were plain `.netcdf` rather than `.netcdf.gz`, and the previous reader ignored them. The Stage 01 script was updated to read both formats, and a manifest was added to distinguish missing source from no-hail days. This illustrates the model-building value of AI agents as persistent auditors: the issue was not a novel algorithmic insight, but a data-engineering defect that would have materially affected the historical record.
+
+### Example: GridRad reflectivity ingestion
+
+During full-pipeline execution, most GridRad hourly gap-fill days produced zero active cells despite successful NetCDF downloads. AI-assisted inspection of NCAR file structure showed that physical reflectivity is stored as sparse `Reflectivity(Index)`, while `Nradecho` is a separate 3-D echo mask with values well below the 40 dBZ column threshold used for SHI. The Stage **04c** reader was corrected to reconstruct dBZ from sparse reflectivity, normalize longitudes, and write diagnostic GDAL tags. Affected gap-era GeoTIFFs were deleted and reprocessed. This case shows how AI-assisted monitoring plus file-format literacy can catch scientifically silent failures that unit tests on synthetic data may miss.
 
 ### Reproducibility controls
 
@@ -300,24 +322,34 @@ PET aggregate table summary:
 
 ### AI-assisted development results
 
-Placeholder values to insert:
+Process metrics for the AI-assisted infrastructure build (hazard maps and stochastic catalog still pending full production run):
 
 ```text
-Development duration:
-Number of AI-assisted commits:
-Number of AI-detected defects fixed before full run:
-Number of documentation pages expanded:
-Number of automated tests added or repaired:
-Number of long-run monitoring checks:
-Examples of AI audit findings:
+Development duration (repository):          ~9 weeks (2026-03-17 to 2026-05-20)
+Intensive AI-assisted hardening window:     ~3 weeks (2026-05-01 to 2026-05-20)
+Commits since 2026-05-01 (main):            50 of 90 total repository commits
+AI-audit defects remediated pre-production: 7 documented (Table 1)
+Documentation markdown files in docs/:      24 at HEAD (vs ~12 at 2026-05-01 review)
+New docs added in May 2026 pass:            FAQ, benchmarks, sensitivity, vulnerability
+                                            derivation, REVIEW_PRE_RUN, literature review
+                                            updates, RUN_NOTES, HANDOFF revisions
+Automated test modules:                     33 (26 at v2.1 infrastructure merge)
+Automated test functions (pytest collect):  115
+Integration smoke test added:               tests/integration/test_smoke_synthetic.py (May 2026)
+CI (GitHub Actions tests.yml):              Python 3.10/3.11/3.12 matrix; 18 recent runs all green
+Long-run monitoring (operations):           Stage 01 complete (5,023 MYRORSS dailies + manifest);
+                                            Stage 02 MRMS in progress; Stage 04c gap-fill restarted
+                                            2026-05-20 after reflectivity fix; logs + GDAL tags
 ```
+
+Examples of AI audit findings beyond Table 1: (i) comprehensive v2.1 review document identifying missing LICENSE, CI, and `pyproject.toml` (resolved same week); (ii) detection that Stages 05–15 had been executed on a 31-event May-2011 smoke slice before Stage 01 finished, invalidating those outputs for production; (iii) documentation drift across Python version strings and `MAX_HAIL_MM` caps reconciled to `_config.py`; (iv) GridRad pipeline ergonomics (streaming 04b inside 04c, worker pools, per-day staging deletion) implemented after operational review; (v) PNAS manuscript and literature-review expansion tying AI-process claims to reproducibility artifacts rather than anecdotal chat use.
 
 ### Figure placeholders
 
-Expected main figures:
+Expected main figures (pending final pipeline outputs):
 
 1. AI-assisted development workflow and repository architecture.
-2. Data-source timeline: MYRORSS, GridRad, MRMS, ERA5, SPC validation.
+2. Data-source timeline: MYRORSS, GridRad gap-fill (Jan 2012–13 Oct 2020), MRMS (from 14 Oct 2020), ERA5, SPC validation.
 3. Stage 01 manifest coverage and source-status summary.
 4. Corrected annual hail climatology.
 5. Analytical 100-year and 1,000-year hail return-period maps.
@@ -376,7 +408,8 @@ The full pipeline contains 15 stages:
 02  MRMS ingestion — daily MESH rasters from operational radar
 03  SPC report download — validation dataset only, not hazard input
 04a ERA5 isotherms — monthly 0°C / −20°C freezing levels for GridRad SHI
-04b GridRad SHI → MESH75 — fills MYRORSS–MRMS temporal gap
+04b GridRad / GridRad-Severe download — NCAR inputs for gap era (2012–2020-10-13)
+04c GridRad gap fill — SHI from sparse Reflectivity (dBZ) → MESH75 daily rasters + GDAL QA tags
 05  Bias correction and filtering — MESH75 calibration, ML optional, deterministic fallback required
 06  SPC validation — corrected MESH75 vs surface reports; source-transition diagnostics
 07  Hail climatology — annual exceedance frequency and occurrence rasters

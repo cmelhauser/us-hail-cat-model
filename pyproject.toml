@@ -1,6 +1,6 @@
 [project]
 name = "us-hail-cat-model"
-version = "2.1.0"
+version = "2.2.0"
 description = "Radar-based probabilistic hail hazard model for CONUS"
 readme = "README.md"
 license = { file = "LICENSE" }

@@ -108,7 +108,8 @@ v2.0 introduced a three-era radar strategy:
 | Era | Source | Purpose |
 |---|---|---|
 | 1998-2011 | MYRORSS | Early historical radar reanalysis |
-| 2012-2019 | GridRad / GridRad-Severe | Gap fill between MYRORSS and operational MRMS |
+| 2012-2020-10-13 | GridRad / GridRad-Severe (Stage 04c) | Gap fill between MYRORSS and operational MRMS |
+| 2020-10-14–present | MRMS | Operational radar era |
 | 2020-present | MRMS | Recent operational radar era |
 
 ERA5 monthly isotherm heights support GridRad Severe Hail Index computation.

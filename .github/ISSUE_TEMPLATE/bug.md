@@ -38,7 +38,7 @@ What happened instead? Paste the relevant log output or traceback:
 - OS: [e.g., Ubuntu 22.04]
 - Python version: [e.g., 3.11.4]
 - Key package versions: `numpy`, `rasterio`, `scipy` (from `pip freeze`)
-- Model version / git commit: [e.g., v2.1.0 / `git rev-parse --short HEAD`]
+- Model version / git commit: [e.g., v2.2.0 / `git rev-parse --short HEAD`]
 
 ## Additional context
 

@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.1**
-**Last updated: 2026-05-04 (main branch, Stage 02 running)**
+**Last updated: 2026-05-28 (`v2.2.0` — 12 UTC → 12 UTC convective days; see `docs/methodology.md` §2.6)**
 
 ---
 
@@ -45,7 +45,7 @@ Do not:
 9. Change output file names without updating the data dictionary.
 10. Assume missing SPC reports mean radar false alarms.
 11. Infer MYRORSS source availability from GeoTIFF file size or all-zero raster values.
-12. Commit generated data, logs, rendered figures, local bootstrap files, or model artifacts.
+12. Commit generated data, logs, rendered figures, local bootstrap files, or model artifacts. **Exception:** `data/analysis/mesh_daily_peaks/` diagnostic summaries are versioned intentionally.
 
 ---
 
@@ -193,15 +193,15 @@ When asked to review the project:
 
 ---
 
-## 9. Confirmed State After 2026-05-03 Scan
+## 9. Confirmed State After 2026-05-20
 
 Current repository state:
 
-- Active branch: `main`.
-- Current synced commit: `2228d54`.
-- GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing for the current PR run.
+- Active branch: `v2.2.0` (replaces retired `v2.1.2`).
+- GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing.
 - Stage helper refactor complete: `_config.py`, `_logging.py`, and `_io.py` are wired into stage scripts where required.
-- Stage 01 full run is still active; do not start another Stage 01 process while it is running.
+- Stage 01 complete; Stage 04c uses sparse **`Reflectivity`** reader — restart gap-fill with `--workers 2` after disk cleanup (`docs/RUN_NOTES.md`).
+- Tracked diagnostic summaries: `data/analysis/mesh_daily_peaks/` (regenerate via `scripts/diagnostics/summarize_mesh_daily_peaks.py`).
 
 ### Files created 2026-05-01 (while pipeline was running)
 

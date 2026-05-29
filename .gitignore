@@ -1,5 +1,12 @@
-# ── Data directory (all subdirectories) ───────────────────────────────────────
-data/
+# ── Data directory (generated pipeline outputs; except tracked analysis summaries) ─
+data/**
+!data/analysis/
+data/analysis/**
+!data/analysis/mesh_daily_peaks/
+!data/analysis/mesh_daily_peaks/**
+
+# ── Local scratch (ad-hoc scripts, plots, draft PDFs) ─────────────────────────
+tmp/
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 logs/

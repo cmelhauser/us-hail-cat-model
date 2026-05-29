@@ -29,8 +29,8 @@ def test_delete_gridrad_inputs_for_day_removes_directories(load_script, tmp_path
     monkeypatch.setattr(s, "GRIDRAD_DIR", g)
     monkeypatch.setattr(s, "GRIDRAD_SEV", sev)
     day = date(2015, 5, 1)
-    d1 = g / "2015" / "20150501"
-    d2 = sev / "2015" / "20150501"
+    d1 = g / "by_convective_day" / "20150501"
+    d2 = sev / "by_convective_day" / "20150501"
     d1.mkdir(parents=True)
     (d1 / "stub.nc").write_text("x", encoding="utf-8")
     d2.mkdir(parents=True)

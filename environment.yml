@@ -1,4 +1,4 @@
-# Conda environment for the CONUS Hail Catastrophe Model v2.1
+# Conda environment for the CONUS Hail Catastrophe Model v2.2
 # Used by Dockerfile and for local reproducible environments.
 #
 # Create: micromamba create -f environment.yml

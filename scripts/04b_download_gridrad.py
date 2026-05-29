@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-04b_download_gridrad.py — Download GridRad / GridRad-Severe NetCDF Inputs (2012–2019)
+04b_download_gridrad.py — Download GridRad / GridRad-Severe NetCDF Inputs (2012–2020-10-13)
 =====================================================================================
 Downloads the GridRad NetCDF inputs required by Stage 04c (gap-fill SHI → MESH75).
 
@@ -9,9 +9,12 @@ public NOAA S3 radar sources used by Stages 01–02. Stage 04c reads those input
 from `data/historical/` (or you can chain **04b → 04c** in one pass with
 ``04c_fill_gridrad_gap.py --with-04b-download``).
 
+**Convective day (v2.2):** each download batch targets one **12 UTC → 12 UTC**
+window (label = date at window start). Timesteps are filtered from two UTC
+calendar catalogs and staged under ``by_convective_day/YYYYMMDD/``.
+
 **Default behavior (disk / memory friendly):** catalogs and downloads are driven
-**one calendar day at a time** so THREDDS planning and local NetCDF staging never
-cover the full 2012–2019 range at once. Use ``--plan-all-days-first`` only if you
+**one convective day at a time**. Use ``--plan-all-days-first`` only if you
 need the legacy “plan everything, then download” schedule (higher peak RAM / disk
 for the plan list).
 
@@ -32,8 +35,8 @@ Data Sources
 
 Local Layout (expected by Stage 04c)
 ------------------------------------
-  data/historical/gridrad/YYYY/YYYYMMDD/*.nc
-  data/historical/gridrad_severe/YYYY/YYYYMMDD/*.nc
+  data/historical/gridrad/by_convective_day/YYYYMMDD/*.nc
+  data/historical/gridrad_severe/by_convective_day/YYYYMMDD/*.nc
 
 Authentication
 --------------
@@ -88,9 +91,19 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 
 try:
     from _config import DATA_ROOT, LOG_ROOT
+    from _io import (
+        calendar_days_for_convective_day,
+        observation_utc_to_convective_day,
+        parse_observation_utc_from_name,
+    )
     from _logging import get_logger
 except ImportError:  # pragma: no cover
     from scripts._config import DATA_ROOT, LOG_ROOT
+    from scripts._io import (
+        calendar_days_for_convective_day,
+        observation_utc_to_convective_day,
+        parse_observation_utc_from_name,
+    )
     from scripts._logging import get_logger
 
 GRIDRAD_DIR = DATA_ROOT / "historical" / "gridrad"
@@ -193,8 +206,8 @@ def _ymd(day: date) -> str:
     return day.strftime("%Y%m%d")
 
 
-def _day_out_dir(base: Path, day: date) -> Path:
-    return base / f"{day.year}" / _ymd(day)
+def _convective_stage_dir(base: Path, convective_day: date) -> Path:
+    return base / "by_convective_day" / _ymd(convective_day)
 
 
 def _catalog_url(dsid: str, day: date) -> str:
@@ -343,7 +356,8 @@ def list_day_catalog_files(
 @dataclass(frozen=True)
 class DownloadItem:
     dsid: str
-    day: date
+    convective_day: date
+    catalog_day: date
     filename: str
     url: str
     out_path: Path
@@ -351,29 +365,46 @@ class DownloadItem:
 
 def plan_downloads_for_day(
     session: requests.Session,
-    day: date,
+    convective_day: date,
     hourly: bool,
     severe: bool,
     *,
     catalog_timeout: tuple[float, float],
 ) -> list[DownloadItem]:
+    """Plan downloads for one convective day (12 UTC → 12 UTC)."""
     items: list[DownloadItem] = []
+    cal_a, cal_b = calendar_days_for_convective_day(convective_day)
 
-    if severe:
-        for fn in list_day_catalog_files(session, DS_SEVERE, day, timeout=catalog_timeout):
-            out_dir = _day_out_dir(GRIDRAD_SEV_DIR, day)
-            out_path = out_dir / fn
-            url = _fileserver_url(DS_SEVERE, day, fn)
-            items.append(DownloadItem(DS_SEVERE, day, fn, url, out_path))
+    for catalog_day in (cal_a, cal_b):
+        if severe:
+            for fn in list_day_catalog_files(
+                session, DS_SEVERE, catalog_day, timeout=catalog_timeout
+            ):
+                obs = parse_observation_utc_from_name(fn)
+                if obs is None or observation_utc_to_convective_day(obs) != convective_day:
+                    continue
+                out_path = _convective_stage_dir(GRIDRAD_SEV_DIR, convective_day) / fn
+                url = _fileserver_url(DS_SEVERE, catalog_day, fn)
+                items.append(
+                    DownloadItem(DS_SEVERE, convective_day, catalog_day, fn, url, out_path)
+                )
 
-    if hourly:
-        for fn in list_day_catalog_files(session, DS_HOURLY, day, timeout=catalog_timeout):
-            out_dir = _day_out_dir(GRIDRAD_DIR, day)
-            out_path = out_dir / fn
-            url = _fileserver_url(DS_HOURLY, day, fn)
-            items.append(DownloadItem(DS_HOURLY, day, fn, url, out_path))
+        if hourly:
+            for fn in list_day_catalog_files(
+                session, DS_HOURLY, catalog_day, timeout=catalog_timeout
+            ):
+                obs = parse_observation_utc_from_name(fn)
+                if obs is None or observation_utc_to_convective_day(obs) != convective_day:
+                    continue
+                out_path = _convective_stage_dir(GRIDRAD_DIR, convective_day) / fn
+                url = _fileserver_url(DS_HOURLY, catalog_day, fn)
+                items.append(
+                    DownloadItem(DS_HOURLY, convective_day, catalog_day, fn, url, out_path)
+                )
 
-    return items
+    # One row per destination path (two catalog days can list the same filename).
+    by_path = {it.out_path: it for it in items}
+    return list(by_path.values())
 
 
 def _download_one(
@@ -474,7 +505,7 @@ def download_planned_items(
 
 def download_for_day(
     session: requests.Session,
-    day: date,
+    convective_day: date,
     *,
     hourly: bool,
     severe: bool,
@@ -484,14 +515,13 @@ def download_for_day(
     max_workers: int,
 ) -> dict[str, int]:
     """
-    Plan and download all GridRad / GridRad-Severe files for one calendar day.
+    Plan and download GridRad inputs for one convective day (12 UTC → 12 UTC).
 
-    Intended for tight disk/memory budgets: call once per day, then run Stage 04c
-    for that day and optionally delete local NetCDF inputs.
+    Files are staged under ``by_convective_day/YYYYMMDD/`` for Stage 04c.
     """
     planned = plan_downloads_for_day(
         session,
-        day,
+        convective_day,
         hourly=hourly,
         severe=severe,
         catalog_timeout=catalog_timeout,
