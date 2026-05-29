@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-05-20 (`v2.1.2` / `main` at `c0b35b8`; Stage 04c gap-fill paused after disk-full incident — restart with `--workers 2`).
+Last updated: 2026-05-28 (`v2.2.0` — active branch; 12 UTC → 12 UTC convective days).
 
 ## What This Project Is
 
@@ -13,7 +13,7 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: 2.1.0 (hardening release; no methodology redesign from v2.0)
+- Version: 2.2.0 (convective day 12 UTC → 12 UTC; breaking change from v2.1 calendar UTC days)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
@@ -21,8 +21,8 @@ stochastic event catalog.
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
-Current operating branch: `v2.1.2` (aligned with `main` at `c0b35b8`). The old
-`v2.1` branch has been merged and is no longer the active development branch.
+Current operating branch: `v2.2.0` (convective-day migration; replaces retired `v2.1.2`).
+The old `v2.1` branch has been merged and is no longer the active development branch.
 
 ## Non-Negotiable Rules
 
@@ -35,7 +35,8 @@ bump.
 | 2 | Stage 05 has a deterministic fallback. `--skip-ml` must produce complete valid output with no optional ML artifact. |
 | 3 | SPC reports are validation only. Never use SPC as a hazard input. |
 | 4 | `event_peaks.npz` is authoritative for Stage 13. Sparse arrays are the source of truth. |
-| 5 | The 0.05 degree grid is fixed in v2.1. Any change requires a version bump and full rerun. |
+| 5 | The 0.05 degree grid is fixed. Convective-day definition (12 UTC start) is versioned in v2.2; any change requires a version bump and full rerun. |
+| 11 | Daily MESH labels use **convective days** (12 UTC → 12 UTC). Stages 01, 02, 04b, 04c filter timesteps with `scripts/_io.py` helpers; do not revert to calendar UTC midnight without a version bump. |
 | 6 | Never commit generated data files, logs, figures, model artifacts, or local bootstrap files. **Exception:** `data/analysis/mesh_daily_peaks/` diagnostic summaries (CSV/PNG + README). |
 | 7 | Update tests and docs whenever methodology, output schemas, or stage behavior changes. |
 | 8 | Grid constants come from `scripts/_config.py`. Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, or `LON_MIN` in stage scripts. |
@@ -138,13 +139,14 @@ auto-**skip** standalone **04b** and run **04c** with **`--with-04b-download --w
 
 ## Stages 04b / 04c (GridRad)
 
-- **04b** (`scripts/04b_download_gridrad.py`): default is **one calendar day at a time**
-  (plan + download per day). **`--plan-all-days-first`** restores the legacy global
-  plan-then-download flow. **`--workers`** defaults to **1** (parallel HTTP GETs *within*
-  the current day only; respect NCAR throttling guidance).
+- **04b** (`scripts/04b_download_gridrad.py`): default is **one convective day at a time**
+  (12 UTC → 12 UTC; plan + download per label). Staging:
+  `gridrad(_severe)/by_convective_day/YYYYMMDD/`. **`--plan-all-days-first`** restores
+  the legacy global plan-then-download flow. **`--workers`** defaults to **1**
+  (parallel HTTP GETs *within* the current day only; respect NCAR throttling guidance).
 - **04c** (`scripts/04c_fill_gridrad_gap.py`): default **`--workers 1`** (sequential days).
   After each day finishes, **`delete_gridrad_inputs_for_day`** removes that day’s trees
-  under `data/historical/gridrad/` and `data/historical/gridrad_severe/` unless
+  under `by_convective_day/YYYYMMDD/` in both `gridrad/` and `gridrad_severe/` unless
   **`--keep-gridrad-inputs`**. **`--with-04b-download`** chains **04b**’s
   **`download_for_day`** before **`process_day`**; with **`--workers > 1`**, each worker
   process uses its own HTTP session (04b is loaded once per worker via a pool
@@ -234,7 +236,7 @@ As of 2026-05-20:
 
 | Area | Status |
 |---|---|
-| Active branch | `v2.1.2` / `main` at `c0b35b8` |
+| Active branch | `v2.2.0` (12 UTC → 12 UTC convective days) |
 | All 15 stage scripts | Written and syntax-checked |
 | Tests | 28 pytest files; GitHub Actions green on Python 3.10/3.11/3.12 |
 | Integration test | `tests/integration/test_smoke_synthetic.py` |

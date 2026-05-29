@@ -105,3 +105,72 @@ def test_stage04b_download_gridrad_list_day_catalog_files_severe_uses_year_catal
         "nexrad_3d_v4_2_20150508T120500Z.nc",
     ]
 
+
+def test_stage04b_plan_downloads_for_day_convective_window(load_script):
+    s = load_script("04b_download_gridrad.py")
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, text):
+            self.text = text
+
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def __init__(self, mapping):
+            self._mapping = mapping
+
+        def get(self, url, timeout=60, stream=False):
+            return Resp(self._mapping[url])
+
+    year_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"
+         xmlns:xlink="http://www.w3.org/1999/xlink" version="1.2">
+  <catalogRef xlink:title="20160721" xlink:href="20160721/catalog.xml" />
+  <catalogRef xlink:title="20160722" xlink:href="20160722/catalog.xml" />
+</catalog>
+"""
+    day21_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"
+         xmlns:xlink="http://www.w3.org/1999/xlink" version="1.2">
+  <dataset name="root">
+    <dataset name="nexrad_3d_v4_2_20160721T110000Z.nc" />
+    <dataset name="nexrad_3d_v4_2_20160721T130000Z.nc" />
+  </dataset>
+</catalog>
+"""
+    day22_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"
+         xmlns:xlink="http://www.w3.org/1999/xlink" version="1.2">
+  <dataset name="root">
+    <dataset name="nexrad_3d_v4_2_20160722T110000Z.nc" />
+    <dataset name="nexrad_3d_v4_2_20160722T130000Z.nc" />
+  </dataset>
+</catalog>
+"""
+    base = s._thredds_base_severe()
+    mapping = {
+        f"{base}2016/catalog.xml": year_xml,
+        f"{base}2016/20160721/catalog.xml": day21_xml,
+        f"{base}2016/20160722/catalog.xml": day22_xml,
+    }
+    fs = FakeSession(mapping)
+    items = s.plan_downloads_for_day(
+        fs,
+        date(2016, 7, 21),
+        hourly=False,
+        severe=True,
+        catalog_timeout=(10.0, 10.0),
+    )
+    names = sorted(it.filename for it in items)
+    assert names == [
+        "nexrad_3d_v4_2_20160721T130000Z.nc",
+        "nexrad_3d_v4_2_20160722T110000Z.nc",
+    ]
+    assert all(
+        it.out_path.parent == s._convective_stage_dir(s.GRIDRAD_SEV_DIR, date(2016, 7, 21))
+        for it in items
+    )
+

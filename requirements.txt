@@ -1,4 +1,4 @@
-# CONUS Hail Cat Model v2.1
+# CONUS Hail Cat Model v2.2
 # Python 3.10+ required
 # Preferred install: pip install -e ".[dev]"
 # Legacy install: pip install -r requirements.txt

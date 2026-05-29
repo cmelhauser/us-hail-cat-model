@@ -3,18 +3,24 @@
 ## Run Context
 
 - Date started: 2026-05-01 14:47 EDT
-- Active branch: `v2.1.2` (aligned with `main`)
-- Current commit: `c0b35b8`
-- Remote sync: `v2.1.2`, `main`, and `origin` are aligned at `c0b35b8`
+- Active branch: `v2.2.0` (convective-day migration; retired `v2.1.2`)
+- Prior production mesh archived under `data/historical/mesh_0.05deg_archive_calendar_utc_00z/` (gitignored)
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active
   development.
 - Python: `.venv/bin/python` 3.9.6
 - Disk available at start: approximately 376 GiB
 
+## v2.2 convective-day migration (2026-05-28)
+
+- **Temporal definition:** daily `mesh_YYYYMMDD.tif` = max over **[label 12:00 UTC, label+1 12:00 UTC)**.
+- **Prior v2.1 rasters** archived under `data/historical/mesh_0.05deg_archive_calendar_utc_00z/`; `mesh_0.05deg/` must be rebuilt.
+- **GridRad staging:** `gridrad(_severe)/by_convective_day/YYYYMMDD/` (not `YYYY/YYYYMMDD/`).
+- **Mesh peak diagnostic:** v2.1 CSV/PNG removed; regenerate after re-ingest with `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
+
 ## Current Run Status
 
-Snapshot taken 2026-05-20:
+Snapshot taken 2026-05-20 (pre-v2.2; superseded by convective-day re-ingest):
 
 - **Stage 04c** reflectivity reader fixed (`Nradecho` → sparse **`Reflectivity`** + lon normalization). Bad **2012** gap TIFFs from the old reader were deleted before restart.
 - **04c paused:** run stopped after **`[Errno 28] No space left on device`**. Stale `data/historical/gridrad/2013/` and `gridrad_severe/2013/` staging trees were removed (~35 GB freed). Gap TIFFs already written were kept; example dates still missing TIFFs: **20130612**, **20130616**, **20130617**.

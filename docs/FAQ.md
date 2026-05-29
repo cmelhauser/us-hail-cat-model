@@ -1,4 +1,4 @@
-# FAQ — CONUS Hail Catastrophe Model v2.1
+# FAQ — CONUS Hail Catastrophe Model v2.2
 
 **Related:** `docs/methodology.md`, `docs/technical_documentation.md`, `docs/uncertainty.md`, `docs/REVIEW_2026-05-01.md §B.7`
 
@@ -12,11 +12,11 @@ Gridded hail hazard return-period maps and a 50,000-year stochastic event catalo
 
 **Q: What is the spatial resolution?**
 
-0.05 degrees (~5.5 km) in EPSG:4326. The grid is 520 rows × 1180 columns. This resolution is fixed in v2.1; changing it requires a version bump and full rerun.
+0.05 degrees (~5.5 km) in EPSG:4326. The grid is 520 rows × 1180 columns. This resolution is fixed; changing it requires a version bump and full rerun.
 
 **Q: What time period does the model cover?**
 
-The observational record runs from April 1998 (MYRORSS start) through the present MRMS operational era. Three radar sources are spliced: MYRORSS (Apr 1998–Dec 2011), GridRad/GridRad-Severe (Jan 2012–13 Oct 2020), and operational MRMS (14 Oct 2020–present). Stage **04c** processes calendar days through **2020-10-13**; there is no radar gap-fill after that date.
+The observational record runs from April 1998 (MYRORSS start) through the present MRMS operational era. Three radar sources are spliced: MYRORSS (Apr 1998–Dec 2011), GridRad/GridRad-Severe (Jan 2012–13 Oct 2020), and operational MRMS (14 Oct 2020–present). Stage **04c** processes **convective days** (12 UTC → 12 UTC) through label **2020-10-13**; there is no radar gap-fill after that date. See `docs/methodology.md` §2.6.
 
 **Q: What is the primary hazard variable?**
 
@@ -104,7 +104,7 @@ Stage 05 has optional machine-learning components for conditional GridRad calibr
 
 **Q: Stage 04c: what is the difference between `--workers` and `--04b-download-workers`?**
 
-On **`04c_fill_gridrad_gap.py`**, **`--workers`** is how many **calendar days** run in parallel (separate processes when `N > 1`). **`--04b-download-workers`** only applies with **`--with-04b-download`**: it parallelizes **HTTP GETs within one day’s** `download_for_day` call. For throttling, think **`04c_workers × 04b_download_workers`** (see `docs/reproduce.md` §5 table). Stage **04b**’s own **`--workers`** flag is unrelated—it only affects within-day GETs when you run **04b** as a standalone script.
+On **`04c_fill_gridrad_gap.py`**, **`--workers`** is how many **convective days** run in parallel (separate processes when `N > 1`). **`--04b-download-workers`** only applies with **`--with-04b-download`**: it parallelizes **HTTP GETs within one convective day’s** `download_for_day` call. For throttling, think **`04c_workers × 04b_download_workers`** (see `docs/reproduce.md` §5 table). Stage **04b**’s own **`--workers`** flag is unrelated—it only affects within-day GETs when you run **04b** as a standalone script.
 
 **Q: Why did many GridRad gap-fill days show zero hail (`active_cells=0`) even when NetCDFs downloaded successfully?**
 
@@ -112,7 +112,7 @@ Stage **04c** must use **reflectivity in dBZ** for SHI. NCAR GridRad v3/v4 files
 
 **Q: Stage 04c failed with "No space left on device" — what should I do?**
 
-Stop the run, delete stale per-day staging under `data/historical/gridrad/` and `data/historical/gridrad_severe/` for the year in progress (gap-fill GeoTIFFs under `mesh_0.05deg/` are kept). Restart with fewer parallel days: **`python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`** (or `1`). `run_pipeline.py --only 04c` always passes **`--workers 4`**, which can hold up to four full day trees (~8–12 GB each) before per-day cleanup. See `docs/RUN_NOTES.md` and `docs/technical_documentation.md` §8.4.
+Stop the run, delete stale staging under `data/historical/gridrad/by_convective_day/` and `data/historical/gridrad_severe/by_convective_day/` for the labels in progress (gap-fill GeoTIFFs under `mesh_0.05deg/` are kept). Restart with fewer parallel days: **`python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`** (or `1`). `run_pipeline.py --only 04c` always passes **`--workers 4`**, which can hold up to four full convective-day trees (~8–12 GB each) before per-day cleanup. See `docs/RUN_NOTES.md` and `docs/technical_documentation.md` §8.4.
 
 **Q: Why must Stage 13 be "sparse-safe"?**
 
@@ -239,7 +239,7 @@ The test suite uses `importlib.util.spec_from_file_location` in `tests/conftest.
 
 **Q: Can I change the grid resolution?**
 
-Not in v2.1. The 0.05° grid is a versioned model assumption. Any change requires regenerating all downstream outputs and bumping the model version to v2.2 or v3.0 depending on scope. See `docs/methodology.md §4`.
+The 0.05° grid remains fixed. **v2.2** changed the **temporal** definition of a daily raster to a **12 UTC → 12 UTC convective day** (see `docs/methodology.md` §2.6). That requires re-running Stages 01, 02, 04c, and downstream stages; archived v2.1 calendar-UTC GeoTIFFs are not interchangeable. Further grid or day-definition changes need a version bump and full rerun.
 
 **Q: Where is the documentation index?**
 

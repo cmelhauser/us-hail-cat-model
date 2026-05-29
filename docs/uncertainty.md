@@ -77,7 +77,7 @@ error in freezing-level height yields a ~2–5% SHI error in typical environment
 
 Each radar day's corrected MESH75 raster is a spatial maximum over the day's
 available sweeps. The temporal resolution of the underlying radar mosaics (5–6
-minutes for MRMS; hourly for MYRORSS) means the "daily maximum" is well
+minutes for MRMS; hourly for MYRORSS) means the "convective-day maximum" (12 UTC → 12 UTC) is well
 resolved for long-duration events but may miss short-duration isolated
 convection in MYRORSS.
 

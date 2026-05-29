@@ -98,17 +98,17 @@ The model uses radar-derived hail information as the primary hazard field. Human
 
 ### MYRORSS
 
-MYRORSS provides the early historical radar reanalysis period from April 1998 through December 2011. The pipeline reads both plain `.netcdf` and `.netcdf.gz` archive objects, decodes sparse source files, accumulates daily maximum MESH, aggregates to a 0.05 degree grid, and writes GeoTIFF outputs. A daily manifest records source availability, source file counts, read errors, active cells, maximum MESH, and processing status.
+MYRORSS provides the early historical radar reanalysis period from April 1998 through December 2011. The pipeline reads both plain `.netcdf` and `.netcdf.gz` archive objects, decodes sparse source files, and accumulates the cell-wise maximum MESH over **convective days** defined as **12 UTC → 12 UTC** (label = date at window start), then aggregates to a 0.05 degree grid and writes GeoTIFF outputs. A daily manifest records source availability, source file counts, read errors, active cells, maximum MESH, and processing status.
 
 ### GridRad and GridRad-Severe
 
-GridRad or GridRad-Severe fills the gap from January 2012 through 13 October 2020 (inclusive). Stage **04b** downloads hourly GridRad and 5-minute GridRad-Severe NetCDF inputs from NCAR; Stage **04c** computes daily MESH75 on the canonical 0.05° grid. GridRad-Severe is preferred when available because higher temporal sampling better resolves short-lived hail cores.
+GridRad or GridRad-Severe fills the gap from January 2012 through 13 October 2020 (inclusive). Stage **04b** downloads timesteps that fall in each 12 UTC → 12 UTC convective window; Stage **04c** computes daily MESH75 on the canonical 0.05° grid. GridRad-Severe is preferred when available because higher temporal sampling better resolves short-lived hail cores.
 
 Severe Hail Index is derived from three-dimensional **reflectivity in dBZ** and ERA5 isotherm fields, then converted to MESH75 using the Murillo and Homeyer (2021) corrigendum coefficients. NCAR GridRad v3/v4 files typically store reflectivity as sparse `Reflectivity(Index)` with an `index` vector; the pipeline reconstructs a dense vertical profile per grid column. The 3-D field `Nradecho` is an echo mask, not dBZ, and is excluded from SHI. Longitudes given in 0–360° form are normalized before CONUS masking. Gap-fill GeoTIFFs carry GDAL metadata tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`, `SOURCE`, `DATE`) for operational QA.
 
 ### MRMS
 
-Operational MRMS supplies the recent radar era from **14 October 2020** onward. The pipeline handles native orientation and longitude conventions before writing daily model-grid MESH rasters.
+Operational MRMS supplies the recent radar era from **14 October 2020** onward. The pipeline handles native orientation and longitude conventions before writing convective-day model-grid MESH rasters (same 12 UTC → 12 UTC definition as MYRORSS and GridRad).
 
 ### ERA5
 

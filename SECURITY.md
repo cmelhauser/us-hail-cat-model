@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.1.x   | ✅ Active |
+| 2.2.x   | ✅ Active |
+| 2.1.x   | ❌ Superseded (calendar-UTC daily rasters; not comparable to 2.2) |
 | 2.0.x   | ⚠️  Critical fixes only |
 | 1.x     | ❌ End of life |
 

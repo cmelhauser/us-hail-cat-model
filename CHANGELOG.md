@@ -7,7 +7,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased] — 2026-05-20
+## [Unreleased]
+
+## [2.2.0] — 2026-05-28
+
+**Breaking methodology change.** Daily MESH rasters now use **12 UTC → 12 UTC convective days** (label = date at window start). v2.1 calendar-UTC (00Z–00Z) production GeoTIFFs are not comparable; re-run Stages **01**, **02**, and **04c** (and downstream **05–15**) on a clean `mesh_0.05deg/` tree.
+
+### Changed
+
+- **`MODEL_VERSION`:** `2.2.0`; **`CONVECTIVE_DAY_START_HOUR_UTC`:** `12` in `scripts/_config.py`.
+- **Stages 01, 02:** List timesteps from two UTC calendar archive prefixes, filter by observation time, write `mesh_YYYYMMDD.tif` with GDAL tag `CONVECTIVE_WINDOW_UTC`.
+- **Stages 04b, 04c:** Download and process convective days; stage GridRad under `by_convective_day/YYYYMMDD/`; filter timesteps by parsed filename UTC.
+- **Documentation:** Convective-day definition in `docs/methodology.md` §2.6, `docs/data_dictionary.md`, `AGENTS.md`, `docs/FAQ.md`, `docs/pnas_article_ai_hail_model.md`, and related pipeline docs.
+
+### Added
+
+- **`scripts/_io.py`:** Convective-day helpers (`convective_day_window_utc`, `observation_utc_to_convective_day`, `parse_observation_utc_from_name`, `mesh_path_for_convective_day`, `filter_keys_for_convective_day`, …).
+- **`tests/test_convective_day.py`:** Unit tests for assignment and filtering edge cases.
+
+---
+
+## [2.1.x] — 2026-05-20
 
 ### Fixed
 

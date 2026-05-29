@@ -65,7 +65,7 @@ Do not use area means, bilinear interpolation, or summation for MESH fields unle
 2. List source objects for each day.
 3. Accept both plain NetCDF and gzipped NetCDF objects.
 4. Decode sparse pixel arrays into the native MYRORSS grid.
-5. Accumulate daily maximum MESH at native resolution.
+5. Accumulate convective-day maximum MESH at native resolution (12 UTC → 12 UTC; see `methodology.md` §2.6).
 6. Subset to the CONUS model domain.
 7. Aggregate to 0.05 degree by block maximum.
 8. Apply Stage 01 physical QA: non-finite, negative, and `>300.0 mm` values
@@ -211,14 +211,14 @@ Stage 04a prepares monthly thermodynamic context for GridRad SHI computation and
 **Output:** NetCDF files under:
 
 ```text
-data/historical/gridrad/YYYY/YYYYMMDD/*.nc
-data/historical/gridrad_severe/YYYY/YYYYMMDD/*.nc
+data/historical/gridrad/by_convective_day/YYYYMMDD/*.nc
+data/historical/gridrad_severe/by_convective_day/YYYYMMDD/*.nc
 ```
 
 ### 7.1 Default schedule (disk- and memory-friendly)
 
 By default the script **does not** build one giant download list for the whole
-2012–01–01 … 2020–10–13 range. Instead, for **each calendar day** it:
+2012–01–01 … 2020–10–13 range. Instead, for **each convective day** (12 UTC → 12 UTC) it:
 
 1. Queries THREDDS for that day’s filenames (month catalog for hourly; year + day catalog for severe).
 2. Downloads only that day’s files (resumable: existing non-empty `.nc` files are skipped).
@@ -252,9 +252,9 @@ This caps the in-memory plan to **one day’s file list** and avoids holding hun
 
 ### 8.1 Default run shape (disk- and memory-friendly)
 
-1. **Sequential calendar days by default:** `--workers` defaults to **`1`** (one Python process; no `ProcessPoolExecutor` fan-out). Increase only if you have RAM headroom and want parallel days.
+1. **Sequential convective days by default:** `--workers` defaults to **`1`** (one Python process; no `ProcessPoolExecutor` fan-out). Increase only if you have RAM headroom and want parallel days.
 2. **Per-day NetCDF handling:** each file is opened, processed column-by-column, and closed before the next file; the daily accumulator is a single **520×1180** `float32` array (same order of magnitude as other daily stages).
-3. **Automatic cleanup of GridRad staging:** after **each** calendar day is handled (whether the GeoTIFF was written, skipped because it already existed, marked no-data, or ended in error), the directories  
+3. **Automatic cleanup of GridRad staging:** after **each** convective day is handled (whether the GeoTIFF was written, skipped because it already existed, marked no-data, or ended in error), the directories  
    `data/historical/gridrad/YYYY/YYYYMMDD/` and `data/historical/gridrad_severe/YYYY/YYYYMMDD/`  
    are removed with `shutil.rmtree` **unless** you pass **`--keep-gridrad-inputs`**.  
    - **Why:** keeps the GridRad tree from occupying a full multi-year archive on disk when you only need the derived `mesh_*.tif` products.  
@@ -276,7 +276,7 @@ This loads Stage **04b** in-process via `importlib` (module registered in `sys.m
 before `exec_module` so dataclasses resolve correctly in worker processes). With
 **`--workers 1`**, the parent holds one `requests.Session` for all days. With
 **`--workers N`** and **`N > 1`**, worker processes use a pool initializer so **04b**
-is loaded **once per worker** (not once per day); each calendar day still opens a
+is loaded **once per worker** (not once per day); each convective day still opens a
 **new** `requests.Session`, runs
 **`download_for_day`** when the output GeoTIFF is absent, then **`process_day`**.
 Expect roughly **`N × (--04b-download-workers)`** peak concurrent HTTP GETs unless
@@ -287,8 +287,8 @@ downloads skip quickly—stay within NCAR/GDEX throttling.
 | Goal | Typical pattern |
 |---|---|
 | Parallel **gap-fill only** (inputs already downloaded) | `04c` with `--workers N` and **no** `--with-04b-download` |
-| One calendar day at a time; maximize **within-day** download concurrency | `04c --workers 1 --with-04b-download --04b-download-workers M` |
-| Many calendar days at once; each day may **download then process** | `04c --workers N --with-04b-download` — watch **`N × M`** against NCAR/GDEX limits |
+| One convective day at a time; maximize **within-day** download concurrency | `04c --workers 1 --with-04b-download --04b-download-workers M` |
+| Many convective days at once; each day may **download then process** | `04c --workers N --with-04b-download` — watch **`N × M`** against NCAR/GDEX limits |
 | Keep a full local GridRad tree between stages | Run **`04b`** then **`04c`** separately; use **`--keep-gridrad-inputs`** on **04c** if you need to retain trees after each day |
 
 On **04c**, **`--workers`** counts **processes across days**. **`--04b-download-workers`**
@@ -318,7 +318,7 @@ own stage.
 
 Optional **process-based** parallelism across days. **`--with-04b-download`** is
 allowed with **`--workers > 1`**: each worker runs download-then-process for its
-assigned days (separate calendar days, separate on-disk trees). **Do not** set
+assigned days (separate convective days, separate on-disk trees). **Do not** set
 `workers × 04b-download-workers` so high that NCAR rate limits trigger. When
 `workers > 1`, **deletion of GridRad inputs** still runs in the **parent** process
 after each worker result returns.

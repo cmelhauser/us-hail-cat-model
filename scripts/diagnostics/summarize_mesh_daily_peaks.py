@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Scan mesh_0.05deg daily GeoTIFFs, read MAX_MESH75_MM tags (or raster max),
-write mesh_daily_peaks.csv, percentile summary, and ECDF comparison plots.
+Scan mesh_0.05deg convective-day GeoTIFFs (12 UTC → 12 UTC labels), read
+MAX_MESH75_MM tags (or raster max), write mesh_daily_peaks.csv, percentile
+summary, and ECDF comparison plots.
 
 Usage (from repo root):
   .venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py

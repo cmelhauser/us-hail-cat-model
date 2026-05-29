@@ -24,7 +24,7 @@
 
 ### `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif`
 
-Raw daily maximum MESH raster before Stage 05 correction.
+Raw convective-day maximum MESH raster before Stage 05 correction (12 UTC → 12 UTC; see `docs/methodology.md` §2.6).
 
 | Attribute | Value |
 |---|---|
@@ -32,16 +32,18 @@ Raw daily maximum MESH raster before Stage 05 correction.
 | Shape | 520 × 1180 |
 | Units | mm |
 | Source | MYRORSS, GridRad-derived MESH75, or operational MRMS |
-| Meaning | daily maximum estimated hail size per grid cell |
+| Meaning | convective-day maximum estimated hail size per grid cell |
+| Label `YYYYMMDD` | Convective-day date at 12 UTC window start, not calendar UTC midnight |
 | Important caveat | `0.0` means no MESH signal in the raster cell; use the Stage 01 manifest to distinguish missing MYRORSS source days from available-source no-hail days |
 | Value QA | Values must be finite and within `[0.0, 300.0]` mm after each producing stage's QA pass |
 
-**Optional GDAL tags (Stage 04c gap-fill outputs):**
+**Optional GDAL tags:**
 
 | Tag | Meaning |
 |---|---|
-| `PRODUCT` | `MESH75` |
-| `DATE` | ISO calendar date (`YYYY-MM-DD`) |
+| `CONVECTIVE_WINDOW_UTC` | ISO interval `[start, end)` for the 12Z→12Z window (Stages 01–02, 04c) |
+| `PRODUCT` | `MESH75` (Stage 04c) |
+| `DATE` | Convective-day label (`YYYY-MM-DD`) |
 | `SOURCE` | `gridrad-severe-5min` or `gridrad-hourly` |
 | `MAX_MESH75_MM` | Daily maximum hail in the raster (mm) |
 | `MAX_MESH75_IN` | Same in inches |
@@ -57,7 +59,7 @@ availability from no-hail raster values.
 
 | Column | Type | Meaning |
 |---|---|---|
-| `date` | ISO date | MYRORSS day, `YYYY-MM-DD` |
+| `date` | ISO date | Convective-day label (`YYYY-MM-DD` at 12 UTC start), not calendar UTC midnight |
 | `output_path` | string | Relative path to the daily GeoTIFF |
 | `source_files` | integer | Total MYRORSS NetCDF objects found for the day |
 | `plain_netcdf_files` | integer | Source objects ending in `.netcdf` |
@@ -96,8 +98,8 @@ Staging directories for GridRad / GridRad-Severe NetCDF trees downloaded in Stag
 
 | Attribute | Value |
 |---|---|
-| Type | nested directories by calendar day |
-| Ephemeral by default | After Stage **04c** processes a day, both trees for that `YYYYMMDD` are deleted unless **`--keep-gridrad-inputs`** is passed |
+| Type | `by_convective_day/YYYYMMDD/` under each staging root (12 UTC → 12 UTC label) |
+| Ephemeral by default | After Stage **04c** processes a convective day, that label’s staging tree is deleted unless **`--keep-gridrad-inputs`** is passed |
 | Meaning | Not a required long-term archive path in the default pipeline; keep inputs only when debugging or reprocessing without re-downloading |
 
 **Reflectivity variables (Stage 04c):** SHI uses **dBZ** from sparse **`Reflectivity(Index)`** and **`index`** (reconstructed to a dense 3-D grid). **`Nradecho`** is not reflectivity and must not be used for SHI.

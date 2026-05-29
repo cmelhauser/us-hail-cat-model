@@ -5,11 +5,11 @@
 Downloads NOAA operational MRMS MESH (Maximum Expected Size of Hail) data from
 AWS S3 for the period October 2020 – present.
 
-For each day:
-  1. Lists all MESH timestep files (~720 per day, 2-min cadence) from S3
+For each **convective day** (12 UTC → 12 UTC; label = date at window start):
+  1. Lists MESH timesteps from the two UTC calendar S3 prefixes that overlap the window
   2. Streams and decompresses each gzipped GRIB2 file
   3. Extracts the CONUS subset from the full grid
-  4. Accumulates the daily maximum MESH per native 0.01° pixel
+  4. Accumulates the convective-day maximum MESH per native 0.01° pixel
   5. Aggregates to 0.05° via block-maximum (5×5 cells)
   6. Applies physical QA (finite, non-negative, ≤300.0 mm)
   7. Saves a single-band float32 GeoTIFF (MESH in mm)
@@ -46,7 +46,8 @@ Grid Specification
 Output
 ------
   data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif
-  Single-band float32 GeoTIFF. Value = daily max MESH in mm.
+  Single-band float32 GeoTIFF. Value = convective-day max MESH in mm.
+  GDAL tag ``CONVECTIVE_WINDOW_UTC`` records the 12Z→12Z interval.
   NoData = 0.0. CRS = EPSG:4326. LZW compressed.
   Same path/naming convention as stage 01 — files interleave seamlessly.
 
@@ -87,14 +88,28 @@ try:
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
         NODATA, MAX_HAIL_MM,
     )
-    from _io import sanitize_hail_values, write_geotiff
+    from _io import (
+        calendar_days_for_convective_day,
+        convective_day_window_tag,
+        filter_keys_for_convective_day,
+        mesh_path_for_convective_day,
+        sanitize_hail_values,
+        write_geotiff,
+    )
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
         NODATA, MAX_HAIL_MM,
     )
-    from scripts._io import sanitize_hail_values, write_geotiff
+    from scripts._io import (
+        calendar_days_for_convective_day,
+        convective_day_window_tag,
+        filter_keys_for_convective_day,
+        mesh_path_for_convective_day,
+        sanitize_hail_values,
+        write_geotiff,
+    )
     from scripts._logging import get_logger
 
 # ── paths ─────────────────────────────────────────────────────────────────────
@@ -165,9 +180,9 @@ def get_s3_client():
         region_name=S3_REGION,
     )
 
-def list_mesh_keys(s3, day: date) -> list:
-    """List all MESH GRIB2 file keys for a given day."""
-    prefix = f"{S3_PREFIX}{day.strftime('%Y%m%d')}/"
+def list_mesh_keys(s3, calendar_day: date) -> list:
+    """List all MESH GRIB2 file keys for a UTC calendar day (S3 prefix)."""
+    prefix = f"{S3_PREFIX}{calendar_day.strftime('%Y%m%d')}/"
     keys = []
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
@@ -175,6 +190,15 @@ def list_mesh_keys(s3, day: date) -> list:
             if obj["Key"].endswith(".grib2.gz"):
                 keys.append(obj["Key"])
     return keys
+
+
+def list_mesh_keys_for_convective_day(s3, convective_day: date) -> list:
+    """List MRMS keys in the 12 UTC → 12 UTC window labeled ``convective_day``."""
+    cal_a, cal_b = calendar_days_for_convective_day(convective_day)
+    keys: list[str] = []
+    for cal in (cal_a, cal_b):
+        keys.extend(list_mesh_keys(s3, cal))
+    return filter_keys_for_convective_day(keys, convective_day)
 
 def timestep_conus_mesh_from_grib_bytes(grib_bytes: bytes) -> tuple[np.ndarray, int]:
     """
@@ -263,15 +287,15 @@ def block_max(data: np.ndarray, factor: int) -> np.ndarray:
 
 def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
     """
-    Download all MESH timesteps for one day, compute daily max,
-    aggregate to 0.05°, and write GeoTIFF.
+    Download MESH timesteps for one convective day (12 UTC → 12 UTC), compute max,
+    aggregate to 0.05°, and write GeoTIFF. ``day`` is the convective-day label.
     """
-    out_path = OUT_DIR / f"{day.year}" / f"mesh_{day.strftime('%Y%m%d')}.tif"
+    out_path = mesh_path_for_convective_day(OUT_DIR, day)
 
     if out_path.exists():
         return {"skipped": True}
 
-    keys = list_mesh_keys(s3, day)
+    keys = list_mesh_keys_for_convective_day(s3, day)
 
     if dry_run:
         return {"files": len(keys), "dry_run": True}
@@ -279,7 +303,11 @@ def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
     if not keys:
         # No data for this day — write an all-zero file
         data = np.zeros((OUT_NROWS, OUT_NCOLS), dtype=np.float32)
-        write_geotiff(data, out_path)
+        write_geotiff(
+            data,
+            out_path,
+            tags={"CONVECTIVE_WINDOW_UTC": convective_day_window_tag(day)},
+        )
         return {"files": 0, "pixels": 0, "max_mesh_mm": 0.0}
 
     # Accumulate daily max at native resolution (north-to-south)
@@ -319,7 +347,11 @@ def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
     )
     if n_repaired:
         log(f"    WARN: removed {n_repaired:,} non-finite/out-of-bound cells for {day}")
-    write_geotiff(out_data, out_path)
+    write_geotiff(
+        out_data,
+        out_path,
+        tags={"CONVECTIVE_WINDOW_UTC": convective_day_window_tag(day)},
+    )
 
     active = out_data[(out_data > 0) & np.isfinite(out_data)]
     peak = float(active.max()) if active.size else 0.0

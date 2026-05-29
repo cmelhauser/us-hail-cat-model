@@ -1,14 +1,14 @@
-# Session Handoff — CONUS Hail Catastrophe Model v2.1
+# Session Handoff — CONUS Hail Catastrophe Model v2.2
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-05-20 (`v2.1.2` / `main` at `c0b35b8`; Stage 04c gap-fill paused for disk cleanup).
+> Last updated: 2026-05-28 (**v2.2.0** convective-day migration: 12 UTC → 12 UTC daily MESH; full re-ingest from Stages 01/02/04c required).
 
 ---
 
 ## Repository
 
 - **Local:** `/Users/melhauserc/GitHub/us-hail-cat-model`
-- **Branch:** `v2.1.2` / `main` — synced with `origin` at commit `c0b35b8`
+- **Branch:** `v2.2.0` — convective-day release (replaces retired `v2.1.2`)
 - **Working tree:** should be kept clean except for intentional documentation or
   code edits in the current session
 - **Historical note:** `v2.1` has been merged and is no longer the active

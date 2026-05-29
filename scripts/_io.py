@@ -23,12 +23,16 @@ inline copies they replace — the refactor is purely a mechanical substitution.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 
 try:
     from _config import (
+        CONVECTIVE_DAY_START_HOUR_UTC,
         LAT_MAX,
         LON_MIN,
         NROWS,
@@ -39,6 +43,7 @@ try:
     )
 except ImportError:  # pragma: no cover - exercised by pytest importlib loading
     from scripts._config import (
+        CONVECTIVE_DAY_START_HOUR_UTC,
         LAT_MAX,
         LON_MIN,
         NROWS,
@@ -47,6 +52,116 @@ except ImportError:  # pragma: no cover - exercised by pytest importlib loading
         NODATA,
         MAX_HAIL_MM,
     )
+
+_UTC = timezone.utc
+_RE_GRIDRAD_UTC = re.compile(r"(\d{8})T(\d{6})Z", re.IGNORECASE)
+_RE_MYRORSS_UTC = re.compile(r"(\d{8})-(\d{6})")
+_RE_MRMS_UTC = re.compile(r"(\d{8})-(\d{6})")
+
+# ---------------------------------------------------------------------------
+# Convective day (12 UTC → 12 UTC)
+# ---------------------------------------------------------------------------
+
+def convective_day_window_utc(
+    convective_day: date,
+    start_hour_utc: int = CONVECTIVE_DAY_START_HOUR_UTC,
+) -> tuple[datetime, datetime]:
+    """Return [start, end) UTC for a convective day labeled ``convective_day``.
+
+    Label ``2016-07-21`` means 2016-07-21 12:00 UTC through 2016-07-22 12:00 UTC
+    (exclusive end).
+    """
+    start = datetime(
+        convective_day.year,
+        convective_day.month,
+        convective_day.day,
+        start_hour_utc,
+        0,
+        0,
+        tzinfo=_UTC,
+    )
+    return start, start + timedelta(days=1)
+
+
+def observation_utc_to_convective_day(
+    obs_utc: datetime,
+    start_hour_utc: int = CONVECTIVE_DAY_START_HOUR_UTC,
+) -> date:
+    """Map a UTC observation time to its convective-day label."""
+    if obs_utc.tzinfo is None:
+        obs_utc = obs_utc.replace(tzinfo=_UTC)
+    else:
+        obs_utc = obs_utc.astimezone(_UTC)
+    shifted = obs_utc - timedelta(hours=start_hour_utc)
+    return shifted.date()
+
+
+def observation_in_convective_day(
+    obs_utc: datetime,
+    convective_day: date,
+    start_hour_utc: int = CONVECTIVE_DAY_START_HOUR_UTC,
+) -> bool:
+    """True if ``obs_utc`` falls in the convective window for ``convective_day``."""
+    start, end = convective_day_window_utc(convective_day, start_hour_utc)
+    if obs_utc.tzinfo is None:
+        obs_utc = obs_utc.replace(tzinfo=_UTC)
+    else:
+        obs_utc = obs_utc.astimezone(_UTC)
+    return start <= obs_utc < end
+
+
+def calendar_days_for_convective_day(convective_day: date) -> tuple[date, date]:
+    """UTC calendar dates whose archives can contain timesteps for this convective day."""
+    return convective_day, convective_day + timedelta(days=1)
+
+
+def parse_observation_utc_from_name(name: str) -> datetime | None:
+    """Parse UTC time from MYRORSS, MRMS, or GridRad-style filenames."""
+    for pattern in (_RE_GRIDRAD_UTC, _RE_MYRORSS_UTC, _RE_MRMS_UTC):
+        m = pattern.search(name)
+        if not m:
+            continue
+        ymd, hms = m.group(1), m.group(2)
+        try:
+            return datetime(
+                int(ymd[0:4]),
+                int(ymd[4:6]),
+                int(ymd[6:8]),
+                int(hms[0:2]),
+                int(hms[2:4]),
+                int(hms[4:6]),
+                tzinfo=_UTC,
+            )
+        except ValueError:
+            continue
+    return None
+
+
+def convective_day_window_tag(convective_day: date) -> str:
+    """ISO interval tag for GeoTIFF metadata."""
+    start, end = convective_day_window_utc(convective_day)
+    return f"{start.isoformat()}/{end.isoformat()}"
+
+
+def mesh_path_for_convective_day(mesh_dir: Path, convective_day: date) -> Path:
+    """Canonical daily MESH GeoTIFF path for a convective-day label."""
+    ymd = convective_day.strftime("%Y%m%d")
+    return mesh_dir / f"{convective_day.year}" / f"mesh_{ymd}.tif"
+
+
+def filter_keys_for_convective_day(
+    keys: Iterable[str],
+    convective_day: date,
+    start_hour_utc: int = CONVECTIVE_DAY_START_HOUR_UTC,
+) -> list[str]:
+    """Keep object keys whose parsed UTC time maps to ``convective_day``."""
+    out: list[str] = []
+    for key in keys:
+        obs = parse_observation_utc_from_name(Path(key).name)
+        if obs is not None and observation_utc_to_convective_day(obs, start_hour_utc) == convective_day:
+            out.append(key)
+    return sorted(set(out))
+
 
 # ---------------------------------------------------------------------------
 # GeoTIFF writing

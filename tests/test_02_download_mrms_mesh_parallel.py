@@ -34,11 +34,11 @@ def test_stage02_process_day_parallel_merge_matches_numpy_maximum(load_script, m
         return key, arr, int(np.count_nonzero(arr)), None
 
     monkeypatch.setattr(s, "_fetch_and_decode_timestep", fake_fetch)
-    monkeypatch.setattr(s, "list_mesh_keys", lambda _s3, _day: list(keys))
+    monkeypatch.setattr(s, "list_mesh_keys_for_convective_day", lambda _s3, _day: list(keys))
 
     written: list[np.ndarray] = []
 
-    def fake_write(data, path):
+    def fake_write(data, path, **kwargs):
         written.append(np.asarray(data, dtype=np.float32).copy())
 
     monkeypatch.setattr(s, "write_geotiff", fake_write)
@@ -74,11 +74,11 @@ def test_stage02_process_day_parallel_skips_failed_timesteps(load_script, monkey
         return key, arr_a, int(np.count_nonzero(arr_a)), None
 
     monkeypatch.setattr(s, "_fetch_and_decode_timestep", fake_fetch)
-    monkeypatch.setattr(s, "list_mesh_keys", lambda _s3, _day: list(keys))
+    monkeypatch.setattr(s, "list_mesh_keys_for_convective_day", lambda _s3, _day: list(keys))
 
     written: list[np.ndarray] = []
 
-    def fake_write(data, path):
+    def fake_write(data, path, **kwargs):
         written.append(np.asarray(data, dtype=np.float32).copy())
 
     monkeypatch.setattr(s, "write_geotiff", fake_write)

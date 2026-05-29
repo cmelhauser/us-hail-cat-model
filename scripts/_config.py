@@ -15,7 +15,8 @@ a relative import — use sys.path insertion or `importlib` if needed.
 Stage scripts add their parent directory to sys.path via REPO_ROOT resolution,
 so `from _config import ...` works when scripts are run from repo root.
 
-v2.1 Note: Grid constants are intentionally fixed for the lifetime of v2.1.
+v2.2 Note: Grid constants are intentionally fixed; convective-day windows are
+defined by CONVECTIVE_DAY_START_HOUR_UTC (12 UTC) in scripts/_io.py.
 The "0.05° grid is fixed" rule is a non-negotiable implementation constraint.
 """
 
@@ -24,7 +25,10 @@ from __future__ import annotations
 from pathlib import Path
 
 # ── Model version ─────────────────────────────────────────────────────────────
-MODEL_VERSION: str = "2.1.0"
+MODEL_VERSION: str = "2.2.0"
+
+# Daily hail rasters use a 12 UTC → 12 UTC convective day (see scripts/_io.py).
+CONVECTIVE_DAY_START_HOUR_UTC: int = 12
 
 # ── Grid geometry (0.05° CONUS) ───────────────────────────────────────────────
 # These values define the authoritative grid for all raster I/O.
@@ -122,8 +126,9 @@ GEOTIFF_PROFILE: dict = {
 
 # ── Public API ────────────────────────────────────────────────────────────────
 __all__ = [
-    # Version
+    # Version / temporal aggregation
     "MODEL_VERSION",
+    "CONVECTIVE_DAY_START_HOUR_UTC",
     # Grid geometry
     "DX", "NROWS", "NCOLS", "LAT_MAX", "LON_MIN", "LAT_MIN", "LON_MAX",
     "CRS", "N_CELLS",

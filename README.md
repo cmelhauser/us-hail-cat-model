@@ -1,6 +1,6 @@
-# CONUS Hail Catastrophe Model — v2.1
+# CONUS Hail Catastrophe Model — v2.2
 
-[![Version](https://img.shields.io/badge/version-v2.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v2.2-blue)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![CI](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml/badge.svg)](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml)
@@ -26,11 +26,11 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 
 ## Overview
 
-Version 2.1 is a **hardening release**, not a redesign. The 15-stage pipeline and 0.05° grid are unchanged from v2.0. This release improves calibration robustness, event grouping logic, EVT diagnostics, stochastic simulation memory safety, and test coverage.
+Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days** (label = date at window start). The 15-stage pipeline and 0.05° grid are unchanged from v2.1 aside from this temporal definition; v2.1 calendar-UTC production GeoTIFFs require full re-ingest. See `docs/methodology.md` §2.6.
 
 The model produces:
 
-- Corrected daily MESH75 rasters (1998–present)
+- Corrected convective-day MESH75 rasters (1998–present)
 - Stage 01 source-coverage manifest distinguishing missing source days from true no-hail days
 - Shared hail-value QA guard for non-finite, negative, or `>300.0 mm` artifacts
 - A sparse historical event catalog
@@ -200,7 +200,7 @@ python run_pipeline.py --validate
 
 | Output | Location | Description |
 |--------|----------|-------------|
-| Raw daily MESH rasters | `data/historical/mesh_0.05deg/` | Stage 01/02/04c daily GeoTIFFs before correction |
+| Raw daily MESH rasters | `data/historical/mesh_0.05deg/` | Stage 01/02/04c convective-day (12Z→12Z) GeoTIFFs before correction |
 | Mesh daily peak summaries | `data/analysis/mesh_daily_peaks/` | Optional era QA (CSV, percentiles, ECDF); tracked in git |
 | Stage 01 source manifest | `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` | Per-day MYRORSS source counts, QA-repaired daily maxima, and `missing_source` / `no_hail_pixels` / `ok` status |
 | Corrected MESH rasters | `data/historical/mesh_0.05deg_corrected/` | Daily MESH75 grids |

@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.1**
-**Last updated: 2026-05-20 (`v2.1.2` / `main` at `c0b35b8`; Stage 04c paused — see `docs/RUN_NOTES.md`)**
+**Last updated: 2026-05-28 (`v2.2.0` — 12 UTC → 12 UTC convective days; see `docs/methodology.md` §2.6)**
 
 ---
 
@@ -197,7 +197,7 @@ When asked to review the project:
 
 Current repository state:
 
-- Active branch: `v2.1.2` / `main` at `c0b35b8`.
+- Active branch: `v2.2.0` (replaces retired `v2.1.2`).
 - GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing.
 - Stage helper refactor complete: `_config.py`, `_logging.py`, and `_io.py` are wired into stage scripts where required.
 - Stage 01 complete; Stage 04c uses sparse **`Reflectivity`** reader — restart gap-fill with `--workers 2` after disk cleanup (`docs/RUN_NOTES.md`).
