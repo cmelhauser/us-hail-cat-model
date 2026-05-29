@@ -42,6 +42,7 @@ bump.
 | 8 | Grid constants come from `scripts/_config.py`. Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, or `LON_MIN` in stage scripts. |
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
 | 10 | Use `scripts/_logging.py` for stage loggers and `scripts/_io.py` for shared raster/geospatial helpers. |
+| 12 | **Git:** commit and push only to **`origin`** (`cmelhauser/us-hail-cat-model`). Never `git push upstream`. PRs: `gh pr create --repo cmelhauser/us-hail-cat-model --base main`. See `docs/GIT_REMOTES.md`. |
 
 ## Known Issues / Discrepancies
 

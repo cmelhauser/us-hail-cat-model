@@ -55,6 +55,21 @@ pre-commit install
 
 ---
 
+## Git remotes
+
+**Push, branch tracking, and pull requests use `origin` only** (`cmelhauser/us-hail-cat-model`).
+The `upstream` remote (if present) is **fetch-only** — never push or open PRs against it.
+
+After cloning, run once:
+
+```bash
+./scripts/setup_git_remotes.sh
+```
+
+See `docs/GIT_REMOTES.md` for details.
+
+---
+
 ## Branch Workflow
 
 | Branch | Purpose |
@@ -148,7 +163,13 @@ New documents should be indexed in `docs/README.md`.
 2. Make your changes, add tests, update documentation.
 3. Run `pre-commit run --all-files` and fix any lint issues.
 4. Run the full test suite locally.
-5. Open a PR against `main`. Use the PR template.
+5. Open a PR against `main` on **`origin`** (not `upstream`):
+
+   ```bash
+   gh pr create --repo cmelhauser/us-hail-cat-model --base main
+   ```
+
+   Use the PR template.
 6. Describe *what* changed and *why*. Link any relevant issues.
 
 PRs are merged by the maintainer after review. Expect comments on scientific

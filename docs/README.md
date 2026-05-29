@@ -35,6 +35,7 @@ Use the reading paths below to orient yourself quickly.
 1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation
 2. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
 3. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
+4. [`GIT_REMOTES.md`](GIT_REMOTES.md) — push/PR policy (`origin` only, not `upstream`)
 
 **Version history and migration:**
 1. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap

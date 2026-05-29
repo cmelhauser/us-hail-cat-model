@@ -46,6 +46,7 @@ Do not:
 10. Assume missing SPC reports mean radar false alarms.
 11. Infer MYRORSS source availability from GeoTIFF file size or all-zero raster values.
 12. Commit generated data, logs, rendered figures, local bootstrap files, or model artifacts. **Exception:** `data/analysis/mesh_daily_peaks/` diagnostic summaries are versioned intentionally.
+13. Push to **`upstream`** or open PRs against any repo other than **`cmelhauser/us-hail-cat-model`** on **`origin`**. Use `git push -u origin HEAD` and `gh pr create --repo cmelhauser/us-hail-cat-model --base main` only. See `docs/GIT_REMOTES.md`.
 
 ---
 
