@@ -9,6 +9,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.1] — 2026-05-28
+
+### Added
+
+- **`docs/GIT_REMOTES.md`** and **`scripts/setup_git_remotes.sh`:** document and enforce push/PR to `origin` (`cmelhauser`) only, not `upstream`.
+- Agent/contributor rules in `AGENTS.md`, `CONTRIBUTING.md`, `docs/ai_instructions.md`.
+
+### Changed
+
+- Operational docs synced for **v2.2.1** dev branch vs **2.2.0** model on `main`.
+- **`docs/literature_review.md` §3.6:** literature basis for 12 UTC → 12 UTC convective-day aggregation.
+- **`docs/technical_documentation.md`**, **`docs/UPGRADE_NOTES.md`**, handoff/uncertainty/data-dictionary headers aligned to v2.2.
+
 ## [2.2.0] — 2026-05-28
 
 **Breaking methodology change.** Daily MESH rasters now use **12 UTC → 12 UTC convective days** (label = date at window start). v2.1 calendar-UTC (00Z–00Z) production GeoTIFFs are not comparable; re-run Stages **01**, **02**, and **04c** (and downstream **05–15**) on a clean `mesh_0.05deg/` tree.

@@ -130,7 +130,8 @@ PY
 
 The manifest distinguishes `missing_source` days from `no_hail_pixels` days.
 Both can produce all-zero daily GeoTIFFs, so do not infer source availability
-from raster file size or raster values alone.
+from raster file size or raster values alone. Manifest `date` and `mesh_YYYYMMDD.tif`
+labels are **convective-day** dates (12 UTC → 12 UTC; `docs/methodology.md` §2.6).
 
 Run from a stage:
 

@@ -1,7 +1,7 @@
 # Hail Catastrophe Model — Executive Summary
 
-**Version:** 2.1  
-**Status:** Methodology hardening and pre-run readiness update  
+**Version:** 2.2.0 (model); active dev branch `v2.2.1`  
+**Status:** Convective-day daily MESH on `main`; full mesh re-ingest required after v2.1 calendar-UTC rasters  
 **Primary use:** CONUS hail hazard modeling, stochastic event simulation, validation, and model-risk diagnostics
 
 ---
@@ -23,6 +23,12 @@ v2.1 is not a new model generation. It is a hardening release of the v2.0 radar-
 v2.0 changed the project’s foundation by moving from report-based hail hazard to radar-based hail hazard. v2.1 improves the quality, defensibility, and operational safety of that architecture. It keeps the 15-stage pipeline but improves key areas where methodology or implementation risk could affect results.
 
 The main goal of v2.1 is not to add complexity for its own sake. The goal is to make the model easier to review, safer to run, more transparent, and more defensible.
+
+---
+
+## 2.1 What v2.2 Adds
+
+**v2.2.0** changes how a “daily” hail raster is defined: each `mesh_YYYYMMDD.tif` is the cell-wise maximum over **12 UTC → 12 UTC** (label = date at window start), not UTC calendar midnight. This reduces splitting afternoon convection across two UTC dates and is documented in `docs/methodology.md` §2.6 with literature support in `docs/literature_review.md` §3.6. v2.1 calendar-UTC production GeoTIFFs require full re-ingest from Stages 01, 02, and 04c.
 
 ---
 

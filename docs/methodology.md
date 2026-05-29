@@ -23,7 +23,7 @@ This glossary defines symbols and abbreviations used throughout the document. Va
 | Symbol | Definition |
 |--------|-----------|
 | `i`, `j` | Row (N→S) and column (W→E) index of a 0.05° grid cell |
-| `d` | Calendar day index (integer) |
+| `d` | Convective-day label index (integer); each label is a 12 UTC → 12 UTC window (§2.6) |
 | `doy` | Day-of-year (1–366) |
 | `y` | Year index |
 | `NROWS` | 520 — number of grid rows |
@@ -186,7 +186,7 @@ Examples: `2016-07-21 08:00 UTC` belongs to label `2016-07-20`; `2016-07-21 12:0
 
 Stages 01, 02, 04b, and 04c list timesteps from the two UTC **calendar** archive dates that can overlap a convective window, then filter by parsed filename timestamps. GridRad downloads are staged under `by_convective_day/YYYYMMDD/` so adjacent convective days do not delete shared calendar folders. GeoTIFFs record the window in GDAL tag `CONVECTIVE_WINDOW_UTC`.
 
-Prior v2.1 production rasters used calendar UTC days (00:00–00:00). Those files are not comparable to v2.2 without a full re-ingest from Stage 01 / 02 / 04c.
+Prior v2.1 production rasters used calendar UTC days (00:00–00:00). Those files are not comparable to v2.2 without a full re-ingest from Stage 01 / 02 / 04c. Literature and citations supporting this choice are in `docs/literature_review.md` §3.6.
 
 ---
 

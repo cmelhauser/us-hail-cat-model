@@ -1,6 +1,6 @@
-# Uncertainty Budget — CONUS Hail Catastrophe Model v2.1
+# Uncertainty Budget — CONUS Hail Catastrophe Model v2.2
 
-**Version:** 2.1  
+**Version:** 2.2.0  
 **Status:** Framework document — quantitative bounds to be populated after first full run  
 **Related:** `docs/methodology.md`, `docs/technical_documentation.md §09`
 
@@ -9,7 +9,7 @@
 ## Overview
 
 Every probabilistic hazard estimate carries uncertainty. This document catalogues
-the sources of uncertainty in the v2.1 model, characterises their expected
+the sources of uncertainty in the v2.2 model, characterises their expected
 magnitude, and records the current treatment of each. It serves both as a
 disclosure document for model users and as a roadmap for future uncertainty
 quantification work.
@@ -83,7 +83,7 @@ convection in MYRORSS.
 
 **Current treatment:** Daily maxima are taken as-is.
 
-**Impact:** MYRORSS daily maxima may underestimate true peak MESH75 for fast-moving
+**Impact:** MYRORSS convective-day maxima may underestimate true peak MESH75 for fast-moving
 events. This is expected to depress annual maxima by a few mm in regimes where
 isolated convective cells dominate (e.g., Pacific coast, high plains).
 
@@ -373,7 +373,7 @@ six categories simultaneously. This is deferred to v3.0.
 
 ## 8. Current Uncertainty Disclosures
 
-The following disclosures must accompany any publication of v2.1 model outputs:
+The following disclosures must accompany any publication of v2.2 model outputs:
 
 1. Return-period maps are **point estimates**. Confidence intervals are not yet
    computed. For RP > 500 years, uncertainty likely exceeds ±50% of the point

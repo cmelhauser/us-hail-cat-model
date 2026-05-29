@@ -2,7 +2,7 @@
 
 **CONUS Hail Catastrophe Model**
 **Path:** v1.0 -> v2.0 -> v2.1
-**Current version:** v2.1.0
+**Current version:** v2.2.0 (convective-day daily MESH; see `docs/methodology.md` §2.6)
 
 ---
 
@@ -36,7 +36,8 @@ operationally defensible version of the v2.0 radar-first architecture.
 |---|---|---|---|
 | v1.0 | Prototype | SPC / Storm Data hail reports | Archived in `scripts/archive/v1/` |
 | v2.0 | Redesign | Radar-derived MESH / MESH75 | Replaced v1.0 methodology |
-| v2.1 | Hardening | Radar-derived MESH75 with provenance and QA | Current working model |
+| v2.1 | Hardening | Radar-derived MESH75 with provenance and QA | Superseded by v2.2 |
+| v2.2 | Temporal definition | 12 UTC → 12 UTC convective-day daily MESH | **Current model release** (`main`) |
 
 ---
 

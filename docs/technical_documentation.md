@@ -1,12 +1,12 @@
 # Technical Documentation
 
-**CONUS Hail Catastrophe Model v2.1**
+**CONUS Hail Catastrophe Model v2.2**
 
 ---
 
 ## 1. Purpose
 
-This document describes the implementation contract for the v2.1 hail hazard pipeline. It complements `docs/methodology.md`: the methodology document explains the scientific rationale, while this document specifies stage behavior, inputs, outputs, invariants, validation checks, and failure modes.
+This document describes the implementation contract for the v2.2 hail hazard pipeline. It complements `docs/methodology.md`: the methodology document explains the scientific rationale, while this document specifies stage behavior, inputs, outputs, invariants, validation checks, and failure modes.
 
 The pipeline is intentionally file-oriented. Each stage writes durable artifacts that can be inspected independently, rerun, validated, and excluded from git tracking. This design favors reproducibility and auditability over a monolithic in-memory workflow.
 
@@ -56,13 +56,13 @@ Do not use area means, bilinear interpolation, or summation for MESH fields unle
 
 **Script:** `scripts/01_download_myrorss.py`  
 **Input:** MYRORSS sparse NetCDF files on public AWS S3 (`.netcdf` and `.netcdf.gz`)
-**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif`
+**Output:** `data/historical/mesh_0.05deg/YYYY/mesh_YYYYMMDD.tif` (label = **convective day** at 12 UTC start; §2.6 in `methodology.md`)
 **Manifest:** `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv`
 
 ### 3.1 Technical behavior
 
-1. Iterate MYRORSS dates from April 1998 through December 2011.
-2. List source objects for each day.
+1. Iterate convective-day labels from April 1998 through December 2011.
+2. For each label, list MYRORSS keys from the two UTC calendar S3 prefixes that overlap the 12 UTC → 12 UTC window, then filter by parsed timestep UTC (`list_mesh_keys_for_convective_day`).
 3. Accept both plain NetCDF and gzipped NetCDF objects.
 4. Decode sparse pixel arrays into the native MYRORSS grid.
 5. Accumulate convective-day maximum MESH at native resolution (12 UTC → 12 UTC; see `methodology.md` §2.6).
@@ -70,7 +70,7 @@ Do not use area means, bilinear interpolation, or summation for MESH fields unle
 7. Aggregate to 0.05 degree by block maximum.
 8. Apply Stage 01 physical QA: non-finite, negative, and `>300.0 mm` values
    are reset to `0.0` before downstream use.
-9. Write one daily GeoTIFF.
+9. Write one daily GeoTIFF with GDAL tag `CONVECTIVE_WINDOW_UTC`.
 10. Upsert a source manifest row.
 11. After download/processing, scan the Stage 01 date range again with the same
     QA rules and refresh manifest `active_cells_0p05`, `max_mesh_mm`, and
@@ -146,7 +146,7 @@ MRMS native products use conventions that differ from the final model grid. Stag
 3. extract the CONUS subset;
 4. convert longitude convention where needed;
 5. flip south-to-north native orientation into north-to-south model orientation;
-6. accumulate daily maxima;
+6. accumulate convective-day maxima (12 UTC → 12 UTC; same helpers as Stage 01);
 7. aggregate by block maximum;
 8. apply the shared hail-value QA guard: finite, non-negative, and no larger
    than 300.0 mm;
@@ -255,7 +255,7 @@ This caps the in-memory plan to **one day’s file list** and avoids holding hun
 1. **Sequential convective days by default:** `--workers` defaults to **`1`** (one Python process; no `ProcessPoolExecutor` fan-out). Increase only if you have RAM headroom and want parallel days.
 2. **Per-day NetCDF handling:** each file is opened, processed column-by-column, and closed before the next file; the daily accumulator is a single **520×1180** `float32` array (same order of magnitude as other daily stages).
 3. **Automatic cleanup of GridRad staging:** after **each** convective day is handled (whether the GeoTIFF was written, skipped because it already existed, marked no-data, or ended in error), the directories  
-   `data/historical/gridrad/YYYY/YYYYMMDD/` and `data/historical/gridrad_severe/YYYY/YYYYMMDD/`  
+   `data/historical/gridrad/by_convective_day/YYYYMMDD/` and `data/historical/gridrad_severe/by_convective_day/YYYYMMDD/`  
    are removed with `shutil.rmtree` **unless** you pass **`--keep-gridrad-inputs`**.  
    - **Why:** keeps the GridRad tree from occupying a full multi-year archive on disk when you only need the derived `mesh_*.tif` products.  
    - **Re-runs / debugging:** pass **`--keep-gridrad-inputs`** so NetCDF inputs remain for inspection or so you can re-run 04c without re-downloading.
@@ -308,7 +308,7 @@ own stage.
 3. Find columns with column-max reflectivity ≥ `Z_THRESHOLD` (40 dBZ).
 4. Integrate SHI (Witt et al. 1998) using ERA5 0 °C / −20 °C heights from Stage 04a when available.
 5. Convert SHI → MESH75: `MESH75 = 15.096 * SHI^0.206` (2021 corrigendum coefficients).
-6. Take daily maxima on the canonical 0.05° grid; apply shared `MAX_HAIL_MM` QA via `sanitize_hail_values`.
+6. Take convective-day maxima on the canonical 0.05° grid; apply shared `MAX_HAIL_MM` QA via `sanitize_hail_values`.
 7. Write GeoTIFF with optional GDAL diagnostic tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`, `SOURCE`, `DATE`); log one line per day with peak hail and active-cell count.
 8. Append `YYYYMMDD` to `gridrad_days.txt` when the day produced data.
 

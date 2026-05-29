@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
-**CONUS Hail Catastrophe Model v2.1**
-**Last updated: 2026-05-28 (`v2.2.0` — 12 UTC → 12 UTC convective days; see `docs/methodology.md` §2.6)**
+**CONUS Hail Catastrophe Model v2.2**
+**Last updated: 2026-05-28 (`v2.2.1` dev branch; model **2.2.0** on `main`; convective days — `docs/methodology.md` §2.6, `docs/literature_review.md` §3.6)**
 
 ---
 

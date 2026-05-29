@@ -1,4 +1,4 @@
-# AGENTS.md - CONUS Hail Catastrophe Model v2.1
+# AGENTS.md - CONUS Hail Catastrophe Model v2.2
 
 For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline

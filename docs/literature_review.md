@@ -1,12 +1,12 @@
 # Literature Review
 
-**CONUS Hail Catastrophe Model v2.1**
+**CONUS Hail Catastrophe Model v2.2**
 
 ---
 
 ## 1. Purpose
 
-This literature review documents the scientific basis for the v2.1 hail catastrophe model methodology. It covers report bias, radar-based hail climatology, MESH correction, environmental filtering, extreme-value theory, spatial extremes, stochastic event simulation, topography, vulnerability, and non-stationarity.
+This literature review documents the scientific basis for the v2.2 hail catastrophe model methodology. It covers report bias, radar-based hail climatology, MESH correction, environmental filtering, extreme-value theory, spatial extremes, stochastic event simulation, topography, vulnerability, and non-stationarity.
 
 The review is intentionally applied rather than exhaustive. Each citation is tied to a model decision: whether a data source is used as hazard input or validation, why a calibration step exists, why a statistical model is defensible, and which assumptions require disclosure.
 
@@ -83,6 +83,23 @@ NCAR GridRad NetCDF products (hourly v3, severe v4) expose physical reflectivity
 MYRORSS, GridRad, and MRMS are all radar-derived, but they are not a single observing system. They differ in retrieval algorithm, temporal sampling, vertical representation, processing version, and operational quality control. The model therefore treats source transitions as an explicit algorithmic uncertainty rather than a minor engineering detail.
 
 **Model implication:** Stage 05 calibration and Stage 06 source diagnostics are required before pooled tail fitting.
+
+### 3.6 Convective-day daily aggregation (v2.2)
+
+Radar archives store timesteps on **UTC calendar paths** (e.g. S3 prefixes by `YYYY/MM/DD`), but severe convection is organized into coherent **events** that often span local afternoon and evening and can cross **UTC midnight**. A daily maximum taken over calendar UTC `[00:00, 24:00)` can therefore split one storm system across two daily rasters or mix unrelated systems near the boundary.
+
+**v2.2** defines each daily MESH raster as the cell-wise maximum over a **convective day**: the half-open interval **[D 12:00 UTC, D+1 12:00 UTC)**, with label `D` at the window start. Timesteps are assigned with `convective_day = (t − 12 h).date()`. This matches common practice in climate and hazard archives where a fixed synoptic hour (often **12 UTC**) delimits 24-hour accumulation periods, and it reduces artificial splitting of afternoon hail across UTC calendar dates.
+
+| Reference | Relevance |
+|-----------|-----------|
+| Ortega et al. (2022) | MYRORSS provides 5-minute MESH; daily maxima are sensitive to which timesteps are included in the accumulation window. |
+| Murillo et al. (2021) | GridRad MESH climatology aggregates high-frequency radar volumes; temporal sampling affects severe-hail tails. |
+| Wendt and Jirak (2021) | MRMS MESH is available at sub-hourly cadence; daily hail statistics depend on the chosen 24-hour window. |
+| Smith et al. (2016) | MRMS operational continuity motivates a consistent, documented daily definition across eras. |
+| Allen and Tippett (2015) | SPC hail **report dates** reflect reporting practice; radar-first hazard should use an explicit, reproducible temporal rule rather than implicit UTC midnight. |
+| Witt et al. (1998) | MESH is an instantaneous/severe-hail index integrated over short radar volumes; block-max aggregation to daily grids is a documented design choice in `methodology.md` §2.6. |
+
+**Model implication:** Stages **01**, **02**, **04b**, and **04c** filter timesteps into 12 UTC → 12 UTC windows, write `CONVECTIVE_WINDOW_UTC` on GeoTIFFs, and stage GridRad under `by_convective_day/YYYYMMDD/`. v2.1 calendar-UTC production rasters are **not comparable** without full re-ingest. Downstream stages (05–15) consume the convective-day label from `mesh_YYYYMMDD.tif` filenames; Stage **07** DOY climatology still groups by day-of-year across years (not a change to convective-day definition).
 
 ---
 

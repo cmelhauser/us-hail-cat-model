@@ -1,12 +1,24 @@
 # Upgrade Notes
 
-**Scope:** v2.0 -> v2.1  
-**Audience:** maintainers moving an existing v2.0 checkout, run plan, or review
-workflow to the current v2.1 model.
+**Scope:** v2.0 → v2.1 → **v2.2**  
+**Audience:** maintainers moving an existing checkout, run plan, or review workflow to the current model.
 
 ---
 
-## 1. Upgrade Summary
+## 0. v2.1 / v2.2.0 calendar-UTC → v2.2 convective days (breaking)
+
+If you have **v2.1** (or early **v2.2.0**) daily rasters built with **UTC calendar midnight** windows:
+
+1. **Do not mix** those GeoTIFFs with v2.2 convective-day rasters in Stages 05–15.
+2. Archive or move old trees (e.g. `mesh_0.05deg_archive_calendar_utc_00z/`).
+3. **Re-run** Stages **01**, **02**, and **04c** on a clean `data/historical/mesh_0.05deg/`.
+4. Then run **05–15** with `--skip-ml` (or your production flags).
+
+Definition: label `YYYY-MM-DD` = max MESH over **[D 12:00 UTC, D+1 12:00 UTC)**. See `docs/methodology.md` §2.6 and `docs/literature_review.md` §3.6.
+
+---
+
+## 1. Upgrade Summary (v2.0 → v2.1)
 
 v2.1 is a hardening release. It does not change the model grid, the 15-stage
 pipeline shape, or the radar-first hazard philosophy introduced in v2.0.

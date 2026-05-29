@@ -1,6 +1,6 @@
 # Project Memory
 
-**CONUS Hail Catastrophe Model v2.1**
+**CONUS Hail Catastrophe Model v2.2**
 **Last updated: 2026-05-28 (`v2.2.0` — 12 UTC → 12 UTC convective days; full mesh re-ingest required)**
 
 ---
@@ -258,7 +258,7 @@ Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
-Active branch: v2.2.0 (12 UTC → 12 UTC convective days).
+Active branch: v2.2.1 (dev). Model 2.2.0 on main (12 UTC → 12 UTC convective days).
 Stage 01 complete; Stage 04c gap-fill paused 2026-05-20 — restart with --workers 2.
 Stage 01 manifest distinguishes missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.

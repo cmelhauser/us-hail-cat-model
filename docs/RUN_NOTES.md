@@ -3,7 +3,7 @@
 ## Run Context
 
 - Date started: 2026-05-01 14:47 EDT
-- Active branch: `v2.2.0` (convective-day migration; retired `v2.1.2`)
+- Active branch: **`v2.2.1`** (development on `origin` only). Model **2.2.0** on `main`.
 - Prior production mesh archived under `data/historical/mesh_0.05deg_archive_calendar_utc_00z/` (gitignored)
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active

@@ -1,6 +1,6 @@
 # Data Dictionary
 
-**CONUS Hail Catastrophe Model v2.1**
+**CONUS Hail Catastrophe Model v2.2**
 
 ---
 
@@ -66,7 +66,7 @@ availability from no-hail raster values.
 | `gz_netcdf_files` | integer | Source objects ending in `.netcdf.gz` |
 | `source_valid_pixels` | integer or blank | Valid native CONUS hail pixels read from source files; blank for skipped existing rasters |
 | `active_cells_0p05` | integer | Output 0.05° cells with MESH > 0 |
-| `max_mesh_mm` | float | Daily maximum MESH in millimeters after Stage 01 QA repair; values are capped by validation at 300.0 mm |
+| `max_mesh_mm` | float | Convective-day maximum MESH (mm) after Stage 01 QA repair; capped at 300.0 mm |
 | `status` | string | `missing_source`, `no_hail_pixels`, `ok`, `ok_with_read_errors`, `no_hail_pixels_with_read_errors`, or `error` |
 | `skipped` | integer | `1` when the GeoTIFF already existed and was not rebuilt in this pass, else `0` |
 | `read_errors` | integer or blank | Count of source files that failed to read; blank for skipped existing rasters |
