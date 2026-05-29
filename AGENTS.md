@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-05-28 (`v2.2.0` — active branch; 12 UTC → 12 UTC convective days).
+Last updated: 2026-05-28 (`v2.2.1` active dev branch; model release `2.2.0` on `main`).
 
 ## What This Project Is
 
@@ -21,7 +21,7 @@ stochastic event catalog.
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
-Current operating branch: `v2.2.0` (convective-day migration; replaces retired `v2.1.2`).
+Current operating branch: **`v2.2.1`** (development; push/PR to `origin` only). Model release **`2.2.0`** (12 UTC → 12 UTC convective days) is on `main`.
 The old `v2.1` branch has been merged and is no longer the active development branch.
 
 ## Non-Negotiable Rules
@@ -237,7 +237,7 @@ As of 2026-05-20:
 
 | Area | Status |
 |---|---|
-| Active branch | `v2.2.0` (12 UTC → 12 UTC convective days) |
+| Active branch | `v2.2.1` (dev); `main` has model `2.2.0` |
 | All 15 stage scripts | Written and syntax-checked |
 | Tests | 28 pytest files; GitHub Actions green on Python 3.10/3.11/3.12 |
 | Integration test | `tests/integration/test_smoke_synthetic.py` |

@@ -8,7 +8,7 @@
 ## Repository
 
 - **Local:** `/Users/melhauserc/GitHub/us-hail-cat-model`
-- **Branch:** `v2.2.0` — convective-day release (replaces retired `v2.1.2`)
+- **Branch:** **`v2.2.1`** — active development (`origin` only). **`main`** has model **v2.2.0** (convective days).
 - **Working tree:** should be kept clean except for intentional documentation or
   code edits in the current session
 - **Historical note:** `v2.1` has been merged and is no longer the active

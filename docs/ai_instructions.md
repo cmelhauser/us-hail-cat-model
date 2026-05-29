@@ -198,7 +198,7 @@ When asked to review the project:
 
 Current repository state:
 
-- Active branch: `v2.2.0` (replaces retired `v2.1.2`).
+- Active branch: **`v2.2.1`** (development on `origin` only). Model **2.2.0** merged to `main`.
 - GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing.
 - Stage helper refactor complete: `_config.py`, `_logging.py`, and `_io.py` are wired into stage scripts where required.
 - Stage 01 complete; Stage 04c uses sparse **`Reflectivity`** reader — restart gap-fill with `--workers 2` after disk cleanup (`docs/RUN_NOTES.md`).
