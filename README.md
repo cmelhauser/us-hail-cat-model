@@ -1,6 +1,6 @@
-# CONUS Hail Catastrophe Model — v2.1
+# CONUS Hail Catastrophe Model — v2.2
 
-[![Version](https://img.shields.io/badge/version-v2.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v2.2-blue)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![CI](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml/badge.svg)](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml)
@@ -26,11 +26,11 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 
 ## Overview
 
-Version 2.1 is a **hardening release**, not a redesign. The 15-stage pipeline and 0.05° grid are unchanged from v2.0. This release improves calibration robustness, event grouping logic, EVT diagnostics, stochastic simulation memory safety, and test coverage.
+Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days** (label = date at window start). The 15-stage pipeline and 0.05° grid are unchanged from v2.1 aside from this temporal definition; v2.1 calendar-UTC production GeoTIFFs require full re-ingest. See `docs/methodology.md` §2.6.
 
 The model produces:
 
-- Corrected daily MESH75 rasters (1998–present)
+- Corrected convective-day MESH75 rasters (1998–present)
 - Stage 01 source-coverage manifest distinguishing missing source days from true no-hail days
 - Shared hail-value QA guard for non-finite, negative, or `>300.0 mm` artifacts
 - A sparse historical event catalog
@@ -47,7 +47,7 @@ The model produces:
 The model is organized into four logical phases:
 
 **Phase 1 — Ingestion and Calibration (Stages 01–05)**
-Raw MESH data from three radar sources are ingested, time-aligned, and cross-calibrated to a single consistent record. MYRORSS provides the 1998–2011 historical baseline; GridRad-Severe fills the 2012–2019 transition period; operational MRMS covers 2020–present. Stage 05 applies quantile-mapping bias correction between sources, optionally enhanced by a conditional ML model, and filters cells using ERA5 thermodynamic thresholds (0°C / −20°C isotherms).
+Raw MESH data from three radar sources are ingested, time-aligned, and cross-calibrated to a single consistent record. MYRORSS provides the 1998–2011 historical baseline; GridRad/GridRad-Severe fills **2012-01-01 through 2020-10-13** (Stage **04c**); operational MRMS covers **2020-10-14** onward. Stage **04c** reads sparse **`Reflectivity`** (dBZ), not the **`Nradecho`** echo mask. Stage 05 applies quantile-mapping bias correction between sources, optionally enhanced by a conditional ML model, and filters cells using ERA5 thermodynamic thresholds (0°C / −20°C isotherms).
 
 **Phase 2 — Event Catalog (Stages 06–08)**
 Stage 06 cross-validates the corrected MESH record against SPC storm reports (validation use only — SPC is never a hazard input). Stage 07 computes a long-term spatial climatology. Stage 08 groups contiguous hail cells into discrete events using spatial overlap, temporal continuity, centroid displacement (≤ 150 km/day), and intensity jump (≤ 3×) constraints. All events are stored as sparse arrays (`rows`, `cols`, `vals`) — no dense grids are constructed.
@@ -68,8 +68,8 @@ Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correc
 | 02 | `02_download_mrms_mesh.py` | MRMS MESH ingestion (2020–present) |
 | 03 | `03_download_spc.py` | SPC storm reports — validation only |
 | 04a | `04a_download_era5_isotherms.py` | ERA5 isotherm download |
-| 04b | `04b_download_gridrad.py` | Download GridRad / GridRad-Severe inputs (2012–2019) |
-| 04c | `04c_fill_gridrad_gap.py` | Compute MESH75 from GridRad reflectivity + ERA5 |
+| 04b | `04b_download_gridrad.py` | Download GridRad / GridRad-Severe inputs (2012–2020-10-13) |
+| 04c | `04c_fill_gridrad_gap.py` | Compute MESH75 from GridRad dBZ reflectivity + ERA5; optional GDAL peak tags |
 | 05 | `05_apply_mesh_bias_correction.py` | Cross-source bias correction and filtering |
 | 06 | `06_validate_mesh_vs_spc.py` | SPC validation and detection-rate diagnostics |
 | 07 | `07_build_hail_climo.py` | Long-term hail frequency climatology |
@@ -96,8 +96,8 @@ python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validat
 | Dataset | Period | Role |
 |---------|--------|------|
 | MYRORSS MESH | Apr 1998 – Dec 2011 | Historical radar baseline |
-| GridRad / GridRad-Severe | Jan 2012 – Oct 2019 | Transition-period gap fill |
-| MRMS MESH | Oct 2020 – present | Operational radar |
+| GridRad / GridRad-Severe | Jan 2012 – 13 Oct 2020 | Transition-period gap fill (Stage 04c) |
+| MRMS MESH | 14 Oct 2020 – present | Operational radar |
 | ERA5 (0°C / −20°C isotherms) | 1991–2020 | Thermodynamic filtering |
 | SPC storm reports | 2004 – present | Validation only |
 | NOAA/NCEI ETOPO 2022 surface elevation | Static | Stage 11b DEM source for topographic correction |
@@ -158,7 +158,7 @@ python run_pipeline.py --dry-run
 **Recommended first-run sequence:**
 
 ```
-01 → 02 → 03 → 04a → 04b → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
+01 → 02 → 03 → 04a → 04c → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
 → Stage 13 smoke (--n-years 1000) → Stage 13 full → 14 → 15
 ```
 
@@ -200,7 +200,8 @@ python run_pipeline.py --validate
 
 | Output | Location | Description |
 |--------|----------|-------------|
-| Raw daily MESH rasters | `data/historical/mesh_0.05deg/` | Stage 01/02/04b daily GeoTIFFs before correction |
+| Raw daily MESH rasters | `data/historical/mesh_0.05deg/` | Stage 01/02/04c convective-day (12Z→12Z) GeoTIFFs before correction |
+| Mesh daily peak summaries | `data/analysis/mesh_daily_peaks/` | Optional era QA (CSV, percentiles, ECDF); tracked in git |
 | Stage 01 source manifest | `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` | Per-day MYRORSS source counts, QA-repaired daily maxima, and `missing_source` / `no_hail_pixels` / `ok` status |
 | Corrected MESH rasters | `data/historical/mesh_0.05deg_corrected/` | Daily MESH75 grids |
 | Event catalog | `data/historical/events/` | Sparse `.npz` per event |
@@ -213,7 +214,7 @@ python run_pipeline.py --validate
 | Exceedance tables | `data/stochastic/` | PET tables by threshold |
 | Figures | `docs/figures/` | Diagnostic and output maps |
 
-All data outputs are excluded from version control via `.gitignore`.
+Generated pipeline outputs are excluded from version control via `.gitignore`, except the small tracked diagnostic bundle under `data/analysis/mesh_daily_peaks/`.
 
 ---
 
@@ -240,6 +241,7 @@ Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) 
 | `docs/technical_documentation.md` | Per-stage implementation notes |
 | `docs/data_dictionary.md` | All output file schemas |
 | `docs/reproduce.md` | Reproduction guide and environment setup |
+| `scripts/diagnostics/summarize_mesh_daily_peaks.py` | Optional mesh-era peak CSV/ECDF diagnostic |
 | `docs/uncertainty.md` | Six-category uncertainty budget |
 | `docs/executive_summary.md` | Non-technical overview |
 | `docs/explainer.md` | Plain-language model explanation |

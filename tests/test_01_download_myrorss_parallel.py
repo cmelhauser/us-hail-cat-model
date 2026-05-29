@@ -39,11 +39,11 @@ def test_stage01_process_day_parallel_merge_matches_numpy(load_script, monkeypat
         return key, r, c, v, 1, None
 
     monkeypatch.setattr(s, "_fetch_decode_sparse", fake_fetch)
-    monkeypatch.setattr(s, "list_mesh_keys", lambda _s3, _day: list(keys))
+    monkeypatch.setattr(s, "list_mesh_keys_for_convective_day", lambda _s3, _day: list(keys))
 
     written: list[np.ndarray] = []
 
-    def fake_write(data, path):
+    def fake_write(data, path, **kwargs):
         written.append(np.asarray(data, dtype=np.float32).copy())
 
     monkeypatch.setattr(s, "write_geotiff", fake_write)

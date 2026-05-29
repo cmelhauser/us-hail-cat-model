@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 """
-04c_fill_gridrad_gap.py — Compute MESH75 from GridRad 3D Reflectivity (2012–2019)
-==================================================================================
-Fills the 2012–2019 gap using GridRad NEXRAD composite reflectivity.
+04c_fill_gridrad_gap.py — Compute MESH75 from GridRad 3D reflectivity (2012–2020-10-13)
+========================================================================================
+Fills the MYRORSS–MRMS gap using GridRad NEXRAD composite reflectivity (dBZ).
+Uses sparse Reflectivity(Index) + index; Nradecho is not used for SHI.
 
 Inputs are read from:
 
 - `data/historical/gridrad/`
 - `data/historical/gridrad_severe/`
 
+**Convective day (v2.2):** each ``mesh_YYYYMMDD.tif`` is the cell-wise maximum MESH75
+over **12 UTC → 12 UTC** (label = date at window start). Timesteps from two UTC
+calendar archives may contribute (e.g. label ``20160721`` uses 2016-07-21 12:00Z
+through 2016-07-22 12:00Z).
+
 **Default run shape (memory / disk):** days are processed **sequentially** (``--workers 1``).
-After each calendar day finishes (written, skipped, no-data, or error), local GridRad
-NetCDF trees for that day are removed unless you pass ``--keep-gridrad-inputs`` (useful
-for debugging).
+After each convective day finishes (written, skipped, no-data, or error), staged GridRad
+NetCDF trees for that day are removed unless you pass ``--keep-gridrad-inputs``.
 
 **Single-pass pipeline:** ``--with-04b-download`` runs Stage 04b’s per-day download
 immediately before processing each day, then deletes the staged NetCDFs (unless
 ``--keep-gridrad-inputs``). With ``--workers 1`` this is strictly sequential. With
-``--workers N`` and ``N > 1``, up to ``N`` calendar days run in parallel worker
+``--workers N`` and ``N > 1``, up to ``N`` convective days run in parallel worker
 processes (04b is loaded once per worker; each day uses a fresh HTTP session); tune
 ``--04b-download-workers`` so ``N × download_workers`` stays within NCAR throttling guidance.
 
@@ -46,14 +51,28 @@ try:
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
         NODATA, MAX_HAIL_MM,
     )
-    from _io import sanitize_hail_values, write_geotiff
+    from _io import (
+        convective_day_window_tag,
+        mesh_path_for_convective_day,
+        observation_utc_to_convective_day,
+        parse_observation_utc_from_name,
+        sanitize_hail_values,
+        write_geotiff,
+    )
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
         NODATA, MAX_HAIL_MM,
     )
-    from scripts._io import sanitize_hail_values, write_geotiff
+    from scripts._io import (
+        convective_day_window_tag,
+        mesh_path_for_convective_day,
+        observation_utc_to_convective_day,
+        parse_observation_utc_from_name,
+        sanitize_hail_values,
+        write_geotiff,
+    )
     from scripts._logging import get_logger
 
 GRIDRAD_DIR = DATA_ROOT / "historical" / "gridrad"
@@ -163,11 +182,14 @@ def _get_freezing_levels_climo(lat: float, month: int) -> tuple:
     return 3.5, 6.0
 
 
-def delete_gridrad_inputs_for_day(day: date) -> None:
-    """Remove local GridRad / GridRad-Severe NetCDF trees for one calendar day."""
-    ymd = day.strftime("%Y%m%d")
+def _convective_stage_dir(base: Path, convective_day: date) -> Path:
+    return base / "by_convective_day" / convective_day.strftime("%Y%m%d")
+
+
+def delete_gridrad_inputs_for_day(convective_day: date) -> None:
+    """Remove staged GridRad inputs for one convective day (12Z–12Z window)."""
     for base in (GRIDRAD_DIR, GRIDRAD_SEV):
-        d = base / f"{day.year}" / ymd
+        d = _convective_stage_dir(base, convective_day)
         if d.is_dir():
             shutil.rmtree(d, ignore_errors=True)
 
@@ -188,36 +210,88 @@ def compute_shi_column(z_profile, heights_km, h_0c, h_m20c):
     return 0.1 * shi
 
 
-def find_gridrad_files(day: date) -> tuple:
+def _nc_files_for_convective_day(stage_dir: Path, convective_day: date) -> list[Path]:
+    """Return staged NetCDF paths whose filename timestamps map to ``convective_day``."""
+    if not stage_dir.is_dir():
+        return []
+    out: list[Path] = []
+    for path in sorted(stage_dir.glob("*.nc")):
+        obs = parse_observation_utc_from_name(path.name)
+        if obs is None or observation_utc_to_convective_day(obs) != convective_day:
+            continue
+        out.append(path)
+    return out
+
+
+def find_gridrad_files(convective_day: date) -> tuple:
     """
-    Find GridRad files for a day. Returns (files, source_type).
+    Find staged GridRad files for a convective day (12 UTC → 12 UTC).
     Prioritizes GridRad-Severe (5-min) over hourly when available.
     """
-    sev_patterns = [
-        GRIDRAD_SEV / f"{day.year}" / f"{day.strftime('%Y%m%d')}" / "*.nc",
-        GRIDRAD_SEV / f"{day.year}" / f"nexrad_*_{day.strftime('%Y%m%d')}T*.nc",
-    ]
-    sev_files = []
-    for pat in sev_patterns:
-        sev_files.extend(sorted(pat.parent.glob(pat.name)))
+    sev_files = _nc_files_for_convective_day(
+        _convective_stage_dir(GRIDRAD_SEV, convective_day), convective_day
+    )
     if sev_files:
         return sev_files, "gridrad-severe-5min"
 
-    hr_patterns = [
-        GRIDRAD_DIR / f"{day.year}" / f"{day.strftime('%Y%m%d')}" / "*.nc",
-        GRIDRAD_DIR / f"{day.year}" / f"nexrad_*_{day.strftime('%Y%m%d')}T*.nc",
-    ]
-    hr_files = []
-    seen = set()
-    for pat in hr_patterns:
-        for f in sorted(pat.parent.glob(pat.name)):
-            if f not in seen and f.suffix == ".nc":
-                hr_files.append(f)
-                seen.add(f)
+    hr_files = _nc_files_for_convective_day(
+        _convective_stage_dir(GRIDRAD_DIR, convective_day), convective_day
+    )
     if hr_files:
         return hr_files, "gridrad-hourly"
 
     return [], "none"
+
+
+def _read_var_array(ds, name: str) -> np.ndarray:
+    data = ds.variables[name][:]
+    return data.filled(np.nan) if hasattr(data, "filled") else np.asarray(data)
+
+
+def _load_reflectivity_3d(ds) -> np.ndarray | None:
+    """
+    Load reflectivity (dBZ) on (altitude, lat, lon).
+
+    GridRad v3/v4 store the physical field as sparse ``Reflectivity(Index)``.
+    ``Nradecho`` is a 3-D mask/count (typically 0–35), not dBZ — do not use it here.
+    """
+    if "Reflectivity" in ds.variables:
+        dense = _read_var_array(ds, "Reflectivity")
+        if dense.ndim == 3:
+            return dense
+
+    if "Reflectivity" not in ds.variables or "index" not in ds.variables:
+        return None
+
+    sparse = _read_var_array(ds, "Reflectivity")
+    if sparse.ndim != 1:
+        return None
+
+    idx = _read_var_array(ds, "index").astype(np.int64)
+    alts = _read_var_array(ds, "Altitude")
+    lats = _read_var_array(ds, "Latitude")
+    lons = _read_var_array(ds, "Longitude")
+    na, nlat, nlon = len(alts), len(lats), len(lons)
+    n = min(len(idx), len(sparse))
+    if n == 0:
+        return None
+
+    flat = idx[:n]
+    vals = sparse[:n].astype(np.float32)
+    i = flat % nlon
+    jj = (flat // nlon) % nlat
+    kk = flat // (nlon * nlat)
+    valid = (
+        (kk >= 0) & (kk < na) & (jj >= 0) & (jj < nlat) & (i >= 0) & (i < nlon) & np.isfinite(vals)
+    )
+    if not np.any(valid):
+        return None
+
+    grid = np.full((na, nlat, nlon), -np.inf, dtype=np.float32)
+    np.maximum.at(grid, (kk[valid], jj[valid], i[valid]), vals[valid])
+    grid[~np.isfinite(grid)] = np.nan
+    grid[grid == -np.inf] = np.nan
+    return grid
 
 
 def process_gridrad_file(nc_path, daily_max, month):
@@ -250,21 +324,12 @@ def process_gridrad_file(nc_path, daily_max, month):
             ds.close()
             return 0
 
-        for refl_name in ["Reflectivity", "reflectivity", "refl"]:
-            if refl_name in ds.variables:
-                refl = ds.variables[refl_name][:]
-                break
-        else:
+        refl = _load_reflectivity_3d(ds)
+        if refl is None:
             ds.close()
             return 0
-
-        if hasattr(refl, "filled"):
-            refl = refl.filled(np.nan)
     finally:
         ds.close()
-
-    if refl.ndim != 3:
-        return 0
 
     max_refl = np.nanmax(refl, axis=0)
     active = np.argwhere(max_refl >= Z_THRESHOLD)
@@ -274,6 +339,8 @@ def process_gridrad_file(nc_path, daily_max, month):
         j, k = int(idx[0]), int(idx[1])
         lat = float(lats[j])
         lon = float(lons[k])
+        if lon > 180.0:
+            lon -= 360.0
 
         if not (24.0 <= lat <= 50.0 and -125.0 <= lon <= -66.0):
             continue
@@ -298,14 +365,14 @@ def process_gridrad_file(nc_path, daily_max, month):
     return count
 
 
-def process_day(day):
+def process_day(convective_day: date):
     load_era5_isotherms()
 
-    out_path = OUT_DIR / f"{day.year}" / f"mesh_{day.strftime('%Y%m%d')}.tif"
+    out_path = mesh_path_for_convective_day(OUT_DIR, convective_day)
     if out_path.exists():
         return {"skipped": True}
 
-    nc_files, source = find_gridrad_files(day)
+    nc_files, source = find_gridrad_files(convective_day)
     if not nc_files:
         return {"files": 0, "no_data": True}
 
@@ -314,7 +381,7 @@ def process_day(day):
 
     for nc_path in nc_files:
         try:
-            n = process_gridrad_file(nc_path, daily_max, day.month)
+            n = process_gridrad_file(nc_path, daily_max, convective_day.month)
             total_cols += n
         except Exception as e:
             errors += 1
@@ -327,13 +394,31 @@ def process_day(day):
         nodata=OUT_NODATA,
     )
     if n_repaired:
-        log(f"    WARN: removed {n_repaired:,} non-finite/out-of-bound cells for {day}")
-    write_geotiff(out_data, out_path)
+        log(f"    WARN: removed {n_repaired:,} non-finite/out-of-bound cells for {convective_day}")
     active = out_data[(out_data > 0) & np.isfinite(out_data)]
     peak = float(active.max()) if active.size else 0.0
+    n_active = int(active.size)
+    write_geotiff(
+        out_data,
+        out_path,
+        tags={
+            "PRODUCT": "MESH75",
+            "DATE": convective_day.isoformat(),
+            "CONVECTIVE_WINDOW_UTC": convective_day_window_tag(convective_day),
+            "SOURCE": source,
+            "MAX_MESH75_MM": f"{peak:.2f}",
+            "MAX_MESH75_IN": f"{peak / 25.4:.3f}",
+            "ACTIVE_CELLS": str(n_active),
+        },
+    )
     return {
-        "files": len(nc_files), "source": source, "active_cols": total_cols,
-        "peak_mesh75_mm": round(peak, 1), "errors": errors,
+        "files": len(nc_files),
+        "source": source,
+        "active_cols": total_cols,
+        "active_cells": n_active,
+        "peak_mesh75_mm": round(peak, 1),
+        "errors": errors,
+        "tif": str(out_path),
     }
 
 
@@ -389,6 +474,9 @@ def _load_04b_module():
     if spec is None or spec.loader is None:
         raise RuntimeError("Cannot load 04b_download_gridrad.py")
     mod = importlib.util.module_from_spec(spec)
+    # Required so dataclasses / typing can resolve cls.__module__ when 04b is
+    # exec'd in worker processes (importlib does not auto-register until post-exec).
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -417,7 +505,7 @@ def _run_one_day_download_then_process(
     """
     day, with_04b_download, download_workers = spec
     ymd = day.strftime("%Y%m%d")
-    out_path = OUT_DIR / f"{day.year}" / f"mesh_{ymd}.tif"
+    out_path = mesh_path_for_convective_day(OUT_DIR, day)
     try:
         if with_04b_download and not out_path.exists():
             b04 = _worker_04b_mod if _worker_04b_mod is not None else _load_04b_module()
@@ -545,14 +633,41 @@ def main(argv: list[str] | None = None) -> None:
         b04 = _load_04b_module()
         b_sess = b04._request_session()
 
+    def _peak_from_tif(tif_path: Path) -> tuple[float, int]:
+        """Read daily max hail diagnostic from GeoTIFF tags or raster values."""
+        try:
+            import rasterio
+            with rasterio.open(tif_path) as src:
+                tags = src.tags() or {}
+                if "MAX_MESH75_MM" in tags:
+                    peak = float(tags["MAX_MESH75_MM"])
+                    active = int(tags.get("ACTIVE_CELLS", 0))
+                    return peak, active
+                data = src.read(1)
+            active = data[(data > 0) & np.isfinite(data)]
+            return (float(active.max()) if active.size else 0.0, int(active.size))
+        except Exception:
+            return 0.0, 0
+
     def _finalize_day(day: date, ymd: str, result: dict) -> None:
         nonlocal done, skipped, no_data, peak_mesh, sev_count, hr_count
+        tif_path = OUT_DIR / f"{day.year}" / f"mesh_{ymd}.tif"
         if result.get("skipped"):
             skipped += 1
+            if tif_path.exists():
+                peak, n_active = _peak_from_tif(tif_path)
+                peak_mesh = max(peak_mesh, peak)
+                log(
+                    f"  [{ymd}] skipped (exists)  max_mesh75={peak:.1f} mm "
+                    f"({peak / 25.4:.2f} in)  active_cells={n_active:,}"
+                )
+            else:
+                log(f"  [{ymd}] skipped")
         elif result.get("no_data"):
             no_data += 1
+            log(f"  [{ymd}] no_data (no GridRad inputs)")
         elif result.get("error"):
-            log(f"    WARN: {ymd}: {result['error']}")
+            log(f"  [{ymd}] ERROR: {result['error']}")
             no_data += 1
         else:
             done += 1
@@ -561,17 +676,19 @@ def main(argv: list[str] | None = None) -> None:
                 sev_count += 1
             else:
                 hr_count += 1
-            peak = result.get("peak_mesh75_mm", 0.0)
+            peak = float(result.get("peak_mesh75_mm", 0.0))
+            n_active = int(result.get("active_cells", 0))
             peak_mesh = max(peak_mesh, peak)
             gridrad_days.append(ymd)
-            if done % 30 == 0 or peak > 50:
-                elapsed = time.time() - t0
-                rate = done / elapsed if elapsed > 0 else 0
-                eta = (len(all_days) - done - skipped - no_data) / rate if rate > 0 else 0
-                log(
-                    f"  [{ymd}] done={done:,}  src={src}  peak={peak:.0f}mm  "
-                    f"ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}"
-                )
+            elapsed = time.time() - t0
+            rate = done / elapsed if elapsed > 0 else 0
+            remaining = len(all_days) - done - skipped - no_data
+            eta = remaining / rate if rate > 0 else 0.0
+            log(
+                f"  [{ymd}] wrote {tif_path.name}  max_mesh75={peak:.1f} mm "
+                f"({peak / 25.4:.2f} in)  active_cells={n_active:,}  "
+                f"src={src}  done={done:,}  ETA={time.strftime('%H:%M:%S', time.gmtime(eta))}"
+            )
         if not args.keep_gridrad_inputs:
             delete_gridrad_inputs_for_day(day)
 
@@ -579,7 +696,7 @@ def main(argv: list[str] | None = None) -> None:
         if w == 1:
             for day in all_days:
                 ymd = day.strftime("%Y%m%d")
-                out_path = OUT_DIR / f"{day.year}" / f"mesh_{ymd}.tif"
+                out_path = mesh_path_for_convective_day(OUT_DIR, day)
                 try:
                     if args.with_04b_download and not out_path.exists():
                         cat_t = (30.0, 180.0)

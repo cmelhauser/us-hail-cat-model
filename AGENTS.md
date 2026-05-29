@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-05-04 (main branch, Stage 02 running).
+Last updated: 2026-05-28 (`v2.2.0` — active branch; 12 UTC → 12 UTC convective days).
 
 ## What This Project Is
 
@@ -13,16 +13,16 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: 2.1.0 (hardening release; no methodology redesign from v2.0)
+- Version: 2.2.0 (convective day 12 UTC → 12 UTC; breaking change from v2.1 calendar UTC days)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
-- Record: MYRORSS 1998-2011, GridRad 2012-2019, MRMS 2020-present
+- Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
 - Pipeline: 15 stages, all written and tested
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
-Current operating branch: `main`. The old `v2.1` branch has been merged and is
-no longer the active development branch.
+Current operating branch: `v2.2.0` (convective-day migration; replaces retired `v2.1.2`).
+The old `v2.1` branch has been merged and is no longer the active development branch.
 
 ## Non-Negotiable Rules
 
@@ -35,8 +35,9 @@ bump.
 | 2 | Stage 05 has a deterministic fallback. `--skip-ml` must produce complete valid output with no optional ML artifact. |
 | 3 | SPC reports are validation only. Never use SPC as a hazard input. |
 | 4 | `event_peaks.npz` is authoritative for Stage 13. Sparse arrays are the source of truth. |
-| 5 | The 0.05 degree grid is fixed in v2.1. Any change requires a version bump and full rerun. |
-| 6 | Never commit generated data files, logs, figures, model artifacts, or local bootstrap files. |
+| 5 | The 0.05 degree grid is fixed. Convective-day definition (12 UTC start) is versioned in v2.2; any change requires a version bump and full rerun. |
+| 11 | Daily MESH labels use **convective days** (12 UTC → 12 UTC). Stages 01, 02, 04b, 04c filter timesteps with `scripts/_io.py` helpers; do not revert to calendar UTC midnight without a version bump. |
+| 6 | Never commit generated data files, logs, figures, model artifacts, or local bootstrap files. **Exception:** `data/analysis/mesh_daily_peaks/` diagnostic summaries (CSV/PNG + README). |
 | 7 | Update tests and docs whenever methodology, output schemas, or stage behavior changes. |
 | 8 | Grid constants come from `scripts/_config.py`. Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, or `LON_MIN` in stage scripts. |
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
@@ -88,10 +89,12 @@ us-hail-cat-model/
 |   |-- 12_apply_conus_mask.py
 |   |-- 13_generate_stochastic_catalog.py
 |   |-- 14_build_vulnerability.py
-|   `-- 15_render_figures.py
+|   |-- 15_render_figures.py
+|   `-- diagnostics/
+|       `-- summarize_mesh_daily_peaks.py  <- mesh archive peak CSV/ECDF (optional)
 |-- tests/                      <- unit and synthetic integration tests
 |-- docs/                       <- full documentation
-|-- data/                       <- gitignored generated data
+|-- data/                       <- gitignored generated data (except data/analysis/mesh_daily_peaks/)
 `-- logs/                       <- gitignored stage logs
 ```
 
@@ -136,17 +139,20 @@ auto-**skip** standalone **04b** and run **04c** with **`--with-04b-download --w
 
 ## Stages 04b / 04c (GridRad)
 
-- **04b** (`scripts/04b_download_gridrad.py`): default is **one calendar day at a time**
-  (plan + download per day). **`--plan-all-days-first`** restores the legacy global
-  plan-then-download flow. **`--workers`** defaults to **1** (parallel HTTP GETs *within*
-  the current day only; respect NCAR throttling guidance).
+- **04b** (`scripts/04b_download_gridrad.py`): default is **one convective day at a time**
+  (12 UTC → 12 UTC; plan + download per label). Staging:
+  `gridrad(_severe)/by_convective_day/YYYYMMDD/`. **`--plan-all-days-first`** restores
+  the legacy global plan-then-download flow. **`--workers`** defaults to **1**
+  (parallel HTTP GETs *within* the current day only; respect NCAR throttling guidance).
 - **04c** (`scripts/04c_fill_gridrad_gap.py`): default **`--workers 1`** (sequential days).
   After each day finishes, **`delete_gridrad_inputs_for_day`** removes that day’s trees
-  under `data/historical/gridrad/` and `data/historical/gridrad_severe/` unless
+  under `by_convective_day/YYYYMMDD/` in both `gridrad/` and `gridrad_severe/` unless
   **`--keep-gridrad-inputs`**. **`--with-04b-download`** chains **04b**’s
   **`download_for_day`** before **`process_day`**; with **`--workers > 1`**, each worker
   process uses its own HTTP session (04b is loaded once per worker via a pool
   initializer; mind **`workers × --04b-download-workers`** vs NCAR throttling).
+- **04c reflectivity:** use sparse **`Reflectivity(Index)` + `index`** (not **`Nradecho`**, which is not dBZ). Gap-fill GeoTIFFs include GDAL tags `MAX_MESH75_MM`, `ACTIVE_CELLS`, etc., and per-day log lines with peak hail.
+- **04c disk / workers:** `run_pipeline.py` passes **`--workers 4`** by default. With **`--with-04b-download`**, up to four concurrent day trees under `gridrad_severe/` can use ~8–12 GB each. On constrained disks, run **`scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`** (or `1`) directly instead of `run_pipeline.py --only 04c`.
 
 ## Stage 01 Data Provenance
 
@@ -226,16 +232,17 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-05-04:
+As of 2026-05-20:
 
 | Area | Status |
 |---|---|
-| Active branch | `main`, synced with `origin/main` / `upstream/main` at `e4c9331` |
+| Active branch | `v2.2.0` (12 UTC → 12 UTC convective days) |
 | All 15 stage scripts | Written and syntax-checked |
 | Tests | 28 pytest files; GitHub Actions green on Python 3.10/3.11/3.12 |
 | Integration test | `tests/integration/test_smoke_synthetic.py` |
 | Constant-drift guard | `tests/test_no_duplicated_constants.py` |
-| First full pipeline run | Stage 01 complete and QA-repaired; Stage 02 running |
+| First full pipeline run | Stage 01 complete; Stage 02 and **04c** in progress (04c paused 2026-05-20 for disk cleanup) |
+| Mesh peak diagnostic | `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/` |
 | Project metadata | LICENSE, CHANGELOG, CITATION, CONTRIBUTING, COC, SECURITY |
 | Python project config | pyproject.toml, .pre-commit-config.yaml |
 | CI/CD | `.github/workflows/tests.yml` |
@@ -245,22 +252,17 @@ As of 2026-05-04:
 
 ## Current Run Watch
 
-As of the 2026-05-04 snapshot, Stage 01 is complete through 2011-12-31 with
-5,023 MYRORSS daily rasters. The earlier Stage 01 QA repair pass fixed 199 files and
-3,852 cells under the prior 250.0 mm ceiling; the subsequent 300.0 mm
-rescan found 0 files or cells requiring repair. Stage 02
-is running in a detached `screen` session.
+Stage 01 is complete through 2011-12-31 (5,023 MYRORSS daily rasters; manifest QA at 300.0 mm cap). Stage **04c** gap-fill uses the sparse **`Reflectivity`** reader; bad pre-fix gap TIFFs must be deleted before re-run. **2026-05-20:** a disk-full stop removed stale `gridrad/` / `gridrad_severe/` staging under 2013 (~35 GB); restart **04c** with **`--workers 2`** (see `docs/RUN_NOTES.md`). Monitor `logs/04c_fill_gridrad_gap.run.log`. Optional era QA: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 
 The remaining production sequence is:
 
-1. Let Stage 02 (MRMS) complete and validate.
+1. Let Stage 02 (MRMS) and Stage 04c (GridRad gap-fill) complete; use direct **04c** with `--workers 2` if disk is tight.
 2. Run Stage 04a (ERA5) if CDS credentials are configured.
-3. Run Stage 04b (GridRad download) and Stage 04c (GridRad gap-fill), or explicitly document fallback behavior if GridRad inputs remain unavailable.
-4. Re-run Stages 05-15 with `--skip-ml` against the full dataset.
-5. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
-6. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.
-7. Freeze regression/golden outputs and add bootstrap CIs to Stage 09.
-8. Upgrade `.venv` to Python 3.10+ after the active run.
+3. Re-run Stages 05-15 with `--skip-ml` against the full dataset.
+4. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
+5. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.
+6. Freeze regression/golden outputs and add bootstrap CIs to Stage 09.
+7. Upgrade `.venv` to Python 3.10+ after the active run.
 
 ## Documentation Quick Reference
 

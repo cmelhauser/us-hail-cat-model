@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 """
-run_pipeline.py — CONUS Hail Cat Model v2.1: Full Pipeline Runner
+run_pipeline.py — CONUS Hail Cat Model v2.2: Full Pipeline Runner
 ==================================================================
 Runs all pipeline stages in order. Stops on any failure.
 
@@ -15,9 +15,11 @@ Usage:
     python run_pipeline.py --validate   # Validate outputs only
     python run_pipeline.py --skip-ml    # Use deterministic v2.1 fallbacks
 
-Stage 04c is invoked with ``--with-04b-download --workers 4`` (per-day download,
-four calendar days in parallel; GridRad inputs deleted after each day unless
-``--keep-gridrad-inputs`` is passed to 04c manually). When 04c is not skipped,
+Stage 04c is invoked with ``--with-04b-download --workers 4`` (per convective
+day download, four convective days in parallel; GridRad inputs deleted after each
+day unless ``--keep-gridrad-inputs`` is passed to 04c manually). Daily MESH
+labels use 12 UTC → 12 UTC windows (see ``docs/methodology.md`` §2.6). When 04c
+is not skipped,
 standalone stage 04b is skipped automatically for full or early-resume runs so
 GridRad is not staged twice—use ``--only 04b`` or ``--from 04b`` to run the
 legacy NCAR download stage alone.

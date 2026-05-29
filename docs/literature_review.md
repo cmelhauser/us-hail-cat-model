@@ -70,7 +70,13 @@ This work compares operational MRMS MESH hail climatology with Storm Data.
 
 This GridRad-based hail climatology supports using GridRad to extend radar hail records.
 
-**Model implication:** GridRad can fill temporal gaps but requires calibration.
+**Model implication:** GridRad can fill temporal gaps but requires calibration. v2.1 gap-fill runs through **2020-10-13**; Murillo et al. (2021) climatology is most directly comparable for **2012–2019**.
+
+### GridRad reflectivity and SHI (implementation note)
+
+NCAR GridRad NetCDF products (hourly v3, severe v4) expose physical reflectivity primarily as sparse `Reflectivity(Index)` with an `index` vector, not always as a dense `(Altitude, Latitude, Longitude)` array. The 3-D field `Nradecho` is an echo-related mask and must not be substituted for dBZ in Witt et al. (1998) SHI integration.
+
+**Model implication:** Stage **04c** reconstructs dBZ from sparse reflectivity, normalizes longitudes, and documents daily peaks via GDAL tags. Mis-specified reflectivity fields produce scientifically silent all-zero gap days.
 
 ### Source-transition literature synthesis
 

@@ -1,16 +1,16 @@
 # Methodology
 
-**CONUS Hail Catastrophe Model v2.1**
+**CONUS Hail Catastrophe Model v2.2**
 
 ---
 
 ## Abstract
 
-The CONUS Hail Catastrophe Model v2.1 is a radar-first probabilistic hail hazard model for the continental United States. It estimates daily hail occurrence, hail-size severity, rare-event return levels, spatially coherent event footprints, and long synthetic event catalogs on a 0.05 degree latitude-longitude grid. The model is designed for hazard research, scenario analysis, and catastrophe-model prototyping. It is not a claims-calibrated loss model.
+The CONUS Hail Catastrophe Model v2.2 is a radar-first probabilistic hail hazard model for the continental United States. It estimates daily hail occurrence, hail-size severity, rare-event return levels, spatially coherent event footprints, and long synthetic event catalogs on a 0.05 degree latitude-longitude grid. The model is designed for hazard research, scenario analysis, and catastrophe-model prototyping. It is not a claims-calibrated loss model.
 
 The central methodological choice is to use radar-derived Maximum Expected Size of Hail (MESH) fields as the primary hazard observation, while reserving SPC hail reports for validation and calibration support. That choice reflects the well-documented non-meteorological bias in human hail reports, including population density, road density, observation practices, report-size rounding, and historical changes in severe-hail reporting thresholds (Allen and Tippett 2015; Blair et al. 2011, 2017). Radar products have their own uncertainties, but they provide spatially continuous observations over rural and urban domains and are therefore better suited to gridded hazard estimation.
 
-v2.1 is a hardening release rather than a full redesign. It preserves the 15-stage architecture while improving source provenance, deterministic fallback behavior, event grouping, tail diagnostics, sparse stochastic simulation, and documentation traceability.
+v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the same 15-stage architecture.
 
 ---
 
@@ -96,8 +96,8 @@ This glossary defines symbols and abbreviations used throughout the document. Va
 | Abbreviation | Definition |
 |-------------|-----------|
 | MYRORSS | Multi-Year Reanalysis of Remotely Sensed Storms — radar reanalysis, Apr 1998–Dec 2011 |
-| GridRad | Three-dimensional radar analysis from NCAR — gap-fill source, Jan 2012–Oct 2019 |
-| MRMS | Multi-Radar Multi-Sensor — operational NOAA product, Oct 2020–present |
+| GridRad | Three-dimensional radar analysis from NCAR — gap-fill source, Jan 2012–13 Oct 2020 |
+| MRMS | Multi-Radar Multi-Sensor — operational NOAA product, 14 Oct 2020–present |
 | ERA5 | ECMWF Reanalysis v5 — monthly 0°C / −20°C isotherms |
 | SPC | Storm Prediction Center — hail reports used for validation only |
 | CONUS | Continental United States |
@@ -172,13 +172,29 @@ These outputs are intentionally redundant. Agreement between them increases conf
 
 Optional machine-learning artifacts may improve calibration or environmental filtering, but they are not required for a valid run. The model must remain executable with deterministic logic under `--skip-ml`. This protects reproducibility and prevents undeclared binary artifacts from becoming hidden dependencies.
 
+### 2.6 Convective day (v2.2)
+
+From v2.2 onward, every daily MESH raster labeled `YYYY-MM-DD` is the cell-wise maximum over a **convective day**: the half-open UTC interval **[D 12:00, D+1 12:00)**. The label `D` is the calendar date at the window start (12 UTC), not midnight UTC.
+
+Assignment rule for an observation at UTC time `t`:
+
+```text
+convective_day = (t − 12 h).date()
+```
+
+Examples: `2016-07-21 08:00 UTC` belongs to label `2016-07-20`; `2016-07-21 12:00 UTC` through `2016-07-22 11:59 UTC` belong to label `2016-07-21`.
+
+Stages 01, 02, 04b, and 04c list timesteps from the two UTC **calendar** archive dates that can overlap a convective window, then filter by parsed filename timestamps. GridRad downloads are staged under `by_convective_day/YYYYMMDD/` so adjacent convective days do not delete shared calendar folders. GeoTIFFs record the window in GDAL tag `CONVECTIVE_WINDOW_UTC`.
+
+Prior v2.1 production rasters used calendar UTC days (00:00–00:00). Those files are not comparable to v2.2 without a full re-ingest from Stage 01 / 02 / 04c.
+
 ---
 
 ## 3. Data Sources and Their Roles
 
 ### 3.1 MYRORSS historical radar reanalysis
 
-MYRORSS provides the early radar backbone from April 1998 through December 2011. The archive contains sparse radar-derived NetCDF objects at high temporal frequency and supports a spatially continuous historical hail field. Stage 01 reads both plain `.netcdf` and gzipped `.netcdf.gz` archive objects, accumulates native daily maximum MESH, subsets CONUS, aggregates by block maximum, applies finite-value and physical-bound QA, and writes daily GeoTIFFs.
+MYRORSS provides the early radar backbone from April 1998 through December 2011. The archive contains sparse radar-derived NetCDF objects at high temporal frequency and supports a spatially continuous historical hail field. Stage 01 reads both plain `.netcdf` and gzipped `.netcdf.gz` archive objects, accumulates native convective-day maximum MESH (12 UTC → 12 UTC; §2.6), subsets CONUS, aggregates by block maximum, applies finite-value and physical-bound QA, and writes daily GeoTIFFs.
 
 Stage 01 also writes:
 
@@ -200,15 +216,17 @@ climatology, event building, extreme-value fitting, and stochastic simulation.
 
 ### 3.2 Operational MRMS
 
-MRMS supplies the recent operational era from October 2020 onward. It provides national multi-radar products with consistent gridded severe-weather fields. Stage 02 extracts MESH GRIB2 products, handles native orientation and longitude conventions, computes daily maxima, applies the shared hail-value QA guard, and writes the same 0.05 degree GeoTIFF format used by MYRORSS.
+MRMS supplies the recent operational era from October 2020 onward. It provides national multi-radar products with consistent gridded severe-weather fields. Stage 02 extracts MESH GRIB2 products, handles native orientation and longitude conventions, computes convective-day maxima (§2.6), applies the shared hail-value QA guard, and writes the same 0.05 degree GeoTIFF format used by MYRORSS.
 
 MRMS is not assumed identical to MYRORSS. Differences in processing chain, radar network state, temporal update frequency, quality control, and algorithm evolution can create source-transition artifacts. v2.1 addresses those artifacts through Stage 05 calibration and Stage 06 source diagnostics.
 
 ### 3.3 GridRad and GridRad-Severe
 
-GridRad fills the gap between MYRORSS and operational MRMS. Stage 04b downloads GridRad / GridRad-Severe inputs from NCAR RDA/GDEX. Stage 04c computes Severe Hail Index (SHI) from three-dimensional radar reflectivity and ERA5 isotherm fields, then converts SHI to MESH75. GridRad-Severe is preferred where available because higher temporal sampling better resolves short-lived hail cores.
+GridRad fills the gap between MYRORSS and operational MRMS. Stage 04b downloads GridRad / GridRad-Severe inputs from NCAR RDA/GDEX. Stage 04c computes Severe Hail Index (SHI) from three-dimensional **radar reflectivity in dBZ** and ERA5 isotherm fields, then converts SHI to MESH75. GridRad-Severe is preferred where available because higher temporal sampling better resolves short-lived hail cores.
 
-In production-oriented runs, **04b** defaults to planning and downloading **one calendar day at a time** (with optional parallel GETs *within* that day), and **04c** defaults to **sequential** day processing. Unless **`--keep-gridrad-inputs`** is set, **04c** deletes the staged NetCDF trees for each day after that day completes, so `data/historical/gridrad/` and `data/historical/gridrad_severe/` may hold only a short-lived working set rather than a full multi-year archive. **`--with-04b-download`** on **04c** performs the per-day download immediately before gap-fill for the same day, which minimizes peak local GridRad storage; **`--workers > 1`** on **04c** is allowed with **`--with-04b-download`** (separate worker processes and sessions), subject to NCAR connection limits.
+**Reflectivity ingestion (Stage 04c):** NCAR GridRad NetCDF files (hourly v3 and severe v4) typically expose reflectivity as sparse `Reflectivity(Index)`; the stage reconstructs a dense vertical profile per grid column from `Reflectivity` and `index`. The 3-D field `Nradecho` is an echo mask, not dBZ, and must not be substituted for reflectivity in SHI. Longitudes given in 0–360° are normalized before mapping to the CONUS 0.05° grid.
+
+In production-oriented runs, **04b** defaults to planning and downloading **one convective day at a time** (with optional parallel GETs within that day), staging NetCDFs under `by_convective_day/YYYYMMDD/`, and **04c** defaults to **sequential** convective-day processing. Unless **`--keep-gridrad-inputs`** is set, **04c** deletes each day's staged tree after that day completes. **`--with-04b-download`** on **04c** performs the per-day download immediately before gap-fill for the same convective label; **`--workers > 1`** is allowed with **`--with-04b-download`** (separate worker processes and sessions), subject to NCAR connection limits.
 
 GridRad-derived hail estimates are treated as a gap-fill source, not as automatically homogeneous with MYRORSS or MRMS. The model therefore applies source-specific calibration and requires transition diagnostics.
 

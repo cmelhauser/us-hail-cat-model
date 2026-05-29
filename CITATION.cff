@@ -4,8 +4,8 @@ message: >
   using the metadata below.
 type: software
 title: "CONUS Hail Catastrophe Model"
-version: 2.1.0
-date-released: "2026-05-01"
+version: 2.2.0
+date-released: "2026-05-28"
 abstract: >
   A radar-based probabilistic hail hazard model for the Continental United States.
   Ingests NOAA MYRORSS, NCAR GridRad, and NOAA MRMS radar-derived MESH data over

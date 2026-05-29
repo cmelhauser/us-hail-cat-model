@@ -24,21 +24,23 @@ Use the reading paths below to orient yourself quickly.
 10. [`pnas_publication_readiness.md`](pnas_publication_readiness.md) — novelty assessment, evidence gaps, and submission-readiness checklist
 
 **Engineer / developer running the pipeline:**
-7. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands
-8. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
-9. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
-10. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
+1. [`RUN_NOTES.md`](RUN_NOTES.md) — live run status, restart commands, disk/workers notes
+2. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands
+3. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
+4. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
+5. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
+6. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
 
 **AI agent or future developer:**
-11. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation
-12. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
-13. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
+1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation
+2. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
+3. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
 
 **Version history and migration:**
-14. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap
-15. [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
-16. [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) — upstream PR narrative for the v1.0→v2.0→v2.1 arc
-17. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
+1. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap
+2. [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
+3. [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) — upstream PR narrative for the v1.0→v2.0→v2.1 arc
+4. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
 
 ---
 
@@ -59,6 +61,7 @@ Use the reading paths below to orient yourself quickly.
 | [`technical_documentation.md`](technical_documentation.md) | Engineering | Per-stage implementation: inputs, outputs, algorithms, CLI |
 | [`data_dictionary.md`](data_dictionary.md) | Engineering | All output files: paths, schemas, units, nodata conventions |
 | [`reproduce.md`](reproduce.md) | Engineering | Step-by-step instructions to reproduce the model from scratch |
+| [`RUN_NOTES.md`](RUN_NOTES.md) | Engineering | First-run context, current stage status, restart commands |
 | [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) | Audit | Checklist completed before each full pipeline execution |
 | [`AGENTS.md`](../AGENTS.md) | Governance | Canonical AI-agent and developer orientation |
 | [`ai_instructions.md`](ai_instructions.md) | Governance | Operating constraints for AI-assisted development |
