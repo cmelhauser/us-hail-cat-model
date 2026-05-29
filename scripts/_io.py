@@ -23,6 +23,7 @@ inline copies they replace — the refactor is purely a mechanical substitution.
 
 from __future__ import annotations
 
+import csv
 import re
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
@@ -314,3 +315,144 @@ def latlon_to_grid(
     if 0 <= row < NROWS and 0 <= col < NCOLS:
         return row, col
     return -1, -1
+
+
+# ---------------------------------------------------------------------------
+# Daily MESH source manifests (stages 01, 02, 04c)
+# ---------------------------------------------------------------------------
+
+MESH_SOURCE_MANIFEST_FIELDS = [
+    "date",
+    "output_path",
+    "source_files",
+    "plain_netcdf_files",
+    "gz_netcdf_files",
+    "source_valid_pixels",
+    "active_cells_0p05",
+    "max_mesh_mm",
+    "status",
+    "skipped",
+    "read_errors",
+]
+
+
+def count_plain_and_compressed_sources(
+    names: Iterable[str],
+    *,
+    plain_suffixes: tuple[str, ...] = (".netcdf",),
+    compressed_suffixes: tuple[str, ...] = (".netcdf.gz",),
+) -> tuple[int, int]:
+    """Count plain vs compressed source objects by filename suffix."""
+    plain = compressed = 0
+    for name in names:
+        lowered = name.lower()
+        if any(lowered.endswith(suffix) for suffix in compressed_suffixes):
+            compressed += 1
+        elif any(lowered.endswith(suffix) for suffix in plain_suffixes):
+            plain += 1
+    return plain, compressed
+
+
+def classify_mesh_source_day(
+    source_files: int,
+    active_cells: int,
+    read_errors: int = 0,
+) -> str:
+    """Classify source availability separately from hail/no-hail signal."""
+    if source_files == 0:
+        return "missing_source"
+    if read_errors >= source_files:
+        return "error"
+    if read_errors > 0:
+        if active_cells > 0:
+            return "ok_with_read_errors"
+        return "no_hail_pixels_with_read_errors"
+    if active_cells == 0:
+        return "no_hail_pixels"
+    return "ok"
+
+
+def mesh_manifest_row(
+    day: date,
+    out_path: Path,
+    repo_root: Path,
+    *,
+    source_files: int,
+    plain_count: int,
+    gz_count: int,
+    source_pixels: int | None,
+    active_cells: int,
+    max_mesh_mm: float,
+    status: str,
+    skipped: bool = False,
+    read_errors: int | None = None,
+) -> dict:
+    """Build one daily MESH source-coverage manifest row."""
+    try:
+        output_path = str(out_path.relative_to(repo_root))
+    except ValueError:
+        output_path = str(out_path)
+    return {
+        "date": day.isoformat(),
+        "output_path": output_path,
+        "source_files": source_files,
+        "plain_netcdf_files": plain_count,
+        "gz_netcdf_files": gz_count,
+        "source_valid_pixels": "" if source_pixels is None else source_pixels,
+        "active_cells_0p05": active_cells,
+        "max_mesh_mm": max_mesh_mm,
+        "status": status,
+        "skipped": int(skipped),
+        "read_errors": "" if read_errors is None else read_errors,
+    }
+
+
+def read_mesh_manifest_rows_by_date(manifest_path: Path) -> dict:
+    """Read a MESH source manifest keyed by ISO date."""
+    rows: dict = {}
+    if manifest_path.exists():
+        with open(manifest_path, newline="") as f:
+            for row in csv.DictReader(f):
+                rows[row["date"]] = row
+    return rows
+
+
+def write_mesh_manifest_rows(manifest_path: Path, rows: dict) -> None:
+    """Write a complete MESH source manifest dictionary keyed by date."""
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = manifest_path.with_suffix(".csv.tmp")
+    with open(tmp_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=MESH_SOURCE_MANIFEST_FIELDS)
+        writer.writeheader()
+        for key in sorted(rows):
+            writer.writerow(
+                {field: rows[key].get(field, "") for field in MESH_SOURCE_MANIFEST_FIELDS}
+            )
+    tmp_path.replace(manifest_path)
+
+
+def upsert_mesh_manifest_row(manifest_path: Path, row: dict) -> None:
+    """Write or replace one manifest row by date."""
+    rows = read_mesh_manifest_rows_by_date(manifest_path)
+    rows[row["date"]] = {
+        field: row.get(field, "") for field in MESH_SOURCE_MANIFEST_FIELDS
+    }
+    write_mesh_manifest_rows(manifest_path, rows)
+
+
+def summarize_mesh_output_raster(
+    path: Path,
+    *,
+    max_hail_mm: float = MAX_HAIL_MM,
+) -> tuple[int, float]:
+    """Return active 0.05° cells and max MESH (mm) from a daily GeoTIFF."""
+    import rasterio
+
+    with rasterio.open(path) as src:
+        data = src.read(1)
+    valid = np.isfinite(data) & (data > 0) & (data <= max_hail_mm)
+    if not np.any(valid):
+        return 0, 0.0
+    active_cells = int(np.count_nonzero(valid))
+    max_mesh = float(data[valid].max())
+    return active_cells, round(max_mesh, 1)

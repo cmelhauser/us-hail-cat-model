@@ -50,18 +50,20 @@ Usage
   python scripts/01_download_myrorss.py --year 2005 --month 5   # single month
   python scripts/01_download_myrorss.py --validate       # check outputs only
   python scripts/01_download_myrorss.py --qa-only        # repair existing rasters + manifest
+  python scripts/01_download_myrorss.py --manifest-only  # rebuild manifest from S3 + GeoTIFFs
   python scripts/01_download_myrorss.py --dry-run        # count files without downloading
 
 Runtime
 -------
   ~2–6 hours for full run (bandwidth-dependent). ~10–20 GB downloaded.
   Resumable: skips days where output GeoTIFF already exists.
+  Parallel ``--workers N`` uses N S3/decode threads; NetCDF parsing is lock-serialized
+  because the netCDF4/HDF5 stack is not thread-safe on macOS/Linux.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import gzip
 import io
 import sys
@@ -83,12 +85,20 @@ try:
         NODATA, MAX_HAIL_IN, MAX_HAIL_MM,
     )
     from _io import (
+        MESH_SOURCE_MANIFEST_FIELDS,
         calendar_days_for_convective_day,
+        classify_mesh_source_day,
         convective_day_window_tag,
+        count_plain_and_compressed_sources,
         filter_keys_for_convective_day,
+        mesh_manifest_row,
         mesh_path_for_convective_day,
+        read_mesh_manifest_rows_by_date,
         sanitize_hail_values,
+        summarize_mesh_output_raster,
+        upsert_mesh_manifest_row,
         write_geotiff,
+        write_mesh_manifest_rows,
     )
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
@@ -97,12 +107,20 @@ except ImportError:  # pragma: no cover - pytest importlib fallback
         NODATA, MAX_HAIL_IN, MAX_HAIL_MM,
     )
     from scripts._io import (
+        MESH_SOURCE_MANIFEST_FIELDS,
         calendar_days_for_convective_day,
+        classify_mesh_source_day,
         convective_day_window_tag,
+        count_plain_and_compressed_sources,
         filter_keys_for_convective_day,
+        mesh_manifest_row,
         mesh_path_for_convective_day,
+        read_mesh_manifest_rows_by_date,
         sanitize_hail_values,
+        summarize_mesh_output_raster,
+        upsert_mesh_manifest_row,
         write_geotiff,
+        write_mesh_manifest_rows,
     )
     from scripts._logging import get_logger
 
@@ -157,21 +175,13 @@ END_DATE   = date(2011, 12, 31)  # MYRORSS ends December 2011
 MYRORSS_NODATA = -99900.0
 OUT_NODATA     = NODATA
 
-MANIFEST_FIELDS = [
-    "date",
-    "output_path",
-    "source_files",
-    "plain_netcdf_files",
-    "gz_netcdf_files",
-    "source_valid_pixels",
-    "active_cells_0p05",
-    "max_mesh_mm",
-    "status",
-    "skipped",
-    "read_errors",
-]
+MANIFEST_FIELDS = MESH_SOURCE_MANIFEST_FIELDS
 
 log = get_logger("01_download_myrorss", LOG_ROOT).info
+
+# netCDF4/HDF5 C library is not thread-safe for concurrent Dataset open/close.
+# S3 fetch stays parallel; only the NetCDF parse is serialized.
+_NETCDF_LOCK = threading.Lock()
 
 # boto3 clients are not documented thread-safe; use one per worker thread.
 _thread_local_s3 = threading.local()
@@ -216,11 +226,9 @@ def list_mesh_keys_for_convective_day(s3, convective_day: date) -> list:
         keys.extend(list_mesh_keys(s3, cal))
     return filter_keys_for_convective_day(keys, convective_day)
 
-def summarize_key_formats(keys: list) -> tuple:
-    """Return counts of plain and gzipped NetCDF keys."""
-    gz_count = sum(1 for key in keys if key.endswith(".netcdf.gz"))
-    plain_count = sum(1 for key in keys if key.endswith(".netcdf"))
-    return plain_count, gz_count
+def summarize_key_formats(keys: list) -> tuple[int, int]:
+    """Return counts of plain and gzipped MYRORSS NetCDF keys."""
+    return count_plain_and_compressed_sources(keys)
 
 def decode_netcdf_object(key: str, payload: bytes) -> bytes:
     """Return NetCDF bytes for either plain .netcdf or gzipped .netcdf.gz objects."""
@@ -247,13 +255,14 @@ def sparse_updates_from_netcdf_bytes(
         os.write(fd, nc_bytes)
         os.close(fd)
 
-        ds = netCDF4.Dataset(tmp, "r")
-        try:
-            mesh_vals = ds.variables["MESH"][:]
-            px = ds.variables["pixel_x"][:]
-            py = ds.variables["pixel_y"][:]
-        finally:
-            ds.close()
+        with _NETCDF_LOCK:
+            ds = netCDF4.Dataset(tmp, "r")
+            try:
+                mesh_vals = ds.variables["MESH"][:]
+                px = ds.variables["pixel_x"][:]
+                py = ds.variables["pixel_y"][:]
+            finally:
+                ds.close()
     finally:
         os.unlink(tmp)
 
@@ -359,28 +368,14 @@ def block_max(data: np.ndarray, factor: int) -> np.ndarray:
     )
 
 
-def summarize_output_raster(path: Path) -> tuple:
+def summarize_output_raster(path: Path) -> tuple[int, float]:
     """Return active 0.05° cells and max MESH from an output GeoTIFF."""
-    import rasterio
-
-    with rasterio.open(path) as src:
-        data = src.read(1)
-    valid = np.isfinite(data) & (data > 0) & (data <= QA_MAX_HAIL_MM)
-    if not np.any(valid):
-        return 0, 0.0
-    active_cells = int(np.count_nonzero(valid))
-    max_mesh = float(data[valid].max())
-    return active_cells, round(max_mesh, 1)
+    return summarize_mesh_output_raster(path, max_hail_mm=QA_MAX_HAIL_MM)
 
 
 def read_manifest_rows_by_date() -> dict:
     """Read the Stage 01 manifest keyed by ISO date."""
-    rows = {}
-    if MANIFEST_FILE.exists():
-        with open(MANIFEST_FILE, newline="") as f:
-            for row in csv.DictReader(f):
-                rows[row["date"]] = row
-    return rows
+    return read_mesh_manifest_rows_by_date(MANIFEST_FILE)
 
 
 def iter_stage01_tifs() -> list[Path]:
@@ -395,54 +390,35 @@ def iter_stage01_tifs() -> list[Path]:
             paths.append(path)
     return paths
 
-def classify_day(source_files: int, active_cells: int, read_errors: int = 0) -> str:
-    """Classify source availability separately from hail/no-hail signal."""
-    if source_files == 0:
-        return "missing_source"
-    if read_errors >= source_files:
-        return "error"
-    if read_errors > 0:
-        return "ok_with_read_errors" if active_cells > 0 else "no_hail_pixels_with_read_errors"
-    if active_cells == 0:
-        return "no_hail_pixels"
-    return "ok"
-
 def manifest_row(day: date, out_path: Path, keys: list, source_pixels,
                  active_cells: int, max_mesh_mm: float, status: str,
                  skipped: bool = False, read_errors=0) -> dict:
     """Build one Stage 01 manifest row."""
     plain_count, gz_count = summarize_key_formats(keys)
-    return {
-        "date": day.isoformat(),
-        "output_path": str(out_path.relative_to(REPO_ROOT)),
-        "source_files": len(keys),
-        "plain_netcdf_files": plain_count,
-        "gz_netcdf_files": gz_count,
-        "source_valid_pixels": "" if source_pixels is None else source_pixels,
-        "active_cells_0p05": active_cells,
-        "max_mesh_mm": max_mesh_mm,
-        "status": status,
-        "skipped": int(skipped),
-        "read_errors": "" if read_errors is None else read_errors,
-    }
+    return mesh_manifest_row(
+        day,
+        out_path,
+        REPO_ROOT,
+        source_files=len(keys),
+        plain_count=plain_count,
+        gz_count=gz_count,
+        source_pixels=source_pixels,
+        active_cells=active_cells,
+        max_mesh_mm=max_mesh_mm,
+        status=status,
+        skipped=skipped,
+        read_errors=read_errors,
+    )
 
-def upsert_manifest_row(row: dict):
+
+def upsert_manifest_row(row: dict) -> None:
     """Write or replace a manifest row by date."""
-    MANIFEST_FILE.parent.mkdir(parents=True, exist_ok=True)
-    rows = read_manifest_rows_by_date()
-    rows[row["date"]] = {field: row.get(field, "") for field in MANIFEST_FIELDS}
-    write_manifest_rows(rows)
+    upsert_mesh_manifest_row(MANIFEST_FILE, row)
 
 
-def write_manifest_rows(rows: dict):
+def write_manifest_rows(rows: dict) -> None:
     """Write a complete Stage 01 manifest dictionary keyed by date."""
-    tmp_path = MANIFEST_FILE.with_suffix(".csv.tmp")
-    with open(tmp_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS)
-        writer.writeheader()
-        for key in sorted(rows):
-            writer.writerow(rows[key])
-    tmp_path.replace(MANIFEST_FILE)
+    write_mesh_manifest_rows(MANIFEST_FILE, rows)
 
 def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
     """
@@ -460,7 +436,7 @@ def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
 
     if out_path.exists():
         active_cells, max_mesh_mm = summarize_output_raster(out_path)
-        status = classify_day(len(keys), active_cells)
+        status = classify_mesh_source_day(len(keys), active_cells)
         upsert_manifest_row(manifest_row(
             day, out_path, keys, None, active_cells, max_mesh_mm,
             status, skipped=True, read_errors=None,
@@ -481,7 +457,7 @@ def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
             out_path,
             tags={"CONVECTIVE_WINDOW_UTC": convective_day_window_tag(day)},
         )
-        status = classify_day(0, 0)
+        status = classify_mesh_source_day(0, 0)
         upsert_manifest_row(manifest_row(
             day, out_path, keys, 0, 0, 0.0, status, read_errors=0,
         ))
@@ -540,7 +516,7 @@ def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
 
     active_cells, max_mesh_mm = summarize_output_raster(out_path)
     peak = max_mesh_mm
-    status = classify_day(len(keys), active_cells, errors)
+    status = classify_mesh_source_day(len(keys), active_cells, errors)
     upsert_manifest_row(manifest_row(
         day, out_path, keys, total_pixels, active_cells, max_mesh_mm,
         status, read_errors=errors,
@@ -618,6 +594,30 @@ def validate_outputs() -> bool:
     return True
 
 
+def rebuild_manifest_from_outputs(s3, d_start: date, d_end: date) -> int:
+    """Upsert manifest rows from S3 listings and existing GeoTIFFs (no download)."""
+    n = 0
+    for day in iter_dates(d_start, d_end):
+        keys = list_mesh_keys_for_convective_day(s3, day)
+        out_path = mesh_path_for_convective_day(OUT_DIR, day)
+        if out_path.exists():
+            active_cells, max_mesh_mm = summarize_output_raster(out_path)
+            status = classify_mesh_source_day(len(keys), active_cells)
+            upsert_manifest_row(manifest_row(
+                day, out_path, keys, None, active_cells, max_mesh_mm,
+                status, skipped=True, read_errors=None,
+            ))
+        elif not keys:
+            upsert_manifest_row(manifest_row(
+                day, out_path, keys, 0, 0, 0.0,
+                classify_mesh_source_day(0, 0), read_errors=0,
+            ))
+        else:
+            continue
+        n += 1
+    return n
+
+
 def qa_repair_existing_outputs() -> dict:
     """Scan Stage 01 GeoTIFFs, repair invalid values, and refresh manifest stats."""
     import rasterio
@@ -672,7 +672,9 @@ def qa_repair_existing_outputs() -> dict:
                 read_errors = 0
             row["active_cells_0p05"] = active_cells
             row["max_mesh_mm"] = max_mesh_mm
-            row["status"] = classify_day(source_files, active_cells, read_errors)
+            row["status"] = classify_mesh_source_day(
+                source_files, active_cells, read_errors
+            )
             manifest_rows[day.isoformat()] = {
                 field: row.get(field, "") for field in MANIFEST_FIELDS
             }
@@ -709,6 +711,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--qa-only", action="store_true",
                         help="Repair existing Stage 01 rasters and refresh manifest stats")
     parser.add_argument(
+        "--manifest-only",
+        action="store_true",
+        help="Rebuild manifest_stage01_myrorss.csv from S3 + existing GeoTIFFs",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=8,
@@ -725,6 +732,25 @@ def main(argv: list[str] | None = None) -> None:
         qa_repair_existing_outputs()
         ok = validate_outputs()
         sys.exit(0 if ok else 1)
+
+    if args.manifest_only:
+        if args.year and args.month:
+            import calendar
+            d_start = date(args.year, args.month, 1)
+            d_end = date(args.year, args.month,
+                         calendar.monthrange(args.year, args.month)[1])
+            d_start = max(d_start, START_DATE)
+            d_end = min(d_end, END_DATE)
+        elif args.year:
+            d_start = max(date(args.year, 1, 1), START_DATE)
+            d_end = min(date(args.year, 12, 31), END_DATE)
+        else:
+            d_start = START_DATE
+            d_end = END_DATE
+        s3 = get_s3_client()
+        n = rebuild_manifest_from_outputs(s3, d_start, d_end)
+        log(f"  Manifest rows upserted: {n:,} → {MANIFEST_FILE}")
+        sys.exit(0)
 
     if args.validate:
         ok = validate_outputs()

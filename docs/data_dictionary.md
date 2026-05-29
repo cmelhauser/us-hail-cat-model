@@ -71,6 +71,16 @@ availability from no-hail raster values.
 | `skipped` | integer | `1` when the GeoTIFF already existed and was not rebuilt in this pass, else `0` |
 | `read_errors` | integer or blank | Count of source files that failed to read; blank for skipped existing rasters |
 
+For Stages **02** and **04c**, `plain_netcdf_files` / `gz_netcdf_files` count GRIB2 (`.grib2` / `.grib2.gz`) or GridRad NetCDF (`.nc` / `.nc.gz`) objects respectively; all other columns match Stage 01.
+
+| Manifest file | Stage | Date range (convective-day labels) |
+|---|---|---|
+| `manifest_stage01_myrorss.csv` | 01 MYRORSS | 1998-04-01 – 2011-12-31 |
+| `manifest_stage02_mrms.csv` | 02 MRMS | 2020-10-14 – present |
+| `manifest_stage04c_gridrad.csv` | 04c GridRad gap-fill | 2012-01-01 – 2020-10-13 |
+
+Rebuild without re-downloading rasters: `python scripts/0N_*.py --manifest-only` (lists remote or staged sources and reads existing GeoTIFF stats).
+
 ### `data/historical/mesh_0.05deg/gridrad_days.txt`
 
 List of dates whose daily raster was generated from GridRad or GridRad-Severe.

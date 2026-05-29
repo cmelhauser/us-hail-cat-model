@@ -51,6 +51,9 @@ Output
   NoData = 0.0. CRS = EPSG:4326. LZW compressed.
   Same path/naming convention as stage 01 — files interleave seamlessly.
 
+  data/historical/mesh_0.05deg/manifest_stage02_mrms.csv
+  Same schema as manifest_stage01_myrorss.csv (source-format columns count GRIB2).
+
 Usage
 -----
   python scripts/02_download_mrms_mesh.py                # full run (2020–present)
@@ -58,6 +61,7 @@ Usage
   python scripts/02_download_mrms_mesh.py --year 2023 --month 5
   python scripts/02_download_mrms_mesh.py --validate     # check outputs only
   python scripts/02_download_mrms_mesh.py --dry-run      # count files only
+  python scripts/02_download_mrms_mesh.py --manifest-only  # rebuild manifest from S3 + TIFFs
   python scripts/02_download_mrms_mesh.py --workers 16   # more parallel I/O per day
 
 Runtime
@@ -89,11 +93,16 @@ try:
         NODATA, MAX_HAIL_MM,
     )
     from _io import (
-        calendar_days_for_convective_day,
+        classify_mesh_source_day,
         convective_day_window_tag,
+        count_plain_and_compressed_sources,
+        calendar_days_for_convective_day,
         filter_keys_for_convective_day,
+        mesh_manifest_row,
         mesh_path_for_convective_day,
         sanitize_hail_values,
+        summarize_mesh_output_raster,
+        upsert_mesh_manifest_row,
         write_geotiff,
     )
     from _logging import get_logger
@@ -103,17 +112,23 @@ except ImportError:  # pragma: no cover - pytest importlib fallback
         NODATA, MAX_HAIL_MM,
     )
     from scripts._io import (
-        calendar_days_for_convective_day,
+        classify_mesh_source_day,
         convective_day_window_tag,
+        count_plain_and_compressed_sources,
+        calendar_days_for_convective_day,
         filter_keys_for_convective_day,
+        mesh_manifest_row,
         mesh_path_for_convective_day,
         sanitize_hail_values,
+        summarize_mesh_output_raster,
+        upsert_mesh_manifest_row,
         write_geotiff,
     )
     from scripts._logging import get_logger
 
 # ── paths ─────────────────────────────────────────────────────────────────────
 OUT_DIR   = DATA_ROOT / "historical" / "mesh_0.05deg"   # same as stage 01
+MANIFEST_FILE = OUT_DIR / "manifest_stage02_mrms.csv"
 LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "02_download_mrms_mesh.log"
 
@@ -157,6 +172,9 @@ OUT_NODATA = NODATA
 QA_MAX_HAIL_MM = MAX_HAIL_MM
 
 log = get_logger("02_download_mrms_mesh", LOG_ROOT).info
+
+# cfgrib/eccodes decode is not reliable under concurrent opens from many threads.
+_GRIB_DECODE_LOCK = threading.Lock()
 
 # boto3 clients are not documented thread-safe; use one per worker thread.
 _thread_local_s3 = threading.local()
@@ -220,12 +238,15 @@ def timestep_conus_mesh_from_grib_bytes(grib_bytes: bytes) -> tuple[np.ndarray, 
         os.close(fd)
 
         import xarray as xr
-        ds = xr.open_dataset(tmp, engine="cfgrib")
 
-        # The variable name may be 'unknown' or 'MESH' depending on cfgrib version
-        var_name = list(ds.data_vars)[0]
-        data = ds[var_name].values  # shape: (3500, 7000), south-to-north
-        ds.close()
+        with _GRIB_DECODE_LOCK:
+            ds = xr.open_dataset(tmp, engine="cfgrib")
+            try:
+                # The variable name may be 'unknown' or 'MESH' depending on cfgrib version
+                var_name = list(ds.data_vars)[0]
+                data = ds[var_name].values  # shape: (3500, 7000), south-to-north
+            finally:
+                ds.close()
     finally:
         os.unlink(tmp)
 
@@ -269,6 +290,48 @@ def _fetch_and_decode_timestep(key: str) -> tuple[str, np.ndarray | None, int, E
     except Exception as e:
         return key, None, 0, e
 
+def summarize_mrms_key_formats(keys: list) -> tuple[int, int]:
+    """Return plain vs gzipped GRIB2 key counts (uses manifest plain/gz columns)."""
+    return count_plain_and_compressed_sources(
+        keys,
+        plain_suffixes=(".grib2",),
+        compressed_suffixes=(".grib2.gz",),
+    )
+
+
+def upsert_manifest_row(row: dict) -> None:
+    upsert_mesh_manifest_row(MANIFEST_FILE, row)
+
+
+def manifest_row(
+    day: date,
+    out_path: Path,
+    keys: list,
+    source_pixels: int | None,
+    active_cells: int,
+    max_mesh_mm: float,
+    status: str,
+    *,
+    skipped: bool = False,
+    read_errors: int | None = None,
+) -> dict:
+    plain_count, gz_count = summarize_mrms_key_formats(keys)
+    return mesh_manifest_row(
+        day,
+        out_path,
+        REPO_ROOT,
+        source_files=len(keys),
+        plain_count=plain_count,
+        gz_count=gz_count,
+        source_pixels=source_pixels,
+        active_cells=active_cells,
+        max_mesh_mm=max_mesh_mm,
+        status=status,
+        skipped=skipped,
+        read_errors=read_errors,
+    )
+
+
 def block_max(data: np.ndarray, factor: int) -> np.ndarray:
     """
     Aggregate 2D array via block-maximum.
@@ -291,14 +354,27 @@ def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
     aggregate to 0.05°, and write GeoTIFF. ``day`` is the convective-day label.
     """
     out_path = mesh_path_for_convective_day(OUT_DIR, day)
-
-    if out_path.exists():
-        return {"skipped": True}
-
     keys = list_mesh_keys_for_convective_day(s3, day)
 
     if dry_run:
         return {"files": len(keys), "dry_run": True}
+
+    if out_path.exists():
+        active_cells, max_mesh_mm = summarize_mesh_output_raster(
+            out_path, max_hail_mm=QA_MAX_HAIL_MM
+        )
+        status = classify_mesh_source_day(len(keys), active_cells)
+        upsert_manifest_row(manifest_row(
+            day, out_path, keys, None, active_cells, max_mesh_mm,
+            status, skipped=True, read_errors=None,
+        ))
+        return {
+            "skipped": True,
+            "files": len(keys),
+            "active_cells": active_cells,
+            "max_mesh_mm": max_mesh_mm,
+            "status": status,
+        }
 
     if not keys:
         # No data for this day — write an all-zero file
@@ -308,7 +384,17 @@ def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
             out_path,
             tags={"CONVECTIVE_WINDOW_UTC": convective_day_window_tag(day)},
         )
-        return {"files": 0, "pixels": 0, "max_mesh_mm": 0.0}
+        status = classify_mesh_source_day(0, 0)
+        upsert_manifest_row(manifest_row(
+            day, out_path, keys, 0, 0, 0.0, status, read_errors=0,
+        ))
+        return {
+            "files": 0,
+            "pixels": 0,
+            "active_cells": 0,
+            "max_mesh_mm": 0.0,
+            "status": status,
+        }
 
     # Accumulate daily max at native resolution (north-to-south)
     daily_max = np.zeros((CONUS_NROWS, CONUS_NCOLS), dtype=np.float32)
@@ -354,13 +440,47 @@ def process_day(s3, day: date, dry_run: bool = False, workers: int = 8) -> dict:
     )
 
     active = out_data[(out_data > 0) & np.isfinite(out_data)]
-    peak = float(active.max()) if active.size else 0.0
+    active_cells = int(active.size)
+    max_mesh_mm = round(float(active.max()), 1) if active.size else 0.0
+    status = classify_mesh_source_day(len(keys), active_cells, errors)
+    upsert_manifest_row(manifest_row(
+        day, out_path, keys, total_pixels, active_cells, max_mesh_mm,
+        status, read_errors=errors,
+    ))
     return {
-        "files":       len(keys),
-        "pixels":      total_pixels,
-        "max_mesh_mm": round(peak, 1),
-        "errors":      errors,
+        "files": len(keys),
+        "pixels": total_pixels,
+        "active_cells": active_cells,
+        "max_mesh_mm": max_mesh_mm,
+        "errors": errors,
+        "status": status,
     }
+
+
+def rebuild_manifest_from_outputs(s3, d_start: date, d_end: date) -> int:
+    """Upsert manifest rows from S3 listings and existing GeoTIFFs (no download)."""
+    n = 0
+    for day in iter_dates(d_start, d_end):
+        keys = list_mesh_keys_for_convective_day(s3, day)
+        out_path = mesh_path_for_convective_day(OUT_DIR, day)
+        if out_path.exists():
+            active_cells, max_mesh_mm = summarize_mesh_output_raster(
+                out_path, max_hail_mm=QA_MAX_HAIL_MM
+            )
+            status = classify_mesh_source_day(len(keys), active_cells)
+            upsert_manifest_row(manifest_row(
+                day, out_path, keys, None, active_cells, max_mesh_mm,
+                status, skipped=True, read_errors=None,
+            ))
+        elif not keys:
+            upsert_manifest_row(manifest_row(
+                day, out_path, keys, 0, 0, 0.0,
+                classify_mesh_source_day(0, 0), read_errors=0,
+            ))
+        else:
+            continue
+        n += 1
+    return n
 
 def iter_dates(start: date, end: date):
     """Yield each date from start to end inclusive."""
@@ -434,6 +554,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--validate", action="store_true",
                         help="Check outputs only")
     parser.add_argument(
+        "--manifest-only",
+        action="store_true",
+        help="Rebuild manifest_stage02_mrms.csv from S3 + existing GeoTIFFs",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=8,
@@ -449,6 +574,25 @@ def main(argv: list[str] | None = None) -> None:
     if args.validate:
         ok = validate_outputs()
         sys.exit(0 if ok else 1)
+
+    if args.manifest_only:
+        if args.year and args.month:
+            import calendar
+            d_start = date(args.year, args.month, 1)
+            d_end = date(args.year, args.month,
+                         calendar.monthrange(args.year, args.month)[1])
+            d_start = max(d_start, START_DATE)
+            d_end = min(d_end, END_DATE)
+        elif args.year:
+            d_start = max(date(args.year, 1, 1), START_DATE)
+            d_end = min(date(args.year, 12, 31), END_DATE)
+        else:
+            d_start = START_DATE
+            d_end = END_DATE
+        s3 = get_s3_client()
+        n = rebuild_manifest_from_outputs(s3, d_start, d_end)
+        log(f"  Manifest rows upserted: {n:,} → {MANIFEST_FILE}")
+        sys.exit(0)
 
     log(f"\n{'='*60}")
     log(f"  Operational MRMS MESH Download — Stage 02")

@@ -17,6 +17,8 @@ def test_stage02_workers_cli_defaults(load_script):
 def test_stage02_process_day_parallel_merge_matches_numpy_maximum(load_script, monkeypatch, tmp_path):
     s = load_script("02_download_mrms_mesh.py")
     monkeypatch.setattr(s, "OUT_DIR", tmp_path)
+    monkeypatch.setattr(s, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(s, "upsert_manifest_row", lambda _row: None)
     monkeypatch.setattr(s, "CONUS_NROWS", 100)
     monkeypatch.setattr(s, "CONUS_NCOLS", 100)
 
@@ -61,6 +63,8 @@ def test_stage02_process_day_parallel_merge_matches_numpy_maximum(load_script, m
 def test_stage02_process_day_parallel_skips_failed_timesteps(load_script, monkeypatch, tmp_path):
     s = load_script("02_download_mrms_mesh.py")
     monkeypatch.setattr(s, "OUT_DIR", tmp_path)
+    monkeypatch.setattr(s, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(s, "upsert_manifest_row", lambda _row: None)
     monkeypatch.setattr(s, "CONUS_NROWS", 100)
     monkeypatch.setattr(s, "CONUS_NCOLS", 100)
 

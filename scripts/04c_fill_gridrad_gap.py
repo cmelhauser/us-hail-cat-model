@@ -27,6 +27,10 @@ processes (04b is loaded once per worker; each day uses a fresh HTTP session); t
 ``--04b-download-workers`` so ``N × download_workers`` stays within NCAR throttling guidance.
 
 Stage 04a (``era5_monthly_isotherms_conus.nc``) must exist before SHI computation.
+
+Output manifest (same schema as Stage 01):
+
+  data/historical/mesh_0.05deg/manifest_stage04c_gridrad.csv
 """
 
 from __future__ import annotations
@@ -52,11 +56,16 @@ try:
         NODATA, MAX_HAIL_MM,
     )
     from _io import (
+        classify_mesh_source_day,
         convective_day_window_tag,
+        count_plain_and_compressed_sources,
+        mesh_manifest_row,
         mesh_path_for_convective_day,
         observation_utc_to_convective_day,
         parse_observation_utc_from_name,
         sanitize_hail_values,
+        summarize_mesh_output_raster,
+        upsert_mesh_manifest_row,
         write_geotiff,
     )
     from _logging import get_logger
@@ -66,11 +75,16 @@ except ImportError:  # pragma: no cover - pytest importlib fallback
         NODATA, MAX_HAIL_MM,
     )
     from scripts._io import (
+        classify_mesh_source_day,
         convective_day_window_tag,
+        count_plain_and_compressed_sources,
+        mesh_manifest_row,
         mesh_path_for_convective_day,
         observation_utc_to_convective_day,
         parse_observation_utc_from_name,
         sanitize_hail_values,
+        summarize_mesh_output_raster,
+        upsert_mesh_manifest_row,
         write_geotiff,
     )
     from scripts._logging import get_logger
@@ -79,6 +93,7 @@ GRIDRAD_DIR = DATA_ROOT / "historical" / "gridrad"
 GRIDRAD_SEV = DATA_ROOT / "historical" / "gridrad_severe"
 ERA5_FILE   = DATA_ROOT / "historical" / "era5" / "era5_monthly_isotherms_conus.nc"
 OUT_DIR     = DATA_ROOT / "historical" / "mesh_0.05deg"
+MANIFEST_FILE = OUT_DIR / "manifest_stage04c_gridrad.csv"
 LOG_DIR     = LOG_ROOT
 LOG_FILE    = LOG_DIR / "04c_fill_gridrad_gap.log"
 
@@ -365,17 +380,85 @@ def process_gridrad_file(nc_path, daily_max, month):
     return count
 
 
+def summarize_gridrad_formats(nc_files: list) -> tuple[int, int]:
+    """Return plain vs gzipped NetCDF counts for manifest columns."""
+    names = [p.name for p in nc_files]
+    return count_plain_and_compressed_sources(
+        names,
+        plain_suffixes=(".nc",),
+        compressed_suffixes=(".nc.gz",),
+    )
+
+
+def upsert_manifest_row(row: dict) -> None:
+    upsert_mesh_manifest_row(MANIFEST_FILE, row)
+
+
+def manifest_row_for_day(
+    convective_day: date,
+    out_path: Path,
+    nc_files: list,
+    *,
+    source_pixels: int | None,
+    active_cells: int,
+    max_mesh_mm: float,
+    read_errors: int | None = None,
+    skipped: bool = False,
+) -> dict:
+    plain_count, gz_count = summarize_gridrad_formats(nc_files)
+    status = classify_mesh_source_day(
+        len(nc_files), active_cells, read_errors or 0
+    )
+    return mesh_manifest_row(
+        convective_day,
+        out_path,
+        REPO_ROOT,
+        source_files=len(nc_files),
+        plain_count=plain_count,
+        gz_count=gz_count,
+        source_pixels=source_pixels,
+        active_cells=active_cells,
+        max_mesh_mm=max_mesh_mm,
+        status=status,
+        skipped=skipped,
+        read_errors=read_errors,
+    )
+
+
 def process_day(convective_day: date):
     load_era5_isotherms()
 
     out_path = mesh_path_for_convective_day(OUT_DIR, convective_day)
-    if out_path.exists():
-        return {"skipped": True}
+    nc_files, _source = find_gridrad_files(convective_day)
 
-    nc_files, source = find_gridrad_files(convective_day)
+    if out_path.exists():
+        active_cells, max_mesh_mm = summarize_mesh_output_raster(
+            out_path, max_hail_mm=QA_MAX_HAIL_MM
+        )
+        upsert_manifest_row(manifest_row_for_day(
+            convective_day,
+            out_path,
+            nc_files,
+            source_pixels=None,
+            active_cells=active_cells,
+            max_mesh_mm=max_mesh_mm,
+            skipped=True,
+        ))
+        return {"skipped": True, "active_cells": active_cells, "max_mesh_mm": max_mesh_mm}
+
     if not nc_files:
+        upsert_manifest_row(manifest_row_for_day(
+            convective_day,
+            out_path,
+            nc_files,
+            source_pixels=0,
+            active_cells=0,
+            max_mesh_mm=0.0,
+            read_errors=0,
+        ))
         return {"files": 0, "no_data": True}
 
+    source = _source
     daily_max = np.zeros((OUT_NROWS, OUT_NCOLS), dtype=np.float32)
     total_cols = errors = 0
 
@@ -411,15 +494,60 @@ def process_day(convective_day: date):
             "ACTIVE_CELLS": str(n_active),
         },
     )
+    max_mesh_mm = round(peak, 1)
+    upsert_manifest_row(manifest_row_for_day(
+        convective_day,
+        out_path,
+        nc_files,
+        source_pixels=total_cols,
+        active_cells=n_active,
+        max_mesh_mm=max_mesh_mm,
+        read_errors=errors,
+    ))
     return {
         "files": len(nc_files),
         "source": source,
         "active_cols": total_cols,
         "active_cells": n_active,
-        "peak_mesh75_mm": round(peak, 1),
+        "peak_mesh75_mm": max_mesh_mm,
         "errors": errors,
         "tif": str(out_path),
     }
+
+
+def rebuild_manifest_from_outputs(d_start: date, d_end: date) -> int:
+    """Upsert manifest rows from staged GridRad files and existing GeoTIFFs."""
+    n = 0
+    for day in iter_dates(d_start, d_end):
+        nc_files, _ = find_gridrad_files(day)
+        out_path = mesh_path_for_convective_day(OUT_DIR, day)
+        if out_path.exists():
+            active_cells, max_mesh_mm = summarize_mesh_output_raster(
+                out_path, max_hail_mm=QA_MAX_HAIL_MM
+            )
+            upsert_manifest_row(manifest_row_for_day(
+                day,
+                out_path,
+                nc_files,
+                source_pixels=None,
+                active_cells=active_cells,
+                max_mesh_mm=max_mesh_mm,
+                skipped=True,
+            ))
+        elif not nc_files:
+            upsert_manifest_row(manifest_row_for_day(
+                day,
+                out_path,
+                nc_files,
+                source_pixels=0,
+                active_cells=0,
+                max_mesh_mm=0.0,
+                read_errors=0,
+            ))
+        else:
+            continue
+        n += 1
+    return n
 
 
 def iter_dates(start, end):
@@ -436,6 +564,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--month", type=int, default=None)
     parser.add_argument("--validate", action="store_true")
     parser.add_argument("--check-data", action="store_true")
+    parser.add_argument(
+        "--manifest-only",
+        action="store_true",
+        help="Rebuild manifest_stage04c_gridrad.csv from staged inputs + GeoTIFFs",
+    )
     parser.add_argument(
         "--workers",
         type=int,
@@ -531,6 +664,24 @@ def _run_one_day_download_then_process(
 
 def main(argv: list[str] | None = None) -> None:
     args = build_arg_parser().parse_args(argv)
+
+    if args.manifest_only:
+        if args.year and args.month:
+            import calendar
+            d_start = date(args.year, args.month, 1)
+            d_end = date(args.year, args.month,
+                         calendar.monthrange(args.year, args.month)[1])
+            d_start = max(d_start, GAP_START)
+            d_end = min(d_end, GAP_END)
+        elif args.year:
+            d_start = max(date(args.year, 1, 1), GAP_START)
+            d_end = min(date(args.year, 12, 31), GAP_END)
+        else:
+            d_start = GAP_START
+            d_end = GAP_END
+        n = rebuild_manifest_from_outputs(d_start, d_end)
+        log(f"  Manifest rows upserted: {n:,} → {MANIFEST_FILE}")
+        sys.exit(0)
 
     if args.validate:
         import rasterio
