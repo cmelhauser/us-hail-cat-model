@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import csv
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -162,6 +162,79 @@ def filter_keys_for_convective_day(
         if obs is not None and observation_utc_to_convective_day(obs, start_hour_utc) == convective_day:
             out.append(key)
     return sorted(set(out))
+
+
+def staged_nc_files_for_convective_day(
+    stage_base: Path,
+    convective_day: date,
+    start_hour_utc: int = CONVECTIVE_DAY_START_HOUR_UTC,
+) -> list[Path]:
+    """Return staged NetCDF paths under ``by_convective_day/YYYYMMDD`` for one label."""
+    stage_dir = stage_base / "by_convective_day" / convective_day.strftime("%Y%m%d")
+    if not stage_dir.is_dir():
+        return []
+    out: list[Path] = []
+    for path in sorted(stage_dir.glob("*.nc")):
+        obs = parse_observation_utc_from_name(path.name)
+        if obs is None or observation_utc_to_convective_day(obs, start_hour_utc) != convective_day:
+            continue
+        out.append(path)
+    return out
+
+
+def observation_times_from_paths(
+    paths: Iterable[Path | str],
+    convective_day: date,
+    start_hour_utc: int = CONVECTIVE_DAY_START_HOUR_UTC,
+) -> list[datetime]:
+    """Parse observation UTC times from filenames, keeping only the convective window."""
+    start, end = convective_day_window_utc(convective_day, start_hour_utc)
+    times: list[datetime] = []
+    for path in paths:
+        obs = parse_observation_utc_from_name(Path(path).name)
+        if obs is None:
+            continue
+        if obs.tzinfo is None:
+            obs = obs.replace(tzinfo=_UTC)
+        else:
+            obs = obs.astimezone(_UTC)
+        if start <= obs < end:
+            times.append(obs)
+    return sorted(times)
+
+
+def convective_window_coverage_ok(
+    timestamps: Sequence[datetime],
+    convective_day: date,
+    *,
+    start_hour_utc: int = CONVECTIVE_DAY_START_HOUR_UTC,
+    min_files: int = 6,
+    edge_tolerance_minutes: float = 30.0,
+    max_gap_minutes: float = 60.0,
+) -> bool:
+    """True if timesteps span the convective day without large interior gaps."""
+    start, end = convective_day_window_utc(convective_day, start_hour_utc)
+    times: list[datetime] = []
+    for obs in timestamps:
+        if obs.tzinfo is None:
+            obs = obs.replace(tzinfo=_UTC)
+        else:
+            obs = obs.astimezone(_UTC)
+        if start <= obs < end:
+            times.append(obs)
+    times = sorted(set(times))
+    if len(times) < min_files:
+        return False
+    edge_tol = edge_tolerance_minutes * 60.0
+    if (times[0] - start).total_seconds() > edge_tol:
+        return False
+    if (end - times[-1]).total_seconds() > edge_tol:
+        return False
+    max_gap = max_gap_minutes * 60.0
+    for a, b in zip(times, times[1:]):
+        if (b - a).total_seconds() > max_gap:
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------

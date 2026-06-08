@@ -7,7 +7,10 @@ Downloads the GridRad NetCDF inputs required by Stage 04c (gap-fill SHI → MESH
 This stage exists because GridRad is hosted behind NCAR RDA / GDEX, unlike the
 public NOAA S3 radar sources used by Stages 01–02. Stage 04c reads those inputs
 from `data/historical/` (or you can chain **04b → 04c** in one pass with
-``04c_fill_gridrad_gap.py --with-04b-download``).
+``04c_fill_gridrad_gap.py --with-04b-download``). When chained from **04c**,
+downloads use **`download_for_day_adaptive`** (severe-first: GridRad-Severe when
+the catalog lists it; hourly only when severe is absent or does not cover the
+full convective window).
 
 **Convective day (v2.2):** each download batch targets one **12 UTC → 12 UTC**
 window (label = date at window start). Timesteps are filtered from two UTC
@@ -93,16 +96,22 @@ try:
     from _config import DATA_ROOT, LOG_ROOT
     from _io import (
         calendar_days_for_convective_day,
+        convective_window_coverage_ok,
+        observation_times_from_paths,
         observation_utc_to_convective_day,
         parse_observation_utc_from_name,
+        staged_nc_files_for_convective_day,
     )
     from _logging import get_logger
 except ImportError:  # pragma: no cover
     from scripts._config import DATA_ROOT, LOG_ROOT
     from scripts._io import (
         calendar_days_for_convective_day,
+        convective_window_coverage_ok,
+        observation_times_from_paths,
         observation_utc_to_convective_day,
         parse_observation_utc_from_name,
+        staged_nc_files_for_convective_day,
     )
     from scripts._logging import get_logger
 
@@ -533,6 +542,129 @@ def download_for_day(
         read_timeout=read_timeout,
         max_workers=max_workers,
     )
+
+
+def _merge_download_stats(
+    base: dict[str, int],
+    extra: dict[str, int],
+) -> dict[str, int]:
+    out = dict(base)
+    for key in ("downloaded", "skipped", "missing", "errors"):
+        out[key] = int(out.get(key, 0)) + int(extra.get(key, 0))
+    return out
+
+
+def severe_catalog_has_convective_data(
+    session: requests.Session,
+    convective_day: date,
+    *,
+    catalog_timeout: tuple[float, float],
+) -> bool:
+    """True if THREDDS lists any GridRad-Severe file in this convective window."""
+    return bool(
+        plan_downloads_for_day(
+            session,
+            convective_day,
+            hourly=False,
+            severe=True,
+            catalog_timeout=catalog_timeout,
+        )
+    )
+
+
+def _severe_staging_covers_day(convective_day: date) -> bool:
+    """True if staged severe NetCDFs span the convective window without large gaps."""
+    sev_paths = staged_nc_files_for_convective_day(GRIDRAD_SEV_DIR, convective_day)
+    sev_times = observation_times_from_paths(sev_paths, convective_day)
+    return convective_window_coverage_ok(
+        sev_times,
+        convective_day,
+        max_gap_minutes=15.0,
+    )
+
+
+def download_for_day_adaptive(
+    session: requests.Session,
+    convective_day: date,
+    *,
+    catalog_timeout: tuple[float, float],
+    connect_timeout: float,
+    read_timeout: float,
+    max_workers: int,
+) -> dict[str, int | str]:
+    """
+    Download GridRad inputs with severe-first policy for Stage 04c.
+
+    1. If staged GridRad-Severe already covers the convective window, skip downloads.
+    2. If the severe catalog lists timesteps for this window, download severe only.
+    3. After severe download, re-check window coverage; if gaps remain, add hourly.
+    4. If no severe catalog data exists, download hourly only.
+    """
+    empty = {
+        "downloaded": 0,
+        "skipped": 0,
+        "missing": 0,
+        "errors": 0,
+        "source_mode": "none",
+    }
+
+    if _severe_staging_covers_day(convective_day):
+        n_local = len(staged_nc_files_for_convective_day(GRIDRAD_SEV_DIR, convective_day))
+        out = dict(empty)
+        out["skipped"] = n_local
+        out["source_mode"] = "severe-only-local"
+        return out
+
+    has_severe = severe_catalog_has_convective_data(
+        session,
+        convective_day,
+        catalog_timeout=catalog_timeout,
+    )
+
+    if has_severe:
+        stats = download_for_day(
+            session,
+            convective_day,
+            hourly=False,
+            severe=True,
+            catalog_timeout=catalog_timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+            max_workers=max_workers,
+        )
+        stats = dict(stats)
+        stats["source_mode"] = "severe-only"
+
+        if _severe_staging_covers_day(convective_day):
+            return stats
+
+        hourly_stats = download_for_day(
+            session,
+            convective_day,
+            hourly=True,
+            severe=False,
+            catalog_timeout=catalog_timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+            max_workers=max_workers,
+        )
+        merged = _merge_download_stats(stats, hourly_stats)
+        merged["source_mode"] = "severe+hourly-fill"
+        return merged
+
+    stats = download_for_day(
+        session,
+        convective_day,
+        hourly=True,
+        severe=False,
+        catalog_timeout=catalog_timeout,
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        max_workers=max_workers,
+    )
+    stats = dict(stats)
+    stats["source_mode"] = "hourly-only"
+    return stats
 
 
 def main(argv: list[str] | None = None) -> None:

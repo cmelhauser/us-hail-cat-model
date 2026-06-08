@@ -204,7 +204,7 @@ Current repository state:
 - **Stage 01 complete** (5,023 convective-day MYRORSS rasters through 2011-12-31).
 - **Stage 02 complete** (2026-06-08; 2,060 MRMS rasters 2020-10-14 → 2026-06-04; validation passed).
 - **Stage 03 complete**; **Stage 04a complete** (ERA5 isotherms on disk).
-- **Stage 04c pending** — 0 gap-era (2012–2020-10-13) convective-day TIFFs on disk; restart with `--workers 2` (`docs/RUN_NOTES.md`).
+- **Stage 04c pending** — 0 gap-era (2012–2020-10-13) convective-day TIFFs on disk; restart with `--workers 2` (`docs/RUN_NOTES.md`). With `--with-04b-download`, uses severe-first policy (`download_for_day_adaptive`).
 - **Mesh archive:** 7,083 TIFFs (5,023 + 2,060); gap era pending 04c. ~154 GiB disk free.
 - Tracked diagnostic summaries: `data/analysis/mesh_daily_peaks/` (regenerate after all ingest stages complete).
 

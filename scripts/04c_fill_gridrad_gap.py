@@ -21,10 +21,14 @@ NetCDF trees for that day are removed unless you pass ``--keep-gridrad-inputs``.
 
 **Single-pass pipeline:** ``--with-04b-download`` runs Stage 04b’s per-day download
 immediately before processing each day, then deletes the staged NetCDFs (unless
-``--keep-gridrad-inputs``). With ``--workers 1`` this is strictly sequential. With
-``--workers N`` and ``N > 1``, up to ``N`` convective days run in parallel worker
-processes (04b is loaded once per worker; each day uses a fresh HTTP session); tune
-``--04b-download-workers`` so ``N × download_workers`` stays within NCAR throttling guidance.
+``--keep-gridrad-inputs``). Downloads use a **severe-first** policy: GridRad-Severe
+(5-min) is fetched when the catalog lists it for the convective window; regular
+hourly GridRad is skipped unless severe is unavailable or does not cover the full
+12 UTC → 12 UTC window (hourly then fills gaps). With ``--workers 1`` this is
+strictly sequential. With ``--workers N`` and ``N > 1``, up to ``N`` convective days
+run in parallel worker processes (04b is loaded once per worker; each day uses a
+fresh HTTP session); tune ``--04b-download-workers`` so ``N × download_workers``
+stays within NCAR throttling guidance.
 
 Stage 04a (``era5_monthly_isotherms_conus.nc``) must exist before SHI computation.
 
@@ -58,12 +62,16 @@ try:
     from _io import (
         classify_mesh_source_day,
         convective_day_window_tag,
+        convective_window_coverage_ok,
         count_plain_and_compressed_sources,
         mesh_manifest_row,
         mesh_path_for_convective_day,
+        observation_in_convective_day,
+        observation_times_from_paths,
         observation_utc_to_convective_day,
         parse_observation_utc_from_name,
         sanitize_hail_values,
+        staged_nc_files_for_convective_day,
         summarize_mesh_output_raster,
         upsert_mesh_manifest_row,
         write_geotiff,
@@ -77,12 +85,16 @@ except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._io import (
         classify_mesh_source_day,
         convective_day_window_tag,
+        convective_window_coverage_ok,
         count_plain_and_compressed_sources,
         mesh_manifest_row,
         mesh_path_for_convective_day,
+        observation_in_convective_day,
+        observation_times_from_paths,
         observation_utc_to_convective_day,
         parse_observation_utc_from_name,
         sanitize_hail_values,
+        staged_nc_files_for_convective_day,
         summarize_mesh_output_raster,
         upsert_mesh_manifest_row,
         write_geotiff,
@@ -225,33 +237,55 @@ def compute_shi_column(z_profile, heights_km, h_0c, h_m20c):
     return 0.1 * shi
 
 
-def _nc_files_for_convective_day(stage_dir: Path, convective_day: date) -> list[Path]:
-    """Return staged NetCDF paths whose filename timestamps map to ``convective_day``."""
-    if not stage_dir.is_dir():
+def _hourly_fill_for_severe_gaps(
+    hourly_files: list[Path],
+    severe_times: list,
+    convective_day: date,
+    *,
+    proximity_minutes: float = 3.0,
+) -> list[Path]:
+    """Hourly timesteps not already represented by nearby severe (5-min) observations."""
+    if not hourly_files:
         return []
-    out: list[Path] = []
-    for path in sorted(stage_dir.glob("*.nc")):
+    prox = proximity_minutes * 60.0
+    fill: list[Path] = []
+    for path in hourly_files:
         obs = parse_observation_utc_from_name(path.name)
-        if obs is None or observation_utc_to_convective_day(obs) != convective_day:
+        if obs is None or not observation_in_convective_day(obs, convective_day):
             continue
-        out.append(path)
-    return out
+        covered = any(abs((obs - st).total_seconds()) <= prox for st in severe_times)
+        if not covered:
+            fill.append(path)
+    return fill
 
 
 def find_gridrad_files(convective_day: date) -> tuple:
     """
     Find staged GridRad files for a convective day (12 UTC → 12 UTC).
-    Prioritizes GridRad-Severe (5-min) over hourly when available.
+
+    Prefer GridRad-Severe (5-min). Use hourly only when severe is absent, or to
+    fill timesteps not covered by staged severe after a partial severe download.
     """
-    sev_files = _nc_files_for_convective_day(
-        _convective_stage_dir(GRIDRAD_SEV, convective_day), convective_day
-    )
+    sev_files = staged_nc_files_for_convective_day(GRIDRAD_SEV, convective_day)
+    hr_files = staged_nc_files_for_convective_day(GRIDRAD_DIR, convective_day)
+    sev_times = observation_times_from_paths(sev_files, convective_day)
+
+    if sev_files and convective_window_coverage_ok(
+        sev_times,
+        convective_day,
+        max_gap_minutes=15.0,
+    ):
+        return sev_files, "gridrad-severe-5min"
+
+    if sev_files and hr_files:
+        fill = _hourly_fill_for_severe_gaps(hr_files, sev_times, convective_day)
+        if fill:
+            return sorted(sev_files + fill), "gridrad-severe-5min+hourly-fill"
+        return sev_files, "gridrad-severe-5min"
+
     if sev_files:
         return sev_files, "gridrad-severe-5min"
 
-    hr_files = _nc_files_for_convective_day(
-        _convective_stage_dir(GRIDRAD_DIR, convective_day), convective_day
-    )
     if hr_files:
         return hr_files, "gridrad-hourly"
 
@@ -645,11 +679,9 @@ def _run_one_day_download_then_process(
             sess = b04._request_session()
             try:
                 cat_t = (30.0, 180.0)
-                b04.download_for_day(
+                b04.download_for_day_adaptive(
                     sess,
                     day,
-                    hourly=True,
-                    severe=True,
                     catalog_timeout=cat_t,
                     connect_timeout=30.0,
                     read_timeout=900.0,
@@ -825,7 +857,7 @@ def main(argv: list[str] | None = None) -> None:
             src = result.get("source", "")
             if "severe" in src:
                 sev_count += 1
-            else:
+            elif src == "gridrad-hourly":
                 hr_count += 1
             peak = float(result.get("peak_mesh75_mm", 0.0))
             n_active = int(result.get("active_cells", 0))
@@ -851,11 +883,9 @@ def main(argv: list[str] | None = None) -> None:
                 try:
                     if args.with_04b_download and not out_path.exists():
                         cat_t = (30.0, 180.0)
-                        b04.download_for_day(
+                        b04.download_for_day_adaptive(
                             b_sess,
                             day,
-                            hourly=True,
-                            severe=True,
                             catalog_timeout=cat_t,
                             connect_timeout=30.0,
                             read_timeout=900.0,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 
 def test_stage04b_download_gridrad_workers_default(load_script):
@@ -173,4 +173,84 @@ def test_stage04b_plan_downloads_for_day_convective_window(load_script):
         it.out_path.parent == s._convective_stage_dir(s.GRIDRAD_SEV_DIR, date(2016, 7, 21))
         for it in items
     )
+
+
+def test_stage04b_download_for_day_adaptive_skips_hourly_when_severe_covers(
+    load_script, tmp_path, monkeypatch
+):
+    s = load_script("04b_download_gridrad.py")
+    sev_base = tmp_path / "gridrad_severe"
+    hr_base = tmp_path / "gridrad"
+    monkeypatch.setattr(s, "GRIDRAD_SEV_DIR", sev_base)
+    monkeypatch.setattr(s, "GRIDRAD_DIR", hr_base)
+
+    day = date(2016, 7, 21)
+    stage = sev_base / "by_convective_day" / "20160721"
+    stage.mkdir(parents=True)
+    start = datetime(2016, 7, 21, 12, 0, tzinfo=timezone.utc)
+    for i in range(288):
+        t = start + timedelta(minutes=5 * i)
+        ymd = t.strftime("%Y%m%d")
+        hms = t.strftime("%H%M%S")
+        (stage / f"nexrad_3d_v4_2_{ymd}T{hms}Z.nc").write_text("x", encoding="utf-8")
+
+    class FakeSession:
+        def close(self):
+            return None
+
+    stats = s.download_for_day_adaptive(
+        FakeSession(),
+        day,
+        catalog_timeout=(10.0, 10.0),
+        connect_timeout=10.0,
+        read_timeout=10.0,
+        max_workers=1,
+    )
+    assert stats["source_mode"] == "severe-only-local"
+    assert not list(hr_base.rglob("*.nc"))
+
+
+def test_stage04b_download_for_day_adaptive_hourly_only_without_severe_catalog(
+    load_script, tmp_path, monkeypatch
+):
+    s = load_script("04b_download_gridrad.py")
+    sev_base = tmp_path / "gridrad_severe"
+    hr_base = tmp_path / "gridrad"
+    monkeypatch.setattr(s, "GRIDRAD_SEV_DIR", sev_base)
+    monkeypatch.setattr(s, "GRIDRAD_DIR", hr_base)
+
+    day = date(2016, 7, 21)
+    monkeypatch.setattr(s, "severe_catalog_has_convective_data", lambda *a, **k: False)
+
+    planned = [object()]
+    monkeypatch.setattr(
+        s,
+        "download_for_day",
+        lambda *a, **k: {
+            "downloaded": 2,
+            "skipped": 0,
+            "missing": 0,
+            "errors": 0,
+        },
+    )
+    monkeypatch.setattr(
+        s,
+        "plan_downloads_for_day",
+        lambda *a, **k: planned if k.get("hourly") else [],
+    )
+
+    class FakeSession:
+        def close(self):
+            return None
+
+    stats = s.download_for_day_adaptive(
+        FakeSession(),
+        day,
+        catalog_timeout=(10.0, 10.0),
+        connect_timeout=10.0,
+        read_timeout=10.0,
+        max_workers=1,
+    )
+    assert stats["source_mode"] == "hourly-only"
+    assert stats["downloaded"] == 2
 

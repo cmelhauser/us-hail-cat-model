@@ -63,10 +63,11 @@ def test_stage01_decodes_plain_and_gzipped_netcdf_payloads():
 
 
 def test_stage01_classifies_missing_source_separately_from_no_hail():
-    s = load_stage("01_download_myrorss.py")
-    assert s.classify_day(source_files=0, active_cells=0) == "missing_source"
-    assert s.classify_day(source_files=296, active_cells=0) == "no_hail_pixels"
-    assert s.classify_day(source_files=296, active_cells=12) == "ok"
+    from scripts._io import classify_mesh_source_day
+
+    assert classify_mesh_source_day(source_files=0, active_cells=0) == "missing_source"
+    assert classify_mesh_source_day(source_files=296, active_cells=0) == "no_hail_pixels"
+    assert classify_mesh_source_day(source_files=296, active_cells=12) == "ok"
 
 
 def test_stage01_manifest_row_counts_source_formats():

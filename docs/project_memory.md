@@ -136,6 +136,14 @@ Generates the stochastic catalog. Must remain sparse-safe. Must not reconstruct 
 
 ## 7. Work Log
 
+### 2026-06-08 ✅ Stage 04c severe-first GridRad policy
+
+- **04c** with `--with-04b-download` now calls **`download_for_day_adaptive`** (severe-first).
+- **`find_gridrad_files`** merges hourly only for timesteps not covered by staged severe.
+- **`scripts/_io.py`:** `staged_nc_files_for_convective_day`, `convective_window_coverage_ok`.
+- Docs synced: `AGENTS.md`, `technical_documentation.md`, `reproduce.md`, `FAQ.md`,
+  `RUN_NOTES.md`, `data_dictionary.md`, `CHANGELOG.md`, `README.md`.
+
 ### 2026-06-08 ✅ Stage 02 (MRMS) complete
 
 - Stage 02 finished after **86.4 hours** at **06:19 EDT**.

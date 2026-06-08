@@ -164,6 +164,14 @@ for that convective day are **removed** unless you pass **`--keep-gridrad-inputs
 **`N > 1`** for parallel convective days (each worker has its own session); keep
 **`N × --04b-download-workers`** within NCAR throttling guidance.
 
+**Severe-first downloads:** when **`--with-04b-download`** is set, Stage **04c** calls
+**`download_for_day_adaptive`** (not a blind severe+hourly pull). GridRad-Severe is
+downloaded when the THREDDS catalog lists it for the convective window; hourly GridRad
+is skipped unless severe is unavailable or does not cover the full 12 UTC → 12 UTC day.
+At processing time, **`find_gridrad_files`** uses severe only when window coverage is
+complete; otherwise it merges hourly timesteps for gaps (`SOURCE` tag
+`gridrad-severe-5min+hourly-fill`). See `docs/technical_documentation.md` §7.4 and §8.3.
+
 **Mental model (04b vs 04c workers):** `--workers` on **04c** is the number of **parallel
 convective days** (separate processes when `N > 1`). **`--04b-download-workers`** applies
 only with **`--with-04b-download`**: it is **within-day** parallel HTTP GETs for that

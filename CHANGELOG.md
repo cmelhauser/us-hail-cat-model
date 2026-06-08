@@ -9,6 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Stage 04c / 04b:** Severe-first GridRad acquisition when `--with-04b-download` is set.
+  GridRad-Severe (5-min) is downloaded when the THREDDS catalog lists timesteps for the
+  convective window; hourly GridRad is skipped unless severe is unavailable or does not
+  cover the full 12 UTC → 12 UTC day (hourly then fills gaps). Processing prefers severe
+  and merges hourly only for uncovered timesteps (`gridrad-severe-5min+hourly-fill`).
+- **`scripts/_io.py`:** Shared helpers for staged NetCDF discovery and convective-window
+  coverage checks (`staged_nc_files_for_convective_day`, `convective_window_coverage_ok`, …).
+
+### Fixed
+
+- **`tests/test_01_download_myrorss.py`:** Manifest classification test now calls
+  `classify_mesh_source_day` from `_io.py` (replaces removed `classify_day`).
+
 ## [2.2.1] — 2026-05-28
 
 ### Added

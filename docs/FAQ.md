@@ -65,7 +65,7 @@ See `docs/technical_documentation.md` for per-stage implementation notes. In bri
 | 03 | Download SPC hail reports |
 | 04a | Download ERA5 isotherms |
 | 04b | Download GridRad / GridRad-Severe inputs (NCAR RDA/GDEX); default is one day at a time with `--workers 1` per day |
-| 04c | Compute SHI/MESH75 from GridRad reflectivity + ERA5; default sequential days; optional per-day input cleanup unless `--keep-gridrad-inputs` |
+| 04c | Compute SHI/MESH75 from GridRad reflectivity + ERA5; severe-first download when `--with-04b-download`; default sequential days; optional per-day input cleanup unless `--keep-gridrad-inputs` |
 | 05 | Calibrate all sources, apply environmental filter |
 | 06 | Validate corrected MESH vs SPC reports |
 | 07 | Build hail climatology (annual exceedance frequency) |
@@ -104,7 +104,11 @@ Stage 05 has optional machine-learning components for conditional GridRad calibr
 
 **Q: Stage 04c: what is the difference between `--workers` and `--04b-download-workers`?**
 
-On **`04c_fill_gridrad_gap.py`**, **`--workers`** is how many **convective days** run in parallel (separate processes when `N > 1`). **`--04b-download-workers`** only applies with **`--with-04b-download`**: it parallelizes **HTTP GETs within one convective day’s** `download_for_day` call. For throttling, think **`04c_workers × 04b_download_workers`** (see `docs/reproduce.md` §5 table). Stage **04b**’s own **`--workers`** flag is unrelated—it only affects within-day GETs when you run **04b** as a standalone script.
+On **`04c_fill_gridrad_gap.py`**, **`--workers`** is how many **convective days** run in parallel (separate processes when `N > 1`). **`--04b-download-workers`** only applies with **`--with-04b-download`**: it parallelizes **HTTP GETs within one convective day’s** download call (`download_for_day_adaptive` → `download_for_day`). For throttling, think **`04c_workers × 04b_download_workers`** (see `docs/reproduce.md` §5 table). Stage **04b**’s own **`--workers`** flag is unrelated—it only affects within-day GETs when you run **04b** as a standalone script.
+
+**Q: Does Stage 04c download both GridRad and GridRad-Severe for every day?**
+
+No. With **`--with-04b-download`**, Stage **04c** uses a **severe-first** policy (`download_for_day_adaptive` in **04b**). If GridRad-Severe exists in the THREDDS catalog for the convective window, only severe files are downloaded. Hourly GridRad is fetched only when severe is unavailable or staged severe files do not cover the full 12 UTC → 12 UTC window. Processing mirrors this: complete severe coverage uses severe only; partial severe merges hourly timesteps for gaps (`SOURCE=gridrad-severe-5min+hourly-fill`). Standalone **`04b`** still supports explicit **`--hourly-only`** / **`--severe-only`** flags.
 
 **Q: Why did many GridRad gap-fill days show zero hail (`active_cells=0`) even when NetCDFs downloaded successfully?**
 

@@ -69,7 +69,7 @@ Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correc
 | 03 | `03_download_spc.py` | SPC storm reports — validation only |
 | 04a | `04a_download_era5_isotherms.py` | ERA5 isotherm download |
 | 04b | `04b_download_gridrad.py` | Download GridRad / GridRad-Severe inputs (2012–2020-10-13) |
-| 04c | `04c_fill_gridrad_gap.py` | Compute MESH75 from GridRad dBZ reflectivity + ERA5; optional GDAL peak tags |
+| 04c | `04c_fill_gridrad_gap.py` | Compute MESH75 from GridRad dBZ reflectivity + ERA5; severe-first download when chained with 04b; optional GDAL peak tags |
 | 05 | `05_apply_mesh_bias_correction.py` | Cross-source bias correction and filtering |
 | 06 | `06_validate_mesh_vs_spc.py` | SPC validation and detection-rate diagnostics |
 | 07 | `07_build_hail_climo.py` | Long-term hail frequency climatology |

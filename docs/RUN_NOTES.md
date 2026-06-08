@@ -45,7 +45,9 @@ Snapshot taken **2026-06-08**:
 
 - Prefer **`--workers 2`** on constrained disks (`run_pipeline.py --only 04c` defaults to `--workers 4`).
 - Monitor: `tail -f logs/04c_fill_gridrad_gap.run.log`
+- **Severe-first downloads:** with `--with-04b-download`, **04c** downloads GridRad-Severe when the catalog lists it; hourly GridRad is used only when severe is missing or does not cover the full convective window (see `docs/technical_documentation.md` §8.3).
 - **04c** skips existing `mesh_*.tif`; no gap-era files exist yet, so the full 2012–2020-10-13 range will be processed.
+- **Manifest:** `data/historical/mesh_0.05deg/manifest_stage04c_gridrad.csv` is upserted per day (rebuild: `--manifest-only`).
 - **Re-process rule:** delete any gap TIFF written with the old `Nradecho` reader before trusting distributions.
 
 ### Stage 02 completion log (2026-06-08)

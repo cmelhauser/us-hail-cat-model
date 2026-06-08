@@ -162,7 +162,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 | Stage 02 (MRMS) | ✅ Complete | **2026-06-08.** 2,060 rasters 2020-10-14 → 2026-06-04. Validation passed. Peak MESH 299.9 mm. |
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. |
 | Stage 04a (ERA5) | ✅ Complete | Isotherms and surface geopotential on disk; validation passed 2026-05-13. |
-| Stage 04b/04c (GridRad) | ⏸ Restart needed | Full 2012–2020-10-13 convective-day gap fill pending. Restart: `scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`. |
+| Stage 04b/04c (GridRad) | ⏸ Restart needed | Full 2012–2020-10-13 convective-day gap fill pending. Restart: `scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2` (severe-first downloads). Manifest: `manifest_stage04c_gridrad.csv`. |
 | Stage 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 files only. All outputs invalid for production use. |
 
 **Mesh archive:** 7,083 `mesh_*.tif` (5,023 MYRORSS + 2,060 MRMS). Gap era pending 04c.

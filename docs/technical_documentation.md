@@ -238,7 +238,13 @@ This caps the in-memory plan to **one day’s file list** and avoids holding hun
 
 ### 7.4 Public helpers (for Stage 04c)
 
-- **`download_for_day(...)`** — plan + download all files for one `date`.
+- **`download_for_day(...)`** — plan + download all files for one `date` (explicit `hourly` / `severe` flags).
+- **`download_for_day_adaptive(...)`** — **severe-first** policy used by Stage **04c** with `--with-04b-download`:
+  1. Skip downloads when staged GridRad-Severe already covers the convective window.
+  2. If the severe catalog lists timesteps, download **severe only**.
+  3. Re-check window coverage; if gaps remain, download **hourly** as fill.
+  4. If no severe catalog data exists, download **hourly only**.
+- **`severe_catalog_has_convective_data(...)`** — lightweight THREDDS plan check (no GETs).
 - **`download_planned_items(...)`** — download a pre-built list (used internally).
 
 ---
@@ -278,9 +284,15 @@ before `exec_module` so dataclasses resolve correctly in worker processes). With
 **`--workers N`** and **`N > 1`**, worker processes use a pool initializer so **04b**
 is loaded **once per worker** (not once per day); each convective day still opens a
 **new** `requests.Session`, runs
-**`download_for_day`** when the output GeoTIFF is absent, then **`process_day`**.
+**`download_for_day_adaptive`** when the output GeoTIFF is absent, then **`process_day`**.
 Expect roughly **`N × (--04b-download-workers)`** peak concurrent HTTP GETs unless
 downloads skip quickly—stay within NCAR/GDEX throttling.
+
+**Severe-first policy:** most convective days download only GridRad-Severe (~288
+5-min files) instead of severe plus hourly (~24 extra files). Hourly is fetched only
+when the severe catalog is empty or staged severe files do not span the full
+12 UTC → 12 UTC window (coverage checked via `convective_window_coverage_ok` in
+`scripts/_io.py`).
 
 #### Quick reference (mental model)
 
@@ -292,14 +304,19 @@ downloads skip quickly—stay within NCAR/GDEX throttling.
 | Keep a full local GridRad tree between stages | Run **`04b`** then **`04c`** separately; use **`--keep-gridrad-inputs`** on **04c** if you need to retain trees after each day |
 
 On **04c**, **`--workers`** counts **processes across days**. **`--04b-download-workers`**
-counts **parallel GETs inside** `download_for_day` for the day assigned to that process.
+counts **parallel GETs inside** each day's download call (`download_for_day_adaptive` →
+`download_for_day`) for the day assigned to that process.
 They multiply for throttling purposes. Stage **04b**’s own CLI **`--workers`** is
 unrelated: it only parallelizes GETs **within** each day when you run **04b** as its
 own stage.
 
 ### 8.3 Technical behavior (per day)
 
-1. Prefer GridRad-Severe when files exist; else hourly GridRad.
+1. **Source selection (staged files):** `find_gridrad_files()` prefers GridRad-Severe
+   when it covers the convective window (≥6 files, edges within 30 min of window
+   bounds, max gap ≤15 min for 5-min data). If severe is partial, merge severe plus
+   hourly timesteps not within 3 min of a severe observation (`gridrad-severe-5min+hourly-fill`).
+   If no severe files exist, use hourly only (`gridrad-hourly`).
 2. **Load reflectivity (dBZ) for SHI:**
    - GridRad v3/v4 NetCDF files usually store physical reflectivity as **sparse** `Reflectivity(Index)` plus an `index` vector, not as a dense `(Altitude, Latitude, Longitude)` array.
    - Stage 04c reconstructs a dense 3-D reflectivity grid from sparse `Reflectivity` + `index` when needed.
@@ -309,7 +326,7 @@ own stage.
 4. Integrate SHI (Witt et al. 1998) using ERA5 0 °C / −20 °C heights from Stage 04a when available.
 5. Convert SHI → MESH75: `MESH75 = 15.096 * SHI^0.206` (2021 corrigendum coefficients).
 6. Take convective-day maxima on the canonical 0.05° grid; apply shared `MAX_HAIL_MM` QA via `sanitize_hail_values`.
-7. Write GeoTIFF with optional GDAL diagnostic tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`, `SOURCE`, `DATE`); log one line per day with peak hail and active-cell count.
+7. Write GeoTIFF with optional GDAL diagnostic tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`, `SOURCE`, `DATE`, `CONVECTIVE_WINDOW_UTC`); log one line per day with peak hail and active-cell count. Upsert `manifest_stage04c_gridrad.csv` (same schema as Stage 01/02 manifests).
 8. Append `YYYYMMDD` to `gridrad_days.txt` when the day produced data.
 
 **Re-run after reflectivity-reader fixes:** delete affected `mesh_YYYYMMDD.tif` files under `data/historical/mesh_0.05deg/` for gap days that were produced with the old reader (log lines showing `src=gridrad-hourly` and `active_cells=0` on storm days are a strong indicator), then re-run 04c for those dates.

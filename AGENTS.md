@@ -149,7 +149,9 @@ auto-**skip** standalone **04b** and run **04c** with **`--with-04b-download --w
   After each day finishes, **`delete_gridrad_inputs_for_day`** removes that day’s trees
   under `by_convective_day/YYYYMMDD/` in both `gridrad/` and `gridrad_severe/` unless
   **`--keep-gridrad-inputs`**. **`--with-04b-download`** chains **04b**’s
-  **`download_for_day`** before **`process_day`**; with **`--workers > 1`**, each worker
+  **`download_for_day_adaptive`** before **`process_day`** (severe-first: download
+  GridRad-Severe when the catalog lists it; skip hourly unless severe is absent or
+  does not cover the full 12 UTC → 12 UTC window). With **`--workers > 1`**, each worker
   process uses its own HTTP session (04b is loaded once per worker via a pool
   initializer; mind **`workers × --04b-download-workers`** vs NCAR throttling).
 - **04c reflectivity:** use sparse **`Reflectivity(Index)` + `index`** (not **`Nradecho`**, which is not dBZ). Gap-fill GeoTIFFs include GDAL tags `MAX_MESH75_MM`, `ACTIVE_CELLS`, etc., and per-day log lines with peak hail.
