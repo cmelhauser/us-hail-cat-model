@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-05-28 (`v2.2.1` dev branch; model **2.2.0** on `main`; convective days — `docs/methodology.md` §2.6, `docs/literature_review.md` §3.6)**
+**Last updated: 2026-06-08 (`v2.2.1` dev branch; model **2.2.0** on `main`; Stages 01/02 complete — see `docs/RUN_NOTES.md`)**
 
 ---
 
@@ -194,15 +194,19 @@ When asked to review the project:
 
 ---
 
-## 9. Confirmed State After 2026-05-20
+## 9. Confirmed State After 2026-06-08
 
 Current repository state:
 
 - Active branch: **`v2.2.1`** (development on `origin` only). Model **2.2.0** merged to `main`.
 - GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing.
 - Stage helper refactor complete: `_config.py`, `_logging.py`, and `_io.py` are wired into stage scripts where required.
-- Stage 01 complete; Stage 04c uses sparse **`Reflectivity`** reader — restart gap-fill with `--workers 2` after disk cleanup (`docs/RUN_NOTES.md`).
-- Tracked diagnostic summaries: `data/analysis/mesh_daily_peaks/` (regenerate via `scripts/diagnostics/summarize_mesh_daily_peaks.py`).
+- **Stage 01 complete** (5,023 convective-day MYRORSS rasters through 2011-12-31).
+- **Stage 02 complete** (2026-06-08; 2,060 MRMS rasters 2020-10-14 → 2026-06-04; validation passed).
+- **Stage 03 complete**; **Stage 04a complete** (ERA5 isotherms on disk).
+- **Stage 04c pending** — 0 gap-era (2012–2020-10-13) convective-day TIFFs on disk; restart with `--workers 2` (`docs/RUN_NOTES.md`).
+- **Mesh archive:** 7,083 TIFFs (5,023 + 2,060); gap era pending 04c. ~154 GiB disk free.
+- Tracked diagnostic summaries: `data/analysis/mesh_daily_peaks/` (regenerate after all ingest stages complete).
 
 ### Files created 2026-05-01 (while pipeline was running)
 
@@ -254,11 +258,11 @@ Current repository state:
 - Regression / golden-output tests
 - Bootstrap CIs on Stage 09 RP estimates
 
-**Immediate run priorities after Stage 02 completes:**
-- Run Stage 04a.
-- Run Stage 04b.
-- Re-run Stages 05–15 with `--skip-ml` against the full dataset.
+**Immediate run priorities (2026-06-08):**
+- Restart Stage 04c: `scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`.
+- Re-run Stages 05–15 with `--skip-ml` against the full dataset after 04c completes.
 - Run Stage 13 smoke (`--n-years 1000`) before the full 50,000-year catalog.
+- Regenerate mesh-era diagnostic: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 
 **Stage 04a CDS access note:** Stage 04a needs more than a valid
 `~/.cdsapirc`. The Copernicus account used for the token must also accept the
@@ -271,17 +275,18 @@ dataset licences from the CDS download pages, then retry Stage 04a.
 ## 10. Compact Project Context
 
 ```text
-CONUS Hail Cat Model v2.1 is a radar-first hail hazard model on a 0.05° CONUS grid.
+CONUS Hail Cat Model v2.2 is a radar-first hail hazard model on a 0.05° CONUS grid.
 It uses MYRORSS, GridRad, MRMS, ERA5, and SPC validation.
 15-stage Python pipeline. Run via run_pipeline.py.
 SPC reports are validation only — never a hazard input.
 Stage 08 builds a sparse event catalog (event_peaks.npz: rows/cols/vals per event).
 Stage 13 must remain sparse-safe — no dense event cubes.
 Stage 05 must work with --skip-ml.
-Stage 01 produces manifest_stage01_myrorss.csv — use it for source QA.
+Stage 01/02 manifests (manifest_stage01_myrorss.csv, manifest_stage02_mrms.csv) — use for source QA.
 scripts/_config.py = single source of truth for constants and is imported by all stage scripts.
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 OPEN DOC WATCH: methodology.md §13 and uncertainty.md §5.1 document monthly CV Mar–Sep for σ_perturb; keep them aligned with code if Stage 13 changes.
 First full run started 2026-05-01 via Codex.
-Current active branch is main; v2.1 has been merged and is no longer the active branch.
+Active branch: v2.2.1 (dev). Model 2.2.0 on main (12 UTC → 12 UTC convective days).
+Stage 01 + 02 complete (7,083 mesh TIFFs). Stage 04c gap-fill is the active blocker.
 ```

@@ -20,29 +20,50 @@
 
 ## Current Run Status
 
-Snapshot taken 2026-05-20 (pre-v2.2; superseded by convective-day re-ingest):
+Snapshot taken **2026-06-08**:
 
-- **Stage 04c** reflectivity reader fixed (`Nradecho` → sparse **`Reflectivity`** + lon normalization). Bad **2012** gap TIFFs from the old reader were deleted before restart.
-- **04c paused:** run stopped after **`[Errno 28] No space left on device`**. Stale `data/historical/gridrad/2013/` and `gridrad_severe/2013/` staging trees were removed (~35 GB freed). Gap TIFFs already written were kept; example dates still missing TIFFs: **20130612**, **20130616**, **20130617**.
-- **Restart command (recommended):** `.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2` — avoids `run_pipeline.py` default of **`--workers 4`**, which can hold ~4 concurrent day trees (~8–12 GB each) under `gridrad_severe/`.
-- Monitor: `tail -f logs/04c_fill_gridrad_gap.run.log` (per-day peak hail and `ACTIVE_CELLS`; GDAL tags on gap-fill GeoTIFFs).
-- **Re-process rule:** **04c** skips existing `mesh_*.tif`; delete gap-era files that need redo before re-running dates.
-- **Mesh era QA (optional):** `.venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py` → `data/analysis/mesh_daily_peaks/`.
+| Stage | Status | Notes |
+|-------|--------|-------|
+| Stage 01 (MYRORSS) | ✅ Complete | 5,023 convective-day rasters through 2011-12-31. Manifest: 4,989 `ok`, 20 `missing_source`, 11 `ok_with_read_errors`, 3 `no_hail_pixels`. QA cap 300.0 mm. |
+| Stage 02 (MRMS) | ✅ Complete | Finished **2026-06-08 06:19 EDT** (86.4 h). 2,060 rasters **2020-10-14 → 2026-06-04**. Manifest: 2,059 `ok`, 1 `ok_with_read_errors`. Output validation passed. Peak MESH 299.9 mm. |
+| Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. Rerun only for a fresh pull. |
+| Stage 04a (ERA5) | ✅ Complete | `era5_monthly_isotherms_conus.nc` and `era5_surface_geopotential_conus.nc` on disk; validation passed 2026-05-13. |
+| Stage 04c (GridRad) | ⏸ Not started (v2.2) | **0** gap-era (2012–2020-10-13) convective-day TIFFs on disk. Prior calendar-UTC gap outputs were cleared for v2.2 re-ingest. Last log activity **2026-05-29** at **2016-06-20** (pre-migration run). **Restart required.** |
+| Stages 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 smoke files only. Not production. |
 
-Earlier snapshot (2026-05-04 02:25 EDT):
+**Mesh archive totals:** 7,083 `mesh_*.tif` under `data/historical/mesh_0.05deg/` (5,023 MYRORSS + 2,060 MRMS). Gap era pending Stage 04c.
 
-- Stage 01 completed successfully through 2011-12-31 and validated.
-- Stage 01 QA was rerun with the 300.0 mm physical cap: 0 files and 0
-  cells required repair; post-repair validation passed. The earlier 250.0 mm
-  pass had repaired 199 files and 3,852 cells.
-- TIFF count under `data/historical/mesh_0.05deg`: 5,023 Stage 01 files plus
-  any in-progress Stage 02 MRMS outputs.
-- Stage 01 manifest has 5,023 rows: 4,981 `ok`, 30 `missing_source`,
-  11 `ok_with_read_errors`, and 1 `no_hail_pixels`.
-- Disk available: approximately 373 GiB.
-- Stage 02 is running in detached `screen` session `hail_stage02_mrms`.
-- Stages 05–15 outputs from the earlier May-2011 smoke path are placeholders,
-  not production outputs.
+**Disk available:** ~154 GiB (2026-06-08).
+
+**No active processes:** Stage 02 `screen` session `hail_stage02_mrms` is gone; stale PID in `logs/stage02_mrms.pid`.
+
+### Stage 04c restart (recommended)
+
+```bash
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
+```
+
+- Prefer **`--workers 2`** on constrained disks (`run_pipeline.py --only 04c` defaults to `--workers 4`).
+- Monitor: `tail -f logs/04c_fill_gridrad_gap.run.log`
+- **04c** skips existing `mesh_*.tif`; no gap-era files exist yet, so the full 2012–2020-10-13 range will be processed.
+- **Re-process rule:** delete any gap TIFF written with the old `Nradecho` reader before trusting distributions.
+
+### Stage 02 completion log (2026-06-08)
+
+From `logs/02_download_mrms_mesh.log`:
+
+- Days processed this run: 1,199 (861 skipped as existing)
+- Days with no MESH data: 0
+- Total S3 GRIB2 files read: 862,997
+- Output validation: passed
+
+---
+
+### Historical snapshots (superseded)
+
+**2026-05-20:** Stage 04c reflectivity reader fixed (`Nradecho` → sparse **`Reflectivity`** + lon normalization). Run stopped for disk full (`[Errno 28]`); stale `gridrad/` / `gridrad_severe/` trees under 2013 removed (~35 GB).
+
+**2026-05-04:** Stage 01 complete; Stage 02 running in `screen` session `hail_stage02_mrms`; 5,023 Stage 01 TIFFs on disk.
 
 ## Preflight Commands
 
@@ -75,13 +96,10 @@ interrupted run.
 
 ## Recommended Full Run Shape
 
-Run in cautious stage chunks. Stage 01 is complete. Stage 02 is currently
-running; after it completes, continue with:
+Stages 01, 02, 03, and 04a are complete. **Restart Stage 04c**, then continue:
 
 ```bash
-.venv/bin/python run_pipeline.py --only 03
-.venv/bin/python run_pipeline.py --only 04a
-.venv/bin/python run_pipeline.py --only 04c
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
 .venv/bin/python run_pipeline.py --only 05 --skip-ml
 .venv/bin/python run_pipeline.py --from 06 --skip-ml
 ```
@@ -132,10 +150,12 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 
 ## Next Actions
 
-When Stage 02 completes, finish **04c** then continue:
+1. **Restart Stage 04c** (full 2012–2020-10-13 convective-day gap fill).
+2. **Re-run Stages 05–15** with `--skip-ml` after 04c completes.
+3. **Stage 13 smoke** then full 50,000-year catalog.
+4. **Validate** and regenerate mesh-era diagnostic summaries.
 
 ```bash
-.venv/bin/python run_pipeline.py --only 04a
 .venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
 .venv/bin/python run_pipeline.py --from 05 --skip-ml
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
@@ -143,6 +163,7 @@ When Stage 02 completes, finish **04c** then continue:
 .venv/bin/python run_pipeline.py --only 14
 .venv/bin/python run_pipeline.py --only 15
 .venv/bin/python run_pipeline.py --validate
+.venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py
 ```
 
 Stage 03 has already completed and only needs rerunning if the user wants a

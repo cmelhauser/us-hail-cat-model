@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-05-28 (`v2.2.1` active dev branch; model release `2.2.0` on `main`).
+Last updated: 2026-06-08 (`v2.2.1` active dev branch; model release `2.2.0` on `main`).
 
 ## What This Project Is
 
@@ -233,7 +233,7 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-05-20:
+As of 2026-06-08:
 
 | Area | Status |
 |---|---|
@@ -242,26 +242,35 @@ As of 2026-05-20:
 | Tests | 28 pytest files; GitHub Actions green on Python 3.10/3.11/3.12 |
 | Integration test | `tests/integration/test_smoke_synthetic.py` |
 | Constant-drift guard | `tests/test_no_duplicated_constants.py` |
-| First full pipeline run | Stage 01 complete; Stage 02 and **04c** in progress (04c paused 2026-05-20 for disk cleanup) |
+| First full pipeline run | Stage 01 ✅; Stage 02 ✅; Stage 03 ✅; Stage 04a ✅; **Stage 04c** ⏸ not started for v2.2 convective-day gap fill |
+| Mesh archive | 7,083 convective-day `mesh_*.tif` (5,023 MYRORSS + 2,060 MRMS); **0** gap-era (2012–2020-10-13) TIFFs on disk |
 | Mesh peak diagnostic | `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/` |
 | Project metadata | LICENSE, CHANGELOG, CITATION, CONTRIBUTING, COC, SECURITY |
 | Python project config | pyproject.toml, .pre-commit-config.yaml |
 | CI/CD | `.github/workflows/tests.yml` |
-| Stage 01 source manifest | Implemented |
+| Stage 01 / 02 manifests | Implemented (`manifest_stage01_myrorss.csv`, `manifest_stage02_mrms.csv`) |
 | Regression / golden tests | Pending first production outputs |
 | Bootstrap CIs on RP maps | Pending first production outputs |
 
 ## Current Run Watch
 
-Stage 01 is complete through 2011-12-31 (5,023 MYRORSS daily rasters; manifest QA at 300.0 mm cap). Stage **04c** gap-fill uses the sparse **`Reflectivity`** reader; bad pre-fix gap TIFFs must be deleted before re-run. **2026-05-20:** a disk-full stop removed stale `gridrad/` / `gridrad_severe/` staging under 2013 (~35 GB); restart **04c** with **`--workers 2`** (see `docs/RUN_NOTES.md`). Monitor `logs/04c_fill_gridrad_gap.run.log`. Optional era QA: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
+**Stage 02 (MRMS)** finished **2026-06-08 06:19 EDT** after 86.4 hours. Output validation passed. Coverage: **2020-10-14 → 2026-06-04** (2,060 convective days; manifest: 2,059 `ok`, 1 `ok_with_read_errors`). Peak MESH: 299.9 mm. No process or `screen` session is active.
+
+**Stage 04c (GridRad gap-fill)** is the active blocker. The v2.2 convective-day re-ingest cleared prior calendar-UTC gap TIFFs; **no** gap-era (2012–2020-10-13) rasters exist under `mesh_0.05deg/` yet. Last log activity: **2026-05-29** at **2016-06-20** (`logs/04c_fill_gridrad_gap.log`). Restart with:
+
+```bash
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
+```
+
+Use **`--workers 2`** (not `run_pipeline.py`'s default of 4) on disks under ~250 GiB free (~154 GiB available as of 2026-06-08). Monitor `logs/04c_fill_gridrad_gap.run.log`.
 
 The remaining production sequence is:
 
-1. Let Stage 02 (MRMS) and Stage 04c (GridRad gap-fill) complete; use direct **04c** with `--workers 2` if disk is tight.
-2. Run Stage 04a (ERA5) if CDS credentials are configured.
-3. Re-run Stages 05-15 with `--skip-ml` against the full dataset.
-4. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
-5. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.
+1. **Restart Stage 04c** for the full 2012–2020-10-13 convective-day gap (ERA5 from Stage 04a is already on disk).
+2. Re-run Stages 05–15 with `--skip-ml` against the full dataset.
+3. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
+4. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.
+5. Regenerate mesh-era QA: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 6. Freeze regression/golden outputs and add bootstrap CIs to Stage 09.
 7. Upgrade `.venv` to Python 3.10+ after the active run.
 

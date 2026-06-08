@@ -231,7 +231,7 @@ re-run 04c for those dates (see `docs/technical_documentation.md` §8.3).
 ```
 
 Writes `data/analysis/mesh_daily_peaks/` (`mesh_daily_peaks.csv`, percentiles, ECDF plot).
-Re-run while Stages 02 or 04c are in progress to compare hail distributions by radar era.
+Re-run after ingest stages complete (or while Stage 04c is in progress) to compare hail distributions by radar era.
 
 ## 6. Stage 05 Modes
 
