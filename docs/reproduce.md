@@ -165,12 +165,12 @@ for that convective day are **removed** unless you pass **`--keep-gridrad-inputs
 **`N × --04b-download-workers`** within NCAR throttling guidance.
 
 **Severe-first downloads:** when **`--with-04b-download`** is set, Stage **04c** calls
-**`download_for_day_adaptive`** (not a blind severe+hourly pull). GridRad-Severe is
-downloaded when the THREDDS catalog lists it for the convective window; hourly GridRad
-is skipped unless severe is unavailable or does not cover the full 12 UTC → 12 UTC day.
-At processing time, **`find_gridrad_files`** uses severe only when window coverage is
-complete; otherwise it merges hourly timesteps for gaps (`SOURCE` tag
-`gridrad-severe-5min+hourly-fill`). See `docs/technical_documentation.md` §7.4 and §8.3.
+**`download_for_day_adaptive`**: GridRad-Severe (**d841006**) when the catalog lists
+timesteps for the convective window; otherwise hourly **d841000** (V3.1 through 2017),
+then **d841001** (V4.2 warm-season hourly, Apr–Aug 2018–2021). Partial severe coverage
+may merge hourly timesteps for gaps (`SOURCE=gridrad-severe-5min+hourly-fill`). At
+processing time, **`find_gridrad_files`** uses severe only when window coverage is
+complete; otherwise it merges hourly timesteps for gaps. See `docs/technical_documentation.md` §7.4 and §8.3.
 
 **Mental model (04b vs 04c workers):** `--workers` on **04c** is the number of **parallel
 convective days** (separate processes when `N > 1`). **`--04b-download-workers`** applies
@@ -181,6 +181,7 @@ day’s NetCDF pulls. Rough peak in-flight downloads scale as **`04c_workers × 
 | What you want | Command pattern |
 |---|---|
 | Gap-fill only; GridRad files already on disk | `python scripts/04c_fill_gridrad_gap.py --workers N` (no `--with-04b-download`) |
+| Backfill days missing an output GeoTIFF | `python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers N --missing-only` |
 | Download + gap-fill; one day at a time, max within-day download speed | `--workers 1 --with-04b-download --04b-download-workers M` |
 | Download + gap-fill; many days at once | `--workers N --with-04b-download` (keep `N × M` within NCAR limits; often ≤10 concurrent streams) |
 | Two-stage pipeline (full 04b archive, then 04c) | `run_pipeline.py --only 04b` then **`python scripts/04c_fill_gridrad_gap.py --workers N`** without `--with-04b-download` (``run_pipeline.py --only 04c`` always streams downloads) |

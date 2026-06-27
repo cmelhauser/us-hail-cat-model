@@ -1,7 +1,7 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.2
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-06-08 (**v2.2.0** convective-day migration: 12 UTC → 12 UTC daily MESH; Stages 01/02 complete; **04c gap-fill is the active blocker**).
+> Last updated: 2026-06-27 (**v2.2.0** convective-day migration complete through Stage 04c primary ingest; **Stages 05–15** are the active blocker).
 
 ---
 
@@ -144,13 +144,13 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ---
 
-## Pipeline Run Status (as of 2026-06-08)
+## Pipeline Run Status (as of 2026-06-27)
 
-**Stage 02 (2026-06-08):** MRMS download **complete**. Finished after 86.4 hours at 06:19 EDT. 2,060 convective-day rasters (**2020-10-14 → 2026-06-04**); output validation passed. Manifest: 2,059 `ok`, 1 `ok_with_read_errors`. No active process or `screen` session.
+**Stage 02 (2026-06-08):** MRMS download **complete**. Finished after 86.4 hours at 06:19 EDT. 2,060 convective-day rasters (**2020-10-14 → 2026-06-04**); output validation passed. Manifest: 2,059 `ok`, 1 `ok_with_read_errors`.
 
-**Stage 04c:** **Not started** for v2.2 convective-day gap fill. The v2.2 re-ingest cleared prior calendar-UTC gap TIFFs; **0** gap-era (2012–2020-10-13) rasters exist on disk. Last log activity: **2026-05-29** at **2016-06-20** (pre-migration run). **Restart required** with `--workers 2` on constrained disks (~154 GiB free).
+**Stage 04c (2026-06-27):** GridRad gap-fill **primary ingest complete**. Production runs **2026-06-08 → 2026-06-27** wrote **2,501** gap-era TIFFs (**2012-01-01 → 2020-10-10**). Manifest `manifest_stage04c_gridrad.csv`: **3,209** rows — 2,452 `ok`, 44 `ok_with_read_errors`, 712 `missing_source`, 1 `error`. **2012–2017** essentially complete. Optional **`--missing-only`** backfill may still be running in `screen` session `hail_stage04c` (`--workers 4`). Monitor `logs/04c_fill_gridrad_gap.run.log`. ~173 GiB disk free.
 
-**Mesh peak diagnostic:** `scripts/diagnostics/summarize_mesh_daily_peaks.py` writes tracked summaries under `data/analysis/mesh_daily_peaks/` (regenerate after all ingest stages complete).
+**Mesh peak diagnostic:** Regenerated **2026-06-27** via `scripts/diagnostics/summarize_mesh_daily_peaks.py` → `data/analysis/mesh_daily_peaks/`.
 
 The Codex-run pipeline on 2026-05-01 ran **Stages 05–15 prematurely** before Stage 01 finished.
 All Stages 05–15 output is **placeholder, not production** — built on 31 events from May 2011 only.
@@ -162,15 +162,15 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 | Stage 02 (MRMS) | ✅ Complete | **2026-06-08.** 2,060 rasters 2020-10-14 → 2026-06-04. Validation passed. Peak MESH 299.9 mm. |
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. |
 | Stage 04a (ERA5) | ✅ Complete | Isotherms and surface geopotential on disk; validation passed 2026-05-13. |
-| Stage 04b/04c (GridRad) | ⏸ Restart needed | Full 2012–2020-10-13 convective-day gap fill pending. Restart: `scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2` (severe-first downloads). Manifest: `manifest_stage04c_gridrad.csv`. |
+| Stage 04b/04c (GridRad) | ✅ Primary ingest complete | **2,501** gap TIFFs; manifest 3,209 rows. Optional `--missing-only` backfill may be running. |
 | Stage 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 files only. All outputs invalid for production use. |
 
-**Mesh archive:** 7,083 `mesh_*.tif` (5,023 MYRORSS + 2,060 MRMS). Gap era pending 04c.
+**Mesh archive:** **9,584** `mesh_*.tif` (5,023 MYRORSS + **2,501** GridRad + 2,060 MRMS).
 
 **Re-run sequence (current):**
 ```bash
-# GridRad gap-fill (prefer --workers 2 on constrained disks; run_pipeline defaults to 4):
-.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
+# Optional: backfill days still missing a GeoTIFF
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 4 --missing-only
 .venv/bin/python run_pipeline.py --from 05 --skip-ml   # Re-run all remaining stages
 # After Stage 13 smoke passes (default n_years=1000), do the full 50k run:
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
@@ -185,8 +185,8 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 ## Immediate Next Priorities (in order)
 
-1. **Restart Stage 04c** with `--workers 2` for the full 2012–2020-10-13 convective-day gap. Do not re-run Stages 01 or 02 unless explicitly requested.
-2. **Re-run Stages 05–15** (`--from 05 --skip-ml`) after Stage 04c completes.
+1. **Confirm Stage 04c `--missing-only` backfill is finished** (or accept `missing_source` manifest days). Do not re-run Stages 01 or 02 unless explicitly requested.
+2. **Re-run Stages 05–15** (`--from 05 --skip-ml`) against the full mesh archive.
 3. **Full 50,000-year stochastic catalog** — Stage 13 smoke (`--n-years 1000`) then full run.
 4. **Regression tests** — freeze golden outputs; add checksum tests.
 5. **Bootstrap CIs on Stage 09 RP estimates** — sketch in `docs/uncertainty.md §3.1`.
@@ -212,6 +212,12 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 **Completed in session 2026-05-03 (continued — pipeline audit):**
 - ✅ `docs/HANDOFF.md` — corrected false claims about refactor status; added pipeline run status table and re-run sequence
+
+**Completed in session 2026-06-27:**
+- ✅ **d841001** V4.2 warm-season hourly fallback in Stage 04b/04c
+- ✅ Stage 04c primary ingest complete (**2,501** gap-era TIFFs; manifest 3,209 rows)
+- ✅ Mesh peak diagnostic regenerated (`data/analysis/mesh_daily_peaks/`)
+- ✅ Run-status docs synchronized: `AGENTS.md`, `RUN_NOTES.md`, `HANDOFF.md`, `project_memory.md`, `ai_instructions.md`
 
 **Completed in session 2026-06-08:**
 - ✅ Stage 02 (MRMS) production run finished; output validation passed

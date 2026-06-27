@@ -1,6 +1,6 @@
-# Documentation Index — CONUS Hail Catastrophe Model v2.1
+# Documentation Index — CONUS Hail Catastrophe Model v2.2
 
-This directory contains the complete documentation for the v2.1 hail hazard model.
+This directory contains the complete documentation for the v2.2 hail hazard model.
 Use the reading paths below to orient yourself quickly.
 
 ---

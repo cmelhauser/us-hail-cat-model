@@ -24,6 +24,7 @@ inline copies they replace — the refactor is purely a mechanical substitution.
 from __future__ import annotations
 
 import csv
+import fcntl
 import re
 from collections.abc import Iterable, Sequence
 from datetime import date, datetime, timedelta, timezone
@@ -505,12 +506,19 @@ def write_mesh_manifest_rows(manifest_path: Path, rows: dict) -> None:
 
 
 def upsert_mesh_manifest_row(manifest_path: Path, row: dict) -> None:
-    """Write or replace one manifest row by date."""
-    rows = read_mesh_manifest_rows_by_date(manifest_path)
-    rows[row["date"]] = {
-        field: row.get(field, "") for field in MESH_SOURCE_MANIFEST_FIELDS
-    }
-    write_mesh_manifest_rows(manifest_path, rows)
+    """Write or replace one manifest row by date (process-safe via file lock)."""
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = manifest_path.with_suffix(".csv.lock")
+    with open(lock_path, "w") as lock_f:
+        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+        try:
+            rows = read_mesh_manifest_rows_by_date(manifest_path)
+            rows[row["date"]] = {
+                field: row.get(field, "") for field in MESH_SOURCE_MANIFEST_FIELDS
+            }
+            write_mesh_manifest_rows(manifest_path, rows)
+        finally:
+            fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
 
 
 def summarize_mesh_output_raster(

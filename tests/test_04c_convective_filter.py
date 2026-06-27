@@ -78,6 +78,23 @@ def test_find_gridrad_files_severe_only_when_window_covered(load_script, tmp_pat
     assert all("gridrad_severe" in str(p) for p in files)
 
 
+def test_find_gridrad_files_hourly_v42_label(load_script, tmp_path, monkeypatch):
+    s = load_script("04c_fill_gridrad_gap.py")
+    hourly = tmp_path / "gridrad"
+    monkeypatch.setattr(s, "GRIDRAD_DIR", hourly)
+    monkeypatch.setattr(s, "GRIDRAD_SEV", tmp_path / "gridrad_severe")
+
+    day = date(2018, 4, 15)
+    stage = hourly / "by_convective_day" / "20180415"
+    stage.mkdir(parents=True)
+    (stage / "nexrad_3d_v4_2_20180415T120000Z.nc").write_text("x", encoding="utf-8")
+    (stage / "nexrad_3d_v4_2_20180415T130000Z.nc").write_text("x", encoding="utf-8")
+
+    files, source = s.find_gridrad_files(day)
+    assert source == "gridrad-hourly-v42"
+    assert len(files) == 2
+
+
 def test_find_gridrad_files_hourly_fill_when_severe_sparse(load_script, tmp_path, monkeypatch):
     s = load_script("04c_fill_gridrad_gap.py")
     sev = tmp_path / "gridrad_severe"
@@ -100,3 +117,62 @@ def test_find_gridrad_files_hourly_fill_when_severe_sparse(load_script, tmp_path
     names = {p.name for p in files}
     assert "nexrad_3d_v4_2_20160721T130000Z.nc" in names
     assert "nexrad_3d_v4_2_20160721T150000Z.nc" in names
+
+
+def test_hourly_source_label_v31(load_script):
+    s = load_script("04c_fill_gridrad_gap.py")
+    files = [
+        Path("nexrad_3d_v3_1_20160721T130000Z.nc"),
+        Path("nexrad_3d_v3_1_20160721T140000Z.nc"),
+    ]
+    assert s._hourly_source_label(files) == "gridrad-hourly-v31"
+
+
+def test_hourly_source_label_mixed(load_script):
+    s = load_script("04c_fill_gridrad_gap.py")
+    files = [
+        Path("nexrad_3d_v3_1_20160721T130000Z.nc"),
+        Path("nexrad_3d_v4_2_20160721T140000Z.nc"),
+    ]
+    assert s._hourly_source_label(files) == "gridrad-hourly"
+
+
+def test_find_gridrad_files_hourly_v31_only(load_script, tmp_path, monkeypatch):
+    s = load_script("04c_fill_gridrad_gap.py")
+    hourly = tmp_path / "gridrad"
+    monkeypatch.setattr(s, "GRIDRAD_DIR", hourly)
+    monkeypatch.setattr(s, "GRIDRAD_SEV", tmp_path / "gridrad_severe")
+
+    day = date(2015, 6, 10)
+    stage = hourly / "by_convective_day" / "20150610"
+    stage.mkdir(parents=True)
+    (stage / "nexrad_3d_v3_1_20150610T120000Z.nc").write_text("x", encoding="utf-8")
+    (stage / "nexrad_3d_v3_1_20150610T130000Z.nc").write_text("x", encoding="utf-8")
+
+    files, source = s.find_gridrad_files(day)
+    assert source == "gridrad-hourly-v31"
+    assert len(files) == 2
+
+
+def test_find_gridrad_files_severe_sparse_fills_v42_hourly_2018(
+    load_script, tmp_path, monkeypatch
+):
+    s = load_script("04c_fill_gridrad_gap.py")
+    sev = tmp_path / "gridrad_severe"
+    hourly = tmp_path / "gridrad"
+    monkeypatch.setattr(s, "GRIDRAD_SEV", sev)
+    monkeypatch.setattr(s, "GRIDRAD_DIR", hourly)
+
+    day = date(2018, 6, 1)
+    sev_stage = sev / "by_convective_day" / "20180601"
+    hr_stage = hourly / "by_convective_day" / "20180601"
+    sev_stage.mkdir(parents=True)
+    hr_stage.mkdir(parents=True)
+
+    (sev_stage / "nexrad_3d_v4_2_20180601T130000Z.nc").write_text("s", encoding="utf-8")
+    (hr_stage / "nexrad_3d_v4_2_20180601T150000Z.nc").write_text("h", encoding="utf-8")
+    (hr_stage / "nexrad_3d_v4_2_20180601T160000Z.nc").write_text("h", encoding="utf-8")
+
+    files, source = s.find_gridrad_files(day)
+    assert source == "gridrad-severe-5min+hourly-fill"
+    assert len(files) == 3

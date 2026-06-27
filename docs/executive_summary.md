@@ -105,7 +105,7 @@ Important limitations remain:
 - Spatial dependence is simplified.
 - The vulnerability module is not claims-calibrated.
 - No exposure layer is included.
-- GridRad hourly data may miss short-lived hail peaks when GridRad-Severe is unavailable.
+- GridRad hourly data may miss short-lived hail peaks when GridRad-Severe is unavailable; off-season and non-severe warm-season days may have no NCAR GridRad product (V3.1 ends 2017; V4.2 warm-season hourly is Apr–Aug only).
 - Climate non-stationarity is diagnostic only and not embedded in the main hazard fit.
 - SPC validation data are useful but imperfect.
 
@@ -115,7 +115,7 @@ These limitations do not invalidate the model, but they must be disclosed when o
 
 ## 7. Recommended Use
 
-v2.1 is appropriate for:
+v2.2 is appropriate for:
 
 - independent hail hazard research;
 - comparison with commercial model views;
@@ -136,4 +136,4 @@ For underwriting or regulatory use, the model should be accompanied by:
 
 ## 8. Bottom Line
 
-v2.1 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. It is a strong transparent hazard-modeling framework, but not yet a complete production loss model.
+v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. Radar ingest (MYRORSS, GridRad gap-fill, MRMS) is complete on convective-day v2.2.0 labels; hazard stages 05–15 await full production run. It is a strong transparent hazard-modeling framework, but not yet a complete production loss model.

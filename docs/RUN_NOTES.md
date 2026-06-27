@@ -20,7 +20,7 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-06-08**:
+Snapshot taken **2026-06-27**:
 
 | Stage | Status | Notes |
 |-------|--------|-------|
@@ -28,25 +28,33 @@ Snapshot taken **2026-06-08**:
 | Stage 02 (MRMS) | ✅ Complete | Finished **2026-06-08 06:19 EDT** (86.4 h). 2,060 rasters **2020-10-14 → 2026-06-04**. Manifest: 2,059 `ok`, 1 `ok_with_read_errors`. Output validation passed. Peak MESH 299.9 mm. |
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. Rerun only for a fresh pull. |
 | Stage 04a (ERA5) | ✅ Complete | `era5_monthly_isotherms_conus.nc` and `era5_surface_geopotential_conus.nc` on disk; validation passed 2026-05-13. |
-| Stage 04c (GridRad) | ⏸ Not started (v2.2) | **0** gap-era (2012–2020-10-13) convective-day TIFFs on disk. Prior calendar-UTC gap outputs were cleared for v2.2 re-ingest. Last log activity **2026-05-29** at **2016-06-20** (pre-migration run). **Restart required.** |
+| Stage 04c (GridRad) | ✅ Primary ingest complete | **2,501** gap-era (2012–2020-10-13) convective-day TIFFs on disk (**2012-01-01 → 2020-10-10**). Manifest: 3,209 rows — 2,452 `ok`, 44 `ok_with_read_errors`, 712 `missing_source`, 1 `error`. **2012–2017** essentially complete. Optional **`--missing-only`** backfill may still be running (708 days queued 2026-06-27). |
 | Stages 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 smoke files only. Not production. |
 
-**Mesh archive totals:** 7,083 `mesh_*.tif` under `data/historical/mesh_0.05deg/` (5,023 MYRORSS + 2,060 MRMS). Gap era pending Stage 04c.
+**Mesh archive totals:** **9,584** `mesh_*.tif` under `data/historical/mesh_0.05deg/` (5,023 MYRORSS + **2,501** GridRad + 2,060 MRMS).
 
-**Disk available:** ~154 GiB (2026-06-08).
+**Disk available:** ~173 GiB (2026-06-27).
 
-**No active processes:** Stage 02 `screen` session `hail_stage02_mrms` is gone; stale PID in `logs/stage02_mrms.pid`.
+**Active process (if running):** `screen` session `hail_stage04c` — `--missing-only` backfill with `--workers 4`. Check with `screen -ls` and `tail -f logs/04c_fill_gridrad_gap.run.log`.
 
-### Stage 04c restart (recommended)
+### Stage 04c commands
+
+**First full gap fill:**
 
 ```bash
-.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 4
 ```
 
-- Prefer **`--workers 2`** on constrained disks (`run_pipeline.py --only 04c` defaults to `--workers 4`).
+**Backfill days without an output GeoTIFF** (skips existing rasters; includes new **d841001** warm-season hourly fallback for Apr–Aug 2018–2020):
+
+```bash
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 4 --missing-only
+```
+
+- Prefer **`--workers 2`** on disks under ~250 GiB free (`run_pipeline.py --only 04c` defaults to `--workers 4`).
 - Monitor: `tail -f logs/04c_fill_gridrad_gap.run.log`
-- **Severe-first downloads:** with `--with-04b-download`, **04c** downloads GridRad-Severe when the catalog lists it; hourly GridRad is used only when severe is missing or does not cover the full convective window (see `docs/technical_documentation.md` §8.3).
-- **04c** skips existing `mesh_*.tif`; no gap-era files exist yet, so the full 2012–2020-10-13 range will be processed.
+- **Severe-first downloads:** with `--with-04b-download`, **04c** downloads GridRad-Severe when the catalog lists it; hourly GridRad (**d841000** V3.1, then **d841001** V4.2 warm-season Apr–Aug 2018+) is used only when severe is missing or does not cover the full convective window (see `docs/technical_documentation.md` §8.3).
+- **04c** skips existing `mesh_*.tif` unless the day is missing from disk (`--missing-only` filters to those days).
 - **Manifest:** `data/historical/mesh_0.05deg/manifest_stage04c_gridrad.csv` is upserted per day (rebuild: `--manifest-only`).
 - **Re-process rule:** delete any gap TIFF written with the old `Nradecho` reader before trusting distributions.
 
@@ -62,6 +70,10 @@ From `logs/02_download_mrms_mesh.log`:
 ---
 
 ### Historical snapshots (superseded)
+
+**2026-06-27:** Stage 04c primary ingest complete. Production runs **2026-06-08 → 2026-06-27** wrote **2,501** gap-era TIFFs. Manifest complete for all **3,209** convective days. **`--missing-only`** backfill launched for remaining days without TIFFs.
+
+**2026-06-08:** Stage 04c production run started (`--with-04b-download --workers 2`). Stage 02 (MRMS) finished; mesh archive was 7,083 TIFFs (MYRORSS + MRMS only).
 
 **2026-05-20:** Stage 04c reflectivity reader fixed (`Nradecho` → sparse **`Reflectivity`** + lon normalization). Run stopped for disk full (`[Errno 28]`); stale `gridrad/` / `gridrad_severe/` trees under 2013 removed (~35 GB).
 
@@ -98,10 +110,9 @@ interrupted run.
 
 ## Recommended Full Run Shape
 
-Stages 01, 02, 03, and 04a are complete. **Restart Stage 04c**, then continue:
+Stages 01, 02, 03, 04a, and **04c primary ingest** are complete. After any **`--missing-only`** backfill finishes, continue:
 
 ```bash
-.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
 .venv/bin/python run_pipeline.py --only 05 --skip-ml
 .venv/bin/python run_pipeline.py --from 06 --skip-ml
 ```
@@ -152,13 +163,12 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 
 ## Next Actions
 
-1. **Restart Stage 04c** (full 2012–2020-10-13 convective-day gap fill).
-2. **Re-run Stages 05–15** with `--skip-ml` after 04c completes.
+1. **Confirm Stage 04c backfill is done** (or accept manifest `missing_source` days as NCAR gaps).
+2. **Re-run Stages 05–15** with `--skip-ml`.
 3. **Stage 13 smoke** then full 50,000-year catalog.
 4. **Validate** and regenerate mesh-era diagnostic summaries.
 
 ```bash
-.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
 .venv/bin/python run_pipeline.py --from 05 --skip-ml
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000

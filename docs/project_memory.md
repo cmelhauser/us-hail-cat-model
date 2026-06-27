@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-06-08 (`v2.2.0` — 12 UTC → 12 UTC convective days; Stages 01/02 complete; 04c gap-fill pending)**
+**Last updated: 2026-06-27 (`v2.2.0` — 12 UTC → 12 UTC convective days; Stages 01/02/04c primary ingest complete)**
 
 ---
 
@@ -20,7 +20,7 @@
 
 ---
 
-## 2. Current State (as of 2026-06-08)
+## 2. Current State (as of 2026-06-27)
 
 Branch `v2.2.1` is active development; model `v2.2.0` is on `main`. The historical
 `v2.1` branch has been merged.
@@ -31,11 +31,11 @@ First full pipeline run started 2026-05-01. Production progress:
 - Stage 02: **complete** (2026-06-08; 2,060 MRMS rasters 2020-10-14 → 2026-06-04; validation passed);
 - Stage 03: **complete**;
 - Stage 04a: **complete** (ERA5 isotherms on disk; validation passed 2026-05-13);
-- Stage 04c: **not started** for v2.2 convective-day gap fill — **0** gap-era (2012–2020-10-13) TIFFs on disk; restart with `--workers 2` (see `docs/RUN_NOTES.md`);
+- Stage 04c: **primary ingest complete** (2026-06-27) — **2,501** gap-era TIFFs (**2012-01-01 → 2020-10-10**); manifest **3,209** rows (2,496 `ok` / `ok_with_read_errors`; 712 `missing_source`; 1 `error`); optional **`--missing-only`** backfill may still be running;
 - Stages 05–15: placeholder outputs from May-2011 smoke only — not production.
-- **Mesh archive:** 7,083 convective-day `mesh_*.tif` (5,023 + 2,060); gap era pending 04c.
-- **Disk:** ~154 GiB free (2026-06-08).
-- **Mesh peak diagnostic:** `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/` (regenerate after ingest complete).
+- **Mesh archive:** **9,584** convective-day `mesh_*.tif` (5,023 + **2,501** + 2,060).
+- **Disk:** ~173 GiB free (2026-06-27).
+- **Mesh peak diagnostic:** regenerated 2026-06-27 — `scripts/diagnostics/summarize_mesh_daily_peaks.py` + `data/analysis/mesh_daily_peaks/`.
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -136,6 +136,24 @@ Generates the stochastic catalog. Must remain sparse-safe. Must not reconstruct 
 
 ## 7. Work Log
 
+### 2026-06-27 ✅ GridRad V4.2 hourly fallback (d841001)
+
+- **04b** now queries **d841001** (GridRad V4.2 warm-season hourly, Apr–Aug 2008–2021)
+  after **d841000** (V3.1) when Severe is absent or incomplete, for convective days
+  after 2017. Recovers additional Apr–Aug 2018–2020 gap days previously marked
+  `missing_source`.
+- **04c** source tags: `gridrad-hourly-v31`, `gridrad-hourly-v42`.
+- Re-run: `scripts/04c_fill_gridrad_gap.py --with-04b-download --missing-only`.
+
+### 2026-06-27 ✅ Stage 04c primary ingest complete
+
+- Production runs **2026-06-08 → 2026-06-27** wrote **2,501** gap-era TIFFs (**2012-01-01 → 2020-10-10**).
+- Manifest `manifest_stage04c_gridrad.csv` complete for all **3,209** convective days.
+- **`--missing-only`** backfill launched for days still without a GeoTIFF (708 queued).
+- Mesh archive: **9,584** TIFFs (5,023 MYRORSS + 2,501 GridRad + 2,060 MRMS).
+- Mesh peak diagnostic regenerated under `data/analysis/mesh_daily_peaks/`.
+- Run-status docs synchronized: `AGENTS.md`, `RUN_NOTES.md`, `HANDOFF.md`, `project_memory.md`, `ai_instructions.md`.
+
 ### 2026-06-08 ✅ Stage 04c severe-first GridRad policy
 
 - **04c** with `--with-04b-download` now calls **`download_for_day_adaptive`** (severe-first).
@@ -149,8 +167,8 @@ Generates the stochastic catalog. Must remain sparse-safe. Must not reconstruct 
 - Stage 02 finished after **86.4 hours** at **06:19 EDT**.
 - **2,060** convective-day MRMS rasters (**2020-10-14 → 2026-06-04**); manifest 2,059 `ok`, 1 `ok_with_read_errors`.
 - Output validation passed; peak MESH **299.9 mm**.
-- Combined mesh archive: **7,083** TIFFs (5,023 MYRORSS + 2,060 MRMS).
-- **Stage 04c** is now the active ingest blocker (gap-era TIFFs cleared for v2.2 re-ingest).
+- Combined mesh archive at the time: **7,083** TIFFs (5,023 MYRORSS + 2,060 MRMS); gap era ingest started same day.
+- **Stage 04c** production run launched 2026-06-08.
 - Run-status docs synchronized: `AGENTS.md`, `RUN_NOTES.md`, `HANDOFF.md`, `project_memory.md`, `ai_instructions.md`.
 
 ### 2026-05-20 ✅ Stage 04c reflectivity fix + mesh diagnostic
@@ -244,10 +262,10 @@ Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instruction
 
 In order:
 
-1. **Restart Stage 04c** with `--workers 2` for the full 2012–2020-10-13 convective-day gap fill.
+1. **Confirm Stage 04c `--missing-only` backfill is finished** (or accept manifest `missing_source` days).
 2. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset; this includes Stage 11b DEM preparation before Stage 12.
 3. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
-4. **Regenerate mesh-era diagnostic** (`scripts/diagnostics/summarize_mesh_daily_peaks.py`).
+4. **Regenerate mesh-era diagnostic** if ingest changes (`scripts/diagnostics/summarize_mesh_daily_peaks.py`).
 5. **Review Stage 15 figures** once production outputs exist.
 6. **Regression tests** — freeze golden outputs after first production run.
 7. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist.
@@ -277,10 +295,10 @@ Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
-Active branch: v2.2.1 (dev). Model 2.2.0 on main (12 UTC → 12 UTC convective days).
+Active branch: main. Model 2.2.1 (12 UTC → 12 UTC convective days).
 Stage 01 complete (5,023 MYRORSS); Stage 02 complete (2,060 MRMS, 2026-06-08).
-Stage 04a complete; Stage 04c gap-fill pending — restart with --workers 2.
-7,083 mesh TIFFs on disk; 0 gap-era (2012–2020-10-13) TIFFs yet.
+Stage 04a complete; Stage 04c primary ingest complete (2,501 gap TIFFs, 2026-06-27).
+9,584 mesh TIFFs on disk. Stages 05–15 are the active blocker (placeholder smoke outputs only).
 Stage 01/02 manifests distinguish missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.
 scripts/_config.py = single source of truth for all grid constants and is imported by all stage scripts.

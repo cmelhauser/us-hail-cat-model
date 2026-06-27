@@ -21,7 +21,9 @@ pytest tests -q
 Most tests are unit-level: they validate pure helpers, sparse event handling,
 threshold selection behavior, deterministic fallbacks, validation logic, and
 monotonicity properties without downloading external datasets. The
-`tests/integration/` directory contains the synthetic smoke path.
+`tests/integration/` directory contains the synthetic smoke path and GridRad
+hourly fallback tests (`test_gridrad_hourly_fallback.py`: d841001 V4.2 through
+04b → 04c without live THREDDS).
 
 Stage 01 tests also cover MYRORSS archive format handling (`.netcdf` and
 `.netcdf.gz`) and manifest classification so missing-source days remain distinct

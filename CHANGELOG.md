@@ -9,8 +9,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.1] — 2026-06-27
+
+### Added
+
+- **Stage 04c production ingest (2026-06-08 → 2026-06-27):** **2,501** gap-era convective-day
+  GeoTIFFs (**2012-01-01 → 2020-10-10**); manifest `manifest_stage04c_gridrad.csv` complete
+  for all **3,209** days. Combined mesh archive: **9,584+** TIFFs (MYRORSS + GridRad + MRMS).
+- **`--missing-only`** backfill mode for retrying days without an output GeoTIFF.
+- **d841001** (GridRad V4.2 warm-season hourly) hourly fallback and source tags
+  (`gridrad-hourly-v31`, `gridrad-hourly-v42`).
+- **`tests/integration/test_gridrad_hourly_fallback.py`:** end-to-end 04b adaptive → 04c discovery.
+- Process-safe manifest upserts via file lock in **`scripts/_io.py`**.
+
 ### Changed
 
+- **Stage 04b / 04c:** Added **d841001** (GridRad V4.2 warm-season hourly, Apr–Aug
+  2008–2021) as an hourly fallback after **d841000** (V3.1) when GridRad-Severe is
+  absent or incomplete. Recovers additional gap-era warm-season days in 2018–2020 that
+  previously logged `missing_source`. Re-run **`--missing-only`** backfill to ingest.
 - **Stage 04c / 04b:** Severe-first GridRad acquisition when `--with-04b-download` is set.
   GridRad-Severe (5-min) is downloaded when the THREDDS catalog lists timesteps for the
   convective window; hourly GridRad is skipped unless severe is unavailable or does not
@@ -18,20 +35,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and merges hourly only for uncovered timesteps (`gridrad-severe-5min+hourly-fill`).
 - **`scripts/_io.py`:** Shared helpers for staged NetCDF discovery and convective-window
   coverage checks (`staged_nc_files_for_convective_day`, `convective_window_coverage_ok`, …).
+- Documentation, PNAS draft, and agent instructions synced to v2.2.1 ingest state.
 
 ### Fixed
 
 - **`tests/test_01_download_myrorss.py`:** Manifest classification test now calls
   `classify_mesh_source_day` from `_io.py` (replaces removed `classify_day`).
 
-## [2.2.1] — 2026-05-28
-
-### Added
+### Added (2026-05-28)
 
 - **`docs/GIT_REMOTES.md`** and **`scripts/setup_git_remotes.sh`:** document and enforce push/PR to `origin` (`cmelhauser`) only, not `upstream`.
 - Agent/contributor rules in `AGENTS.md`, `CONTRIBUTING.md`, `docs/ai_instructions.md`.
 
-### Changed
+### Changed (2026-05-28)
 
 - Operational docs synced for **v2.2.1** dev branch vs **2.2.0** model on `main`.
 - **`docs/literature_review.md` §3.6:** literature basis for 12 UTC → 12 UTC convective-day aggregation.

@@ -86,9 +86,9 @@ Yes, in this case study, but the value came from disciplined human-AI workflow d
 
 The manuscript needs final values for:
 
-- total processed days and source coverage by era;
-- manifest status counts by year;
-- missing-source versus no-hail days;
+- total processed days and source coverage by era (MYRORSS 5,023; GridRad 2,501+; MRMS 2,060 as of 2026-06-27);
+- manifest status counts by year (Stage 01 and Stage 04c manifests on disk);
+- missing-source versus no-hail days (712 GridRad `missing_source` rows documented);
 - corrected annual hail climatology;
 - SPC validation metrics by size bin, region, season, and source era;
 - source-transition diagnostics at MYRORSS/GridRad/MRMS boundaries;

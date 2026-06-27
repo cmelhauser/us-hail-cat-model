@@ -104,6 +104,22 @@ annual maxima from the two eras will be drawn from slightly different
 distributions. This would inflate or deflate tail estimates depending on the
 direction of the residual bias.
 
+### 2.2.1 GridRad product calendar coverage
+
+NCAR publishes three GridRad products used in Stage 04c: **GridRad-Severe**
+(~100 severe events per year), **V3.1 hourly** (through 2017, all months), and
+**V4.2 warm-season hourly** (Apr–Aug only). Many gap-era convective days have
+no NCAR product (off-season, or warm-season days without a severe event and
+outside the V4.2 calendar). The Stage 04c manifest records these as
+`missing_source`; they are data-availability gaps, not algorithm failures.
+
+**Current treatment:** Severe-first download policy; hourly fallback
+**d841000 → d841001**; manifest provenance; optional `--missing-only` backfill.
+
+**Impact:** Annual maxima and occurrence statistics in the gap era are
+conditional on NCAR product availability. Sparse rural areas on non-severe
+warm-season days may be underrepresented relative to the MRMS era.
+
 ### 2.3 Topographic correction coefficient
 
 Stage 12 applies a freezing-level-aware topographic correction:

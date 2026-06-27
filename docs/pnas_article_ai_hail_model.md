@@ -4,7 +4,7 @@
 
 **Working title:** The Age of AI: Building a US Catastrophe Hail Model  
 **Article type:** Perspective-informed research article / computational science case study  
-**Status:** Draft with results placeholders pending completion of full pipeline run  
+**Status:** Draft with hazard-stage results placeholders; radar ingest (Stages 01, 02, 04c primary) complete as of 2026-06-27  
 **Target journal:** Proceedings of the National Academy of Sciences (PNAS)  
 
 ---
@@ -102,7 +102,7 @@ MYRORSS provides the early historical radar reanalysis period from April 1998 th
 
 ### GridRad and GridRad-Severe
 
-GridRad or GridRad-Severe fills the gap from January 2012 through 13 October 2020 (inclusive). Stage **04b** downloads timesteps that fall in each 12 UTC → 12 UTC convective window; Stage **04c** computes daily MESH75 on the canonical 0.05° grid. GridRad-Severe is preferred when available because higher temporal sampling better resolves short-lived hail cores.
+GridRad or GridRad-Severe fills the gap from January 2012 through 13 October 2020 (inclusive). Stage **04b** downloads timesteps that fall in each 12 UTC → 12 UTC convective window from three NCAR THREDDS datasets: **GridRad-Severe** (**d841006**, 5-min, ~100 severe events per year), **GridRad V3.1 hourly** (**d841000**, through 2017, all months), and **GridRad V4.2 warm-season hourly** (**d841001**, Apr–Aug 2008–2021). Stage **04c** computes daily MESH75 on the canonical 0.05° grid. When **04c** chains downloads (`--with-04b-download`), it uses a **severe-first** policy: severe files are fetched when the catalog lists them; hourly GridRad is downloaded only when severe is unavailable or does not cover the full convective window, trying **d841000** then **d841001** (V4.2 only for Apr–Aug convective days after 2017). GridRad-Severe is preferred when available because higher temporal sampling better resolves short-lived hail cores.
 
 Severe Hail Index is derived from three-dimensional **reflectivity in dBZ** and ERA5 isotherm fields, then converted to MESH75 using the Murillo and Homeyer (2021) corrigendum coefficients. NCAR GridRad v3/v4 files typically store reflectivity as sparse `Reflectivity(Index)` with an `index` vector; the pipeline reconstructs a dense vertical profile per grid column. The 3-D field `Nradecho` is an echo mask, not dBZ, and is excluded from SHI. Longitudes given in 0–360° form are normalized before CONUS masking. Gap-fill GeoTIFFs carry GDAL metadata tags (`MAX_MESH75_MM`, `ACTIVE_CELLS`, `SOURCE`, `DATE`) for operational QA.
 
@@ -217,7 +217,7 @@ Tracked files at HEAD (by category):      37 stage/helper Python modules; 36 tes
                                           24 documentation markdown files; 10 CI/config files
 Current Python + docs line count (wc):    ~8,500 lines in scripts/; ~7,600 lines in docs/
 Cumulative git diffstat (all history):    +146,092 / −120,636 lines
-Automated tests (v2.1 merge → HEAD):      26 → 33 test modules; 115 test functions collected
+Automated tests (v2.1 merge → HEAD):      26 → 37 test modules; 198 test functions collected
 Recent CI workflow runs (tests.yml):      18 sampled runs, 18 success, 0 failure
 Pipeline stages in scope:                 15 (01–15 plus 11b)
 AI-audit defects fixed pre-production:    ≥7 (see table below)
@@ -240,6 +240,7 @@ Representative AI-assisted interventions are summarized in Table 1.
 | 5 | GridRad gap-fill silent zeros | Hourly days with NetCDFs but `active_cells=0` | Stage 04c sparse `Reflectivity` reader; lon fix; GDAL QA tags | Reprocessed 2012 canary day; log peak hail | GridRad–MRMS calibration still required at Stage 05 |
 | 6 | Parallel 04c worker import failure | `ProcessPoolExecutor` dataclass error loading 04b | Register 04b in `sys.modules` before `exec_module` | Multi-worker 04c restart | NCAR download throttling at high worker count |
 | 7 | Physical hail QA ceiling | 250 mm cap vs later 300 mm policy | Shared `sanitize_hail_values`; Stage 01–05 wired | 300 mm rescan: 0 cells after prior 250 mm repair | Values >300 mm still truncated to zero |
+| 8 | GridRad hourly calendar gap (2018–2020) | 708 gap-era days `no_data` after primary ingest; V3.1 ends 2017 | **d841001** V4.2 warm-season hourly fallback in 04b/04c; `--missing-only` backfill | Apr 2018 canary days write `src=gridrad-hourly-v42`; pytest fallback suite | Off-season and non-severe warm-season days may remain `missing_source` |
 
 ### Example: source manifest discovery
 
@@ -248,6 +249,10 @@ During a pre-run review, many apparently empty daily GeoTIFFs were found. AI-ass
 ### Example: GridRad reflectivity ingestion
 
 During full-pipeline execution, most GridRad hourly gap-fill days produced zero active cells despite successful NetCDF downloads. AI-assisted inspection of NCAR file structure showed that physical reflectivity is stored as sparse `Reflectivity(Index)`, while `Nradecho` is a separate 3-D echo mask with values well below the 40 dBZ column threshold used for SHI. The Stage **04c** reader was corrected to reconstruct dBZ from sparse reflectivity, normalize longitudes, and write diagnostic GDAL tags. Affected gap-era GeoTIFFs were deleted and reprocessed. This case shows how AI-assisted monitoring plus file-format literacy can catch scientifically silent failures that unit tests on synthetic data may miss.
+
+### Example: GridRad V4.2 hourly fallback (d841001)
+
+After primary Stage **04c** ingest (2026-06-08 → 2026-06-27), **712** of **3,209** gap-era manifest rows remained `missing_source`, including many Apr–Aug 2018–2020 convective days where V3.1 hourly (**d841000**) is empty but NCAR publishes warm-season V4.2 hourly (**d841001**). AI-assisted review of THREDDS catalogs and the Murillo et al. (2021) GridRad documentation identified the separate dataset ID. Stage **04b** was extended to query **d841001** after **d841000** when severe coverage is absent; Stage **04c** tags outputs `gridrad-hourly-v42`. A **`--missing-only`** backfill recovers additional warm-season days without re-downloading the full archive. This illustrates how AI agents can close data-availability gaps that are invisible to algorithm-only reviews.
 
 ### Reproducibility controls
 
@@ -261,21 +266,22 @@ AI use is disclosed in the Materials and Methods section. The disclosure names t
 
 ## Results
 
-**This section will be completed after the full pipeline run finishes.**
+**Hazard stages (05–15) remain placeholders pending full production run. Radar ingest is complete.**
 
 ### Stage completion and data coverage
 
-Placeholder values to insert:
+Values as of 2026-06-27 (convective-day v2.2.0 definition):
 
 ```text
-Total daily MESH rasters:
-MYRORSS manifest rows:
-Missing-source days:
-No-hail source-present days:
-Read-error days:
-Corrected MESH75 rasters:
-Historical event count:
-Years represented in annual maxima:
+Total daily MESH rasters:                 9,584+ (growing with --missing-only backfill)
+  MYRORSS (1998–2011):                    5,023
+  GridRad gap-fill (2012–2020-10-13):     2,501 primary ingest (+ V4.2 backfill in progress)
+  MRMS (2020-10-14–present):              2,060
+MYRORSS manifest rows:                    5,023 (4,989 ok; 20 missing_source; 11 ok_with_read_errors; 3 no_hail_pixels)
+Stage 04c manifest rows:                  3,209 (2,452 ok; 44 ok_with_read_errors; 712 missing_source; 1 error)
+Corrected MESH75 rasters:                 pending Stage 05 production run
+Historical event count:                   pending Stage 08 production run
+Years represented in annual maxima:       pending Stage 07 production run
 ```
 
 ### Validation against SPC reports
@@ -325,24 +331,21 @@ PET aggregate table summary:
 Process metrics for the AI-assisted infrastructure build (hazard maps and stochastic catalog still pending full production run):
 
 ```text
-Development duration (repository):          ~9 weeks (2026-03-17 to 2026-05-20)
-Intensive AI-assisted hardening window:     ~3 weeks (2026-05-01 to 2026-05-20)
-Commits since 2026-05-01 (main):            50 of 90 total repository commits
-AI-audit defects remediated pre-production: 7 documented (Table 1)
-Documentation markdown files in docs/:      24 at HEAD (vs ~12 at 2026-05-01 review)
-New docs added in May 2026 pass:            FAQ, benchmarks, sensitivity, vulnerability
-                                            derivation, REVIEW_PRE_RUN, literature review
-                                            updates, RUN_NOTES, HANDOFF revisions
-Automated test modules:                     33 (26 at v2.1 infrastructure merge)
-Automated test functions (pytest collect):  115
-Integration smoke test added:               tests/integration/test_smoke_synthetic.py (May 2026)
-CI (GitHub Actions tests.yml):              Python 3.10/3.11/3.12 matrix; 18 recent runs all green
+Development duration (repository):          ~14 weeks (2026-03-17 to 2026-06-27)
+Intensive AI-assisted hardening window:     ~8 weeks (2026-05-01 to 2026-06-27)
+AI-audit defects remediated pre-production: 8 documented (Table 1)
+Documentation markdown files in docs/:      24+
+Automated test modules:                     37 (26 at v2.1 infrastructure merge)
+Automated test functions (pytest collect):  198
+Integration tests:                          test_smoke_synthetic.py; test_gridrad_hourly_fallback.py
+CI (GitHub Actions tests.yml):              Python 3.10/3.11/3.12 matrix; green on v2.2.1 branch
 Long-run monitoring (operations):           Stage 01 complete (5,023 MYRORSS dailies + manifest);
-                                            Stage 02 MRMS in progress; Stage 04c gap-fill restarted
-                                            2026-05-20 after reflectivity fix; logs + GDAL tags
+                                            Stage 02 MRMS complete (2,060 dailies, 2020-10-14 → 2026-06-04);
+                                            Stage 04c primary ingest complete (2,501 gap TIFFs);
+                                            d841001 V4.2 --missing-only backfill in progress (708 days queued)
 ```
 
-Examples of AI audit findings beyond Table 1: (i) comprehensive v2.1 review document identifying missing LICENSE, CI, and `pyproject.toml` (resolved same week); (ii) detection that Stages 05–15 had been executed on a 31-event May-2011 smoke slice before Stage 01 finished, invalidating those outputs for production; (iii) documentation drift across Python version strings and `MAX_HAIL_MM` caps reconciled to `_config.py`; (iv) GridRad pipeline ergonomics (streaming 04b inside 04c, worker pools, per-day staging deletion) implemented after operational review; (v) PNAS manuscript and literature-review expansion tying AI-process claims to reproducibility artifacts rather than anecdotal chat use.
+Examples of AI audit findings beyond Table 1: (i) comprehensive v2.1 review document identifying missing LICENSE, CI, and `pyproject.toml` (resolved same week); (ii) detection that Stages 05–15 had been executed on a 31-event May-2011 smoke slice before Stage 01 finished, invalidating those outputs for production; (iii) documentation drift across Python version strings and `MAX_HAIL_MM` caps reconciled to `_config.py`; (iv) GridRad pipeline ergonomics (streaming 04b inside 04c, worker pools, per-day staging deletion) implemented after operational review; (v) PNAS manuscript and literature-review expansion tying AI-process claims to reproducibility artifacts rather than anecdotal chat use; (vi) **d841001** V4.2 warm-season hourly fallback closing Apr–Aug 2018–2020 NCAR catalog gaps after primary ingest.
 
 ### Figure placeholders
 
@@ -408,8 +411,8 @@ The full pipeline contains 15 stages:
 02  MRMS ingestion — daily MESH rasters from operational radar
 03  SPC report download — validation dataset only, not hazard input
 04a ERA5 isotherms — monthly 0°C / −20°C freezing levels for GridRad SHI
-04b GridRad / GridRad-Severe download — NCAR inputs for gap era (2012–2020-10-13)
-04c GridRad gap fill — SHI from sparse Reflectivity (dBZ) → MESH75 daily rasters + GDAL QA tags
+04b GridRad download — NCAR d841006 (Severe), d841000 (V3.1 hourly), d841001 (V4.2 warm-season hourly)
+04c GridRad gap fill — severe-first SHI from sparse Reflectivity (dBZ) → MESH75 daily rasters + manifest
 05  Bias correction and filtering — MESH75 calibration, ML optional, deterministic fallback required
 06  SPC validation — corrected MESH75 vs surface reports; source-transition diagnostics
 07  Hail climatology — annual exceedance frequency and occurrence rasters

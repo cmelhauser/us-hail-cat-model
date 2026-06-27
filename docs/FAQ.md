@@ -108,7 +108,11 @@ On **`04c_fill_gridrad_gap.py`**, **`--workers`** is how many **convective days*
 
 **Q: Does Stage 04c download both GridRad and GridRad-Severe for every day?**
 
-No. With **`--with-04b-download`**, Stage **04c** uses a **severe-first** policy (`download_for_day_adaptive` in **04b**). If GridRad-Severe exists in the THREDDS catalog for the convective window, only severe files are downloaded. Hourly GridRad is fetched only when severe is unavailable or staged severe files do not cover the full 12 UTC → 12 UTC window. Processing mirrors this: complete severe coverage uses severe only; partial severe merges hourly timesteps for gaps (`SOURCE=gridrad-severe-5min+hourly-fill`). Standalone **`04b`** still supports explicit **`--hourly-only`** / **`--severe-only`** flags.
+No. With **`--with-04b-download`**, Stage **04c** uses a **severe-first** policy (`download_for_day_adaptive` in **04b**). If GridRad-Severe exists in the THREDDS catalog for the convective window, only severe files are downloaded. Hourly GridRad is fetched only when severe is unavailable or staged severe files do not cover the full 12 UTC → 12 UTC window. Hourly fallback order is **d841000** (V3.1, through 2017) then **d841001** (V4.2 warm-season hourly, Apr–Aug 2018–2021). Processing mirrors this: complete severe coverage uses severe only; partial severe merges hourly timesteps for gaps (`SOURCE=gridrad-severe-5min+hourly-fill`). Standalone **`04b`** still supports explicit **`--hourly-only`** / **`--severe-only`** flags.
+
+**Q: Why do many gap-era days still show `missing_source` in the manifest?**
+
+Three NCAR products cover the gap era with different calendars: **GridRad-Severe** (~100 severe events per year), **GridRad V3.1 hourly** (through 2017, all months), and **GridRad V4.2 warm-season hourly** (Apr–Aug only, 2008–2021). Off-season days and non-severe warm-season days may legitimately have no GridRad on NCAR. After the **d841001** fallback (v2.2.1+), re-run **`--missing-only`** backfill to pick up additional Apr–Aug 2018–2020 days that previously logged `no_data`.
 
 **Q: Why did many GridRad gap-fill days show zero hail (`active_cells=0`) even when NetCDFs downloaded successfully?**
 

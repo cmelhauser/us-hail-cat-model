@@ -23,7 +23,9 @@ for the plan list).
 
 Data Sources
 -----------
-  GridRad (hourly):       NCAR RDA d841000
+  GridRad hourly (V3.1):  NCAR RDA d841000  (1995–2017, all months)
+  GridRad hourly (V4.2):  NCAR RDA d841001  (Apr–Aug warm season, 2008–2021;
+                          used as hourly fallback after 2017 when Severe is absent)
   GridRad-Severe (5-min): NCAR RDA d841006
 
   Files are discovered via THREDDS catalogs and fetched from the matching
@@ -146,8 +148,15 @@ FILESERVER_BASE_HOURLY = _fileserver_base_hourly()
 THREDDS_BASE_SEVERE = _thredds_base_severe()
 FILESERVER_BASE_SEVERE = _fileserver_base_severe()
 
-DS_HOURLY = "d841000"
+DS_HOURLY = "d841000"  # GridRad V3.1 hourly
+DS_HOURLY_V42 = "d841001"  # GridRad V4.2 warm-season hourly (Apr–Aug)
 DS_SEVERE = "d841006"
+_HOURLY_DSIDS = frozenset({DS_HOURLY, DS_HOURLY_V42})
+
+V31_HOURLY_END = date(2017, 12, 31)
+V42_HOURLY_START = date(2008, 4, 1)
+V42_HOURLY_END = date(2021, 8, 31)
+V42_HOURLY_MONTHS = frozenset({4, 5, 6, 7, 8})
 
 GAP_START = date(2012, 1, 1)
 GAP_END = date(2020, 10, 13)
@@ -179,7 +188,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Legacy: build one global download plan for all days, then download "
         "(higher peak memory). Default is one-day-at-a-time planning + download.",
     )
-    p.add_argument("--hourly-only", action="store_true", help="Download only d841000 hourly")
+    p.add_argument("--hourly-only", action="store_true", help="Download only hourly (d841000 + d841001 fallback)")
     p.add_argument("--severe-only", action="store_true", help="Download only d841006 severe (5-min)")
     p.add_argument("--check-data", action="store_true", help="Only check what is present/missing")
     p.add_argument(
@@ -215,13 +224,36 @@ def _ymd(day: date) -> str:
     return day.strftime("%Y%m%d")
 
 
+def _v42_hourly_eligible(convective_day: date) -> bool:
+    """
+    True when d841001 (V4.2 warm-season hourly) may contain this convective day.
+
+    Used only after the V3.1 archive ends (2018+). V4.2 is Apr–Aug only.
+    """
+    if convective_day < V42_HOURLY_START:
+        return False
+    if convective_day > min(GAP_END, V42_HOURLY_END):
+        return False
+    if convective_day <= V31_HOURLY_END:
+        return False
+    return convective_day.month in V42_HOURLY_MONTHS
+
+
+def _hourly_dataset_ids(convective_day: date) -> list[str]:
+    """Ordered hourly THREDDS dataset IDs to query for one convective day."""
+    ids = [DS_HOURLY]
+    if _v42_hourly_eligible(convective_day):
+        ids.append(DS_HOURLY_V42)
+    return ids
+
+
 def _convective_stage_dir(base: Path, convective_day: date) -> Path:
     return base / "by_convective_day" / _ymd(convective_day)
 
 
 def _catalog_url(dsid: str, day: date) -> str:
-    if dsid == DS_HOURLY:
-        # GridRad hourly: month catalogs under files/g/d841000/YYYYMM/catalog.xml
+    if dsid in _HOURLY_DSIDS:
+        # GridRad hourly (V3.1 or V4.2): month catalogs under files/g/{dsid}/YYYYMM/
         return f"{_thredds_base_hourly()}{dsid}/{day.year}{day.month:02d}/catalog.xml"
     if dsid == DS_SEVERE:
         # GridRad-Severe: day catalogs under files/d841006/volumes/YYYY/YYYYMMDD/catalog.xml
@@ -230,8 +262,7 @@ def _catalog_url(dsid: str, day: date) -> str:
 
 
 def _fileserver_url(dsid: str, day: date, filename: str) -> str:
-    if dsid == DS_HOURLY:
-        # Hourly files are stored under .../d841000/YYYYMM/
+    if dsid in _HOURLY_DSIDS:
         return f"{_fileserver_base_hourly()}{dsid}/{day.year}{day.month:02d}/{filename}"
     if dsid == DS_SEVERE:
         return f"{_fileserver_base_severe()}{day.year}/{_ymd(day)}/{filename}"
@@ -313,7 +344,7 @@ def list_day_catalog_files(
     """
     ns = {"t": "http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"}
 
-    if dsid == DS_HOURLY:
+    if dsid in _HOURLY_DSIDS:
         url = _catalog_url(dsid, day)
         r = _catalog_get(session, url, timeout=timeout)
         if r.status_code == 404:
@@ -399,17 +430,18 @@ def plan_downloads_for_day(
                 )
 
         if hourly:
-            for fn in list_day_catalog_files(
-                session, DS_HOURLY, catalog_day, timeout=catalog_timeout
-            ):
-                obs = parse_observation_utc_from_name(fn)
-                if obs is None or observation_utc_to_convective_day(obs) != convective_day:
-                    continue
-                out_path = _convective_stage_dir(GRIDRAD_DIR, convective_day) / fn
-                url = _fileserver_url(DS_HOURLY, catalog_day, fn)
-                items.append(
-                    DownloadItem(DS_HOURLY, convective_day, catalog_day, fn, url, out_path)
-                )
+            for dsid in _hourly_dataset_ids(convective_day):
+                for fn in list_day_catalog_files(
+                    session, dsid, catalog_day, timeout=catalog_timeout
+                ):
+                    obs = parse_observation_utc_from_name(fn)
+                    if obs is None or observation_utc_to_convective_day(obs) != convective_day:
+                        continue
+                    out_path = _convective_stage_dir(GRIDRAD_DIR, convective_day) / fn
+                    url = _fileserver_url(dsid, catalog_day, fn)
+                    items.append(
+                        DownloadItem(dsid, convective_day, catalog_day, fn, url, out_path)
+                    )
 
     # One row per destination path (two catalog days can list the same filename).
     by_path = {it.out_path: it for it in items}
@@ -597,8 +629,9 @@ def download_for_day_adaptive(
 
     1. If staged GridRad-Severe already covers the convective window, skip downloads.
     2. If the severe catalog lists timesteps for this window, download severe only.
-    3. After severe download, re-check window coverage; if gaps remain, add hourly.
-    4. If no severe catalog data exists, download hourly only.
+    3. After severe download, re-check window coverage; if gaps remain, add hourly
+       (V3.1 d841000, then V4.2 d841001 for Apr–Aug 2018+ when V3.1 is empty).
+    4. If no severe catalog data exists, download hourly only (same V3.1 → V4.2 order).
     """
     empty = {
         "downloaded": 0,
@@ -702,7 +735,7 @@ def main(argv: list[str] | None = None) -> None:
     log(f"  Period:   {d_start} → {d_end}")
     log(f"  Workers:  {w} (per-day download threads)")
     log(f"  Schedule: {'legacy global plan' if args.plan_all_days_first else 'one day at a time'}")
-    log(f"  Hourly:   {hourly} ({DS_HOURLY})  → {GRIDRAD_DIR}")
+    log(f"  Hourly:   {DS_HOURLY} (V3.1) + {DS_HOURLY_V42} (V4.2 Apr–Aug after 2017)  → {GRIDRAD_DIR}")
     log(f"  Severe:   {severe} ({DS_SEVERE})  → {GRIDRAD_SEV_DIR}")
     if os.environ.get("GDEX_TOKEN") or os.environ.get("GDEX_API_TOKEN"):
         log("  Auth:     GDEX token (env var)")

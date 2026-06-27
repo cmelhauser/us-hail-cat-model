@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-06-08 (`v2.2.1` dev branch; model **2.2.0** on `main`; Stages 01/02 complete — see `docs/RUN_NOTES.md`)**
+**Last updated: 2026-06-27 (`v2.2.1`; model **2.2.1** on `main`; Stages 01/02/04c primary ingest complete — see `docs/RUN_NOTES.md`)**
 
 ---
 
@@ -194,19 +194,19 @@ When asked to review the project:
 
 ---
 
-## 9. Confirmed State After 2026-06-08
+## 9. Confirmed State After 2026-06-27
 
 Current repository state:
 
-- Active branch: **`v2.2.1`** (development on `origin` only). Model **2.2.0** merged to `main`.
+- Active branch: **`main`** (model **2.2.1** on `origin`).
 - GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing.
 - Stage helper refactor complete: `_config.py`, `_logging.py`, and `_io.py` are wired into stage scripts where required.
 - **Stage 01 complete** (5,023 convective-day MYRORSS rasters through 2011-12-31).
 - **Stage 02 complete** (2026-06-08; 2,060 MRMS rasters 2020-10-14 → 2026-06-04; validation passed).
 - **Stage 03 complete**; **Stage 04a complete** (ERA5 isotherms on disk).
-- **Stage 04c pending** — 0 gap-era (2012–2020-10-13) convective-day TIFFs on disk; restart with `--workers 2` (`docs/RUN_NOTES.md`). With `--with-04b-download`, uses severe-first policy (`download_for_day_adaptive`).
-- **Mesh archive:** 7,083 TIFFs (5,023 + 2,060); gap era pending 04c. ~154 GiB disk free.
-- Tracked diagnostic summaries: `data/analysis/mesh_daily_peaks/` (regenerate after all ingest stages complete).
+- **Stage 04c primary ingest complete** (2026-06-27) — **2,501** gap-era TIFFs; manifest **3,209** rows. Hourly fallback now includes **d841001** (V4.2 Apr–Aug). Re-run **`--missing-only`** backfill to ingest additional warm-season days.
+- **Mesh archive:** **9,584** TIFFs (5,023 + **2,501** + 2,060). ~173 GiB disk free.
+- Tracked diagnostic summaries: `data/analysis/mesh_daily_peaks/` (regenerated 2026-06-27).
 
 ### Files created 2026-05-01 (while pipeline was running)
 
@@ -258,11 +258,11 @@ Current repository state:
 - Regression / golden-output tests
 - Bootstrap CIs on Stage 09 RP estimates
 
-**Immediate run priorities (2026-06-08):**
-- Restart Stage 04c: `scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`.
-- Re-run Stages 05–15 with `--skip-ml` against the full dataset after 04c completes.
+**Immediate run priorities (2026-06-27):**
+- Confirm Stage 04c `--missing-only` backfill is finished (or accept manifest `missing_source` days).
+- Re-run Stages 05–15 with `--skip-ml` against the full dataset.
 - Run Stage 13 smoke (`--n-years 1000`) before the full 50,000-year catalog.
-- Regenerate mesh-era diagnostic: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
+- Regenerate mesh-era diagnostic if ingest changes: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 
 **Stage 04a CDS access note:** Stage 04a needs more than a valid
 `~/.cdsapirc`. The Copernicus account used for the token must also accept the
@@ -287,6 +287,6 @@ scripts/_config.py = single source of truth for constants and is imported by all
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 OPEN DOC WATCH: methodology.md §13 and uncertainty.md §5.1 document monthly CV Mar–Sep for σ_perturb; keep them aligned with code if Stage 13 changes.
 First full run started 2026-05-01 via Codex.
-Active branch: v2.2.1 (dev). Model 2.2.0 on main (12 UTC → 12 UTC convective days).
-Stage 01 + 02 complete (7,083 mesh TIFFs). Stage 04c gap-fill is the active blocker.
+Active branch: main. Model 2.2.1 (12 UTC → 12 UTC convective days).
+Stage 01 + 02 + 04c primary ingest complete (9,584 mesh TIFFs). Stages 05–15 are the active blocker.
 ```

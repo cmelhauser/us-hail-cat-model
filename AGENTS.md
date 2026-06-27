@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-06-08 (`v2.2.1` active dev branch; model release `2.2.0` on `main`).
+Last updated: 2026-06-27 (`v2.2.1`; model release `2.2.1` on `main`).
 
 ## What This Project Is
 
@@ -145,17 +145,21 @@ auto-**skip** standalone **04b** and run **04c** with **`--with-04b-download --w
   `gridrad(_severe)/by_convective_day/YYYYMMDD/`. **`--plan-all-days-first`** restores
   the legacy global plan-then-download flow. **`--workers`** defaults to **1**
   (parallel HTTP GETs *within* the current day only; respect NCAR throttling guidance).
+  Hourly sources: **d841000** (V3.1, through 2017) then **d841001** (V4.2 warm-season
+  Apr–Aug fallback for 2018+ when Severe is absent).
 - **04c** (`scripts/04c_fill_gridrad_gap.py`): default **`--workers 1`** (sequential days).
   After each day finishes, **`delete_gridrad_inputs_for_day`** removes that day’s trees
   under `by_convective_day/YYYYMMDD/` in both `gridrad/` and `gridrad_severe/` unless
   **`--keep-gridrad-inputs`**. **`--with-04b-download`** chains **04b**’s
   **`download_for_day_adaptive`** before **`process_day`** (severe-first: download
   GridRad-Severe when the catalog lists it; skip hourly unless severe is absent or
-  does not cover the full 12 UTC → 12 UTC window). With **`--workers > 1`**, each worker
+  does not cover the full 12 UTC → 12 UTC window; hourly tries **d841000** then
+  **d841001** for Apr–Aug 2018+). With **`--workers > 1`**, each worker
   process uses its own HTTP session (04b is loaded once per worker via a pool
   initializer; mind **`workers × --04b-download-workers`** vs NCAR throttling).
 - **04c reflectivity:** use sparse **`Reflectivity(Index)` + `index`** (not **`Nradecho`**, which is not dBZ). Gap-fill GeoTIFFs include GDAL tags `MAX_MESH75_MM`, `ACTIVE_CELLS`, etc., and per-day log lines with peak hail.
 - **04c disk / workers:** `run_pipeline.py` passes **`--workers 4`** by default. With **`--with-04b-download`**, up to four concurrent day trees under `gridrad_severe/` can use ~8–12 GB each. On constrained disks, run **`scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`** (or `1`) directly instead of `run_pipeline.py --only 04c`.
+- **04c resume / backfill:** **`--missing-only`** processes only convective days without an output GeoTIFF (skips existing `mesh_*.tif`). **`--from-date`** / **`--until-date`** bound the window. Manifest rebuild: **`--manifest-only`**.
 
 ## Stage 01 Data Provenance
 
@@ -235,44 +239,45 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-06-08:
+As of 2026-06-27:
 
 | Area | Status |
 |---|---|
-| Active branch | `v2.2.1` (dev); `main` has model `2.2.0` |
+| Active branch | `main` (model `2.2.1`; convective-day v2.2.0 methodology) |
 | All 15 stage scripts | Written and syntax-checked |
-| Tests | 28 pytest files; GitHub Actions green on Python 3.10/3.11/3.12 |
+| Tests | 37 pytest modules (198 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
 | Integration test | `tests/integration/test_smoke_synthetic.py` |
 | Constant-drift guard | `tests/test_no_duplicated_constants.py` |
-| First full pipeline run | Stage 01 ✅; Stage 02 ✅; Stage 03 ✅; Stage 04a ✅; **Stage 04c** ⏸ not started for v2.2 convective-day gap fill |
-| Mesh archive | 7,083 convective-day `mesh_*.tif` (5,023 MYRORSS + 2,060 MRMS); **0** gap-era (2012–2020-10-13) TIFFs on disk |
-| Mesh peak diagnostic | `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/` |
+| First full pipeline run | Stage 01 ✅; Stage 02 ✅; Stage 03 ✅; Stage 04a ✅; **Stage 04c** ✅ primary ingest complete; optional `--missing-only` backfill may still be running |
+| Mesh archive | **9,584** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,501** GridRad + 2,060 MRMS) |
+| Stage 04c manifest | **3,209** gap-era rows in `manifest_stage04c_gridrad.csv` (2,496 `ok` / `ok_with_read_errors`; 712 `missing_source`; 1 `error`) |
+| Mesh peak diagnostic | `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/` (regenerated 2026-06-27) |
 | Project metadata | LICENSE, CHANGELOG, CITATION, CONTRIBUTING, COC, SECURITY |
 | Python project config | pyproject.toml, .pre-commit-config.yaml |
 | CI/CD | `.github/workflows/tests.yml` |
-| Stage 01 / 02 manifests | Implemented (`manifest_stage01_myrorss.csv`, `manifest_stage02_mrms.csv`) |
+| Stage 01 / 02 / 04c manifests | Implemented (`manifest_stage01_myrorss.csv`, `manifest_stage02_mrms.csv`, `manifest_stage04c_gridrad.csv`) |
 | Regression / golden tests | Pending first production outputs |
 | Bootstrap CIs on RP maps | Pending first production outputs |
 
 ## Current Run Watch
 
-**Stage 02 (MRMS)** finished **2026-06-08 06:19 EDT** after 86.4 hours. Output validation passed. Coverage: **2020-10-14 → 2026-06-04** (2,060 convective days; manifest: 2,059 `ok`, 1 `ok_with_read_errors`). Peak MESH: 299.9 mm. No process or `screen` session is active.
+**Stage 02 (MRMS)** finished **2026-06-08 06:19 EDT** after 86.4 hours. Output validation passed. Coverage: **2020-10-14 → 2026-06-04** (2,060 convective days; manifest: 2,059 `ok`, 1 `ok_with_read_errors`). Peak MESH: 299.9 mm.
 
-**Stage 04c (GridRad gap-fill)** is the active blocker. The v2.2 convective-day re-ingest cleared prior calendar-UTC gap TIFFs; **no** gap-era (2012–2020-10-13) rasters exist under `mesh_0.05deg/` yet. Last log activity: **2026-05-29** at **2016-06-20** (`logs/04c_fill_gridrad_gap.log`). Restart with:
+**Stage 04c (GridRad gap-fill)** primary ingest finished **2026-06-27**. Production runs (2026-06-08 → 2026-06-27) wrote **2,501** gap-era TIFFs (**2012-01-01 → 2020-10-10**). **2012–2017** are essentially complete; **712** manifest days are `missing_source` (no NCAR GridRad for that convective window — expected for many off-season days). A **`--missing-only`** backfill may still be running in `screen` session `hail_stage04c`:
 
 ```bash
-.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2
+.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 4 --missing-only
 ```
 
-Use **`--workers 2`** (not `run_pipeline.py`'s default of 4) on disks under ~250 GiB free (~154 GiB available as of 2026-06-08). Monitor `logs/04c_fill_gridrad_gap.run.log`.
+Monitor `logs/04c_fill_gridrad_gap.run.log`. On disks under ~250 GiB free, use **`--workers 2`** instead of `4`. Disk available: ~173 GiB (2026-06-27).
 
 The remaining production sequence is:
 
-1. **Restart Stage 04c** for the full 2012–2020-10-13 convective-day gap (ERA5 from Stage 04a is already on disk).
+1. **Let Stage 04c `--missing-only` backfill finish** (or confirm no process is active and manifest is acceptable).
 2. Re-run Stages 05–15 with `--skip-ml` against the full dataset.
 3. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
 4. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.
-5. Regenerate mesh-era QA: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
+5. Regenerate mesh-era QA if ingest changed: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 6. Freeze regression/golden outputs and add bootstrap CIs to Stage 09.
 7. Upgrade `.venv` to Python 3.10+ after the active run.
 

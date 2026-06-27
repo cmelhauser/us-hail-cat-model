@@ -24,7 +24,8 @@ immediately before processing each day, then deletes the staged NetCDFs (unless
 ``--keep-gridrad-inputs``). Downloads use a **severe-first** policy: GridRad-Severe
 (5-min) is fetched when the catalog lists it for the convective window; regular
 hourly GridRad is skipped unless severe is unavailable or does not cover the full
-12 UTC → 12 UTC window (hourly then fills gaps). With ``--workers 1`` this is
+12 UTC → 12 UTC window (hourly then fills gaps: **d841000** V3.1, then **d841001**
+V4.2 warm-season hourly for Apr–Aug 2018+ when V3.1 is empty). With ``--workers 1`` this is
 strictly sequential. With ``--workers N`` and ``N > 1``, up to ``N`` convective days
 run in parallel worker processes (04b is loaded once per worker; each day uses a
 fresh HTTP session); tune ``--04b-download-workers`` so ``N × download_workers``
@@ -45,7 +46,7 @@ import shutil
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -259,6 +260,18 @@ def _hourly_fill_for_severe_gaps(
     return fill
 
 
+def _hourly_source_label(hr_files: list[Path]) -> str:
+    """Provenance tag for staged hourly GridRad NetCDFs."""
+    if not hr_files:
+        return "gridrad-hourly"
+    names = [p.name for p in hr_files]
+    if all("v4_2" in n for n in names):
+        return "gridrad-hourly-v42"
+    if all("v3_1" in n for n in names):
+        return "gridrad-hourly-v31"
+    return "gridrad-hourly"
+
+
 def find_gridrad_files(convective_day: date) -> tuple:
     """
     Find staged GridRad files for a convective day (12 UTC → 12 UTC).
@@ -287,7 +300,7 @@ def find_gridrad_files(convective_day: date) -> tuple:
         return sev_files, "gridrad-severe-5min"
 
     if hr_files:
-        return hr_files, "gridrad-hourly"
+        return hr_files, _hourly_source_label(hr_files)
 
     return [], "none"
 
@@ -591,6 +604,26 @@ def iter_dates(start, end):
         d += timedelta(days=1)
 
 
+def parse_iso_date(value: str) -> date:
+    """Parse ``YYYY-MM-DD`` for CLI bounds."""
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def filter_days_for_run(
+    days: list[date],
+    *,
+    missing_only: bool,
+) -> list[date]:
+    """Keep only convective days that still need a GeoTIFF when ``missing_only``."""
+    if not missing_only:
+        return days
+    pending: list[date] = []
+    for day in days:
+        if not mesh_path_for_convective_day(OUT_DIR, day).exists():
+            pending.append(day)
+    return pending
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Fill 2012-2019 gap with GridRad MESH75 (ERA5 + GridRad-Severe).")
@@ -630,6 +663,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
         metavar="N",
         dest="download_workers",
         help="With --with-04b-download: parallel download threads per day (default: 1).",
+    )
+    parser.add_argument(
+        "--from-date",
+        type=str,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Inclusive convective-day start (overrides --year/--month lower bound).",
+    )
+    parser.add_argument(
+        "--until-date",
+        type=str,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Inclusive convective-day end (overrides --year/--month upper bound).",
+    )
+    parser.add_argument(
+        "--missing-only",
+        action="store_true",
+        help="Process only days without an output GeoTIFF (backfill retries).",
     )
     return parser
 
@@ -769,36 +821,58 @@ def main(argv: list[str] | None = None) -> None:
         d_start = GAP_START
         d_end = GAP_END
 
+    if args.from_date:
+        d_start = max(parse_iso_date(args.from_date), GAP_START)
+    if args.until_date:
+        d_end = min(parse_iso_date(args.until_date), GAP_END)
+
     log(f"  Period: {d_start} → {d_end}")
     log(f"  Workers: {args.workers} process(es) across days")
     log(f"  With 04b: {args.with_04b_download}")
+    log(f"  Missing only: {args.missing_only}")
     log(f"  Delete GridRad inputs after each day: {not args.keep_gridrad_inputs}")
 
     if args.check_data:
         log("\n  Checking data availability ...")
-        total = sev = hourly = missing = 0
+        total = sev = hourly_v31 = hourly_v42 = hourly_other = missing = 0
         for day in iter_dates(d_start, d_end):
             total += 1
             _files, src = find_gridrad_files(day)
             if src == "gridrad-severe-5min":
                 sev += 1
-            elif src == "gridrad-hourly":
-                hourly += 1
+            elif src == "gridrad-hourly-v31":
+                hourly_v31 += 1
+            elif src == "gridrad-hourly-v42":
+                hourly_v42 += 1
+            elif src.startswith("gridrad-hourly"):
+                hourly_other += 1
+            elif "severe" in src:
+                sev += 1
             else:
                 missing += 1
-        log(f"  {total} days: {sev} GridRad-Severe, {hourly} hourly, {missing} missing")
+        log(
+            f"  {total} days: {sev} GridRad-Severe, "
+            f"{hourly_v31} hourly V3.1, {hourly_v42} hourly V4.2, "
+            f"{hourly_other} hourly (mixed), {missing} missing"
+        )
         sys.exit(0)
 
     gridrad_days_file = OUT_DIR / "gridrad_days.txt"
     gridrad_days = []
 
-    all_days = list(iter_dates(d_start, d_end))
+    all_days = filter_days_for_run(
+        list(iter_dates(d_start, d_end)),
+        missing_only=args.missing_only,
+    )
     done = skipped = no_data = 0
     peak_mesh = 0.0
     sev_count = hr_count = 0
     t0 = time.time()
 
     log(f"\n  Processing {len(all_days):,} days ...\n")
+    if args.missing_only and not all_days:
+        log("  No missing-output days in range; nothing to do.")
+        sys.exit(0)
 
     w = max(1, int(args.workers))
     if args.with_04b_download and w > 1:
@@ -857,7 +931,7 @@ def main(argv: list[str] | None = None) -> None:
             src = result.get("source", "")
             if "severe" in src:
                 sev_count += 1
-            elif src == "gridrad-hourly":
+            elif src == "gridrad-hourly" or src.startswith("gridrad-hourly"):
                 hr_count += 1
             peak = float(result.get("peak_mesh75_mm", 0.0))
             n_active = int(result.get("active_cells", 0))

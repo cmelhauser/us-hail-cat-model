@@ -44,7 +44,7 @@ Raw convective-day maximum MESH raster before Stage 05 correction (12 UTC → 12
 | `CONVECTIVE_WINDOW_UTC` | ISO interval `[start, end)` for the 12Z→12Z window (Stages 01–02, 04c) |
 | `PRODUCT` | `MESH75` (Stage 04c) |
 | `DATE` | Convective-day label (`YYYY-MM-DD`) |
-| `SOURCE` | `gridrad-severe-5min`, `gridrad-severe-5min+hourly-fill`, or `gridrad-hourly` |
+| `SOURCE` | `gridrad-severe-5min`, `gridrad-severe-5min+hourly-fill`, `gridrad-hourly-v31`, `gridrad-hourly-v42`, or `gridrad-hourly` |
 | `MAX_MESH75_MM` | Daily maximum hail in the raster (mm) |
 | `MAX_MESH75_IN` | Same in inches |
 | `ACTIVE_CELLS` | Count of cells with hail &gt; 0 |

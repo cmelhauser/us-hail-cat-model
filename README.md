@@ -96,7 +96,9 @@ python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validat
 | Dataset | Period | Role |
 |---------|--------|------|
 | MYRORSS MESH | Apr 1998 – Dec 2011 | Historical radar baseline |
-| GridRad / GridRad-Severe | Jan 2012 – 13 Oct 2020 | Transition-period gap fill (Stage 04c) |
+| GridRad-Severe (d841006) | Jan 2012 – 13 Oct 2020 | Preferred gap-fill source (~100 severe events/year) |
+| GridRad hourly V3.1 (d841000) | Jan 2012 – Dec 2017 | Hourly gap-fill fallback (all months) |
+| GridRad hourly V4.2 (d841001) | Apr–Aug 2018 – Aug 2021 | Warm-season hourly fallback when Severe absent |
 | MRMS MESH | 14 Oct 2020 – present | Operational radar |
 | ERA5 (0°C / −20°C isotherms) | 1991–2020 | Thermodynamic filtering |
 | SPC storm reports | 2004 – present | Validation only |
@@ -203,6 +205,7 @@ python run_pipeline.py --validate
 | Raw daily MESH rasters | `data/historical/mesh_0.05deg/` | Stage 01/02/04c convective-day (12Z→12Z) GeoTIFFs before correction |
 | Mesh daily peak summaries | `data/analysis/mesh_daily_peaks/` | Optional era QA (CSV, percentiles, ECDF); tracked in git |
 | Stage 01 source manifest | `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` | Per-day MYRORSS source counts, QA-repaired daily maxima, and `missing_source` / `no_hail_pixels` / `ok` status |
+| Stage 04c gap-fill manifest | `data/historical/mesh_0.05deg/manifest_stage04c_gridrad.csv` | Per-day GridRad gap-fill status for 2012-01-01 – 2020-10-13 |
 | Corrected MESH rasters | `data/historical/mesh_0.05deg_corrected/` | Daily MESH75 grids |
 | Event catalog | `data/historical/events/` | Sparse `.npz` per event |
 | EVT parameters | `data/analysis/cdf/` | GPD ξ, σ, threshold per cell |

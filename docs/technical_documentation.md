@@ -207,7 +207,15 @@ Stage 04a prepares monthly thermodynamic context for GridRad SHI computation and
 ## 7. Stage 04b — GridRad download (NCAR RDA / THREDDS)
 
 **Script:** `scripts/04b_download_gridrad.py`  
-**Input:** NCAR RDA THREDDS catalogs + `fileServer` URLs (GridRad **d841000** hourly, GridRad-Severe **d841006** 5-minute). Optional `GDEX_TOKEN` / `GDEX_API_TOKEN` or `~/.netrc` for authenticated GETs.  
+**Input:** NCAR RDA THREDDS catalogs + `fileServer` URLs:
+
+| Dataset | ID | Role |
+|---|---|---|
+| GridRad V3.1 hourly | **d841000** | Hourly fallback through 2017 (all months) |
+| GridRad V4.2 warm-season hourly | **d841001** | Hourly fallback Apr–Aug 2018+ when V3.1 is empty |
+| GridRad-Severe 5-min | **d841006** | Preferred source (~100 severe events/year) |
+
+Optional `GDEX_TOKEN` / `GDEX_API_TOKEN` or `~/.netrc` for authenticated GETs.  
 **Output:** NetCDF files under:
 
 ```text
@@ -242,8 +250,8 @@ This caps the in-memory plan to **one day’s file list** and avoids holding hun
 - **`download_for_day_adaptive(...)`** — **severe-first** policy used by Stage **04c** with `--with-04b-download`:
   1. Skip downloads when staged GridRad-Severe already covers the convective window.
   2. If the severe catalog lists timesteps, download **severe only**.
-  3. Re-check window coverage; if gaps remain, download **hourly** as fill.
-  4. If no severe catalog data exists, download **hourly only**.
+  3. Re-check window coverage; if gaps remain, download **hourly** as fill (**d841000**, then **d841001** for Apr–Aug 2018+).
+  4. If no severe catalog data exists, download **hourly only** (same **d841000 → d841001** order).
 - **`severe_catalog_has_convective_data(...)`** — lightweight THREDDS plan check (no GETs).
 - **`download_planned_items(...)`** — download a pre-built list (used internally).
 

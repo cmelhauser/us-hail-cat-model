@@ -18,10 +18,64 @@ def test_stage04b_download_gridrad_catalog_url_shape(load_script):
     assert "2015" in url
     assert "201505" in url
 
+    v42_url = s._catalog_url(s.DS_HOURLY_V42, date(2018, 4, 1))
+    assert s.DS_HOURLY_V42 in v42_url
+    assert "201804" in v42_url
+
     sev_url = s._catalog_url(s.DS_SEVERE, d)
     assert "d841006" in sev_url
     assert "2015" in sev_url
     assert "20150501" in sev_url
+
+
+def test_stage04b_v42_hourly_eligibility(load_script):
+    s = load_script("04b_download_gridrad.py")
+    assert s._v42_hourly_eligible(date(2018, 4, 1))
+    assert s._v42_hourly_eligible(date(2020, 8, 15))
+    assert not s._v42_hourly_eligible(date(2018, 3, 31))
+    assert not s._v42_hourly_eligible(date(2017, 7, 1))
+    assert not s._v42_hourly_eligible(date(2020, 10, 14))
+
+    assert s._hourly_dataset_ids(date(2016, 7, 1)) == [s.DS_HOURLY]
+    assert s._hourly_dataset_ids(date(2018, 4, 1)) == [s.DS_HOURLY, s.DS_HOURLY_V42]
+
+
+def test_stage04b_plan_downloads_uses_v42_when_v31_empty(load_script):
+    s = load_script("04b_download_gridrad.py")
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, text):
+            self.text = text
+
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def get(self, url, timeout=60, stream=False):
+            if s.DS_HOURLY in url:
+                return Resp("<?xml version='1.0'?><catalog xmlns='http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0'><dataset name='root'/></catalog>")
+            if s.DS_HOURLY_V42 in url:
+                xml = """<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0">
+  <dataset name="root">
+    <dataset name="nexrad_3d_v4_2_20180415T120000Z.nc" />
+  </dataset>
+</catalog>"""
+                return Resp(xml)
+            raise AssertionError(f"unexpected url {url}")
+
+    items = s.plan_downloads_for_day(
+        FakeSession(),
+        date(2018, 4, 15),
+        hourly=True,
+        severe=False,
+        catalog_timeout=(10.0, 10.0),
+    )
+    assert len(items) == 1
+    assert items[0].dsid == s.DS_HOURLY_V42
+    assert items[0].filename == "nexrad_3d_v4_2_20180415T120000Z.nc"
 
 
 def test_stage04b_download_gridrad_list_day_catalog_files_hourly_filters_by_day(load_script):
@@ -253,4 +307,141 @@ def test_stage04b_download_for_day_adaptive_hourly_only_without_severe_catalog(
     )
     assert stats["source_mode"] == "hourly-only"
     assert stats["downloaded"] == 2
+
+
+def test_stage04b_fileserver_url_v42(load_script):
+    s = load_script("04b_download_gridrad.py")
+    url = s._fileserver_url(s.DS_HOURLY_V42, date(2019, 6, 1), "nexrad_3d_v4_2_20190601T120000Z.nc")
+    assert s.DS_HOURLY_V42 in url
+    assert "201906" in url
+    assert url.endswith("nexrad_3d_v4_2_20190601T120000Z.nc")
+
+
+def test_stage04b_list_day_catalog_files_v42(load_script):
+    s = load_script("04b_download_gridrad.py")
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, text):
+            self.text = text
+
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def get(self, url, timeout=60, stream=False):
+            return Resp(
+                """<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0">
+  <dataset name="root">
+    <dataset name="nexrad_3d_v4_2_20190601T120000Z.nc" />
+    <dataset name="nexrad_3d_v4_2_20190602T120000Z.nc" />
+  </dataset>
+</catalog>"""
+            )
+
+    out = s.list_day_catalog_files(
+        FakeSession(), s.DS_HOURLY_V42, date(2019, 6, 1), timeout=(10.0, 10.0)
+    )
+    assert out == ["nexrad_3d_v4_2_20190601T120000Z.nc"]
+
+
+def test_stage04b_plan_downloads_v31_only_before_2018(load_script):
+    s = load_script("04b_download_gridrad.py")
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, text):
+            self.text = text
+
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def get(self, url, timeout=60, stream=False):
+            if s.DS_HOURLY_V42 in url:
+                raise AssertionError("V4.2 catalog must not be queried for 2016")
+            xml = """<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0">
+  <dataset name="root">
+    <dataset name="nexrad_3d_v3_1_20160721T130000Z.nc" />
+  </dataset>
+</catalog>"""
+            return Resp(xml)
+
+    items = s.plan_downloads_for_day(
+        FakeSession(),
+        date(2016, 7, 21),
+        hourly=True,
+        severe=False,
+        catalog_timeout=(10.0, 10.0),
+    )
+    assert len(items) == 1
+    assert items[0].dsid == s.DS_HOURLY
+    assert "v3_1" in items[0].filename
+
+
+def test_stage04b_download_for_day_adaptive_hourly_v42_2018(
+    load_script, tmp_path, monkeypatch
+):
+    s = load_script("04b_download_gridrad.py")
+    monkeypatch.setattr(s, "GRIDRAD_SEV_DIR", tmp_path / "gridrad_severe")
+    monkeypatch.setattr(s, "GRIDRAD_DIR", tmp_path / "gridrad")
+
+    day = date(2018, 7, 4)
+    monkeypatch.setattr(s, "severe_catalog_has_convective_data", lambda *a, **k: False)
+
+    real_plan = s.plan_downloads_for_day
+    planned_items: list = []
+
+    def capture_plan(session, convective_day, hourly, severe, *, catalog_timeout):
+        items = real_plan(session, convective_day, hourly, severe, catalog_timeout=catalog_timeout)
+        if hourly:
+            planned_items.extend(items)
+        return items
+
+    def fake_download(session, item, *, connect_timeout, read_timeout):
+        item.out_path.parent.mkdir(parents=True, exist_ok=True)
+        item.out_path.write_bytes(b"x")
+        return item, "downloaded"
+
+    empty = """<?xml version="1.0"?><catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0"><dataset name="root"/></catalog>"""
+    v42 = """<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0">
+  <dataset name="root">
+    <dataset name="nexrad_3d_v4_2_20180704T120000Z.nc" />
+  </dataset>
+</catalog>"""
+
+    class FakeSession:
+        def get(self, url, timeout=60, stream=False):
+            class Resp:
+                status_code = 200
+                text = empty if s.DS_HOURLY in url else v42
+
+                def raise_for_status(self):
+                    return None
+
+            return Resp()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(s, "plan_downloads_for_day", capture_plan)
+    monkeypatch.setattr(s, "_download_one", fake_download)
+
+    stats = s.download_for_day_adaptive(
+        FakeSession(),
+        day,
+        catalog_timeout=(10.0, 10.0),
+        connect_timeout=10.0,
+        read_timeout=10.0,
+        max_workers=1,
+    )
+    assert stats["source_mode"] == "hourly-only"
+    assert stats["downloaded"] == 1
+    assert len(planned_items) == 1
+    assert planned_items[0].dsid == s.DS_HOURLY_V42
 
