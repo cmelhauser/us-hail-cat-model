@@ -245,6 +245,7 @@ Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) 
 | `docs/data_dictionary.md` | All output file schemas |
 | `docs/reproduce.md` | Reproduction guide and environment setup |
 | `scripts/diagnostics/summarize_mesh_daily_peaks.py` | Optional mesh-era peak CSV/ECDF diagnostic |
+| `scripts/diagnostics/hail_day_climatology.py` | Per-cell hail-day climatology and MESH75 threshold sensitivity |
 | `docs/uncertainty.md` | Six-category uncertainty budget |
 | `docs/executive_summary.md` | Non-technical overview |
 | `docs/explainer.md` | Plain-language model explanation |

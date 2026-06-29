@@ -155,11 +155,10 @@ def test_rp_years_matches_config(script):
 
 def test_damage_threshold_stage08_matches_config():
     s = _load("08_build_event_catalog.py")
-    # Stage 08 uses DAMAGE_THRESHOLD_MM (note: _MM not _THRESH)
-    script_val = getattr(s, "DAMAGE_THRESHOLD_MM", getattr(s, "DAMAGE_THRESH_MM", None))
-    assert script_val is not None, "Stage 08: could not find DAMAGE_THRESHOLD_MM or DAMAGE_THRESH_MM"
-    assert script_val == cfg.DAMAGE_THRESH_MM, (
-        f"Stage 08 damage threshold {script_val} != _config {cfg.DAMAGE_THRESH_MM}"
+    script_val = getattr(s, "EVENT_ACTIVE_THRESHOLD_MM", getattr(s, "DAMAGE_THRESHOLD_MM", None))
+    assert script_val is not None, "Stage 08: could not find EVENT_ACTIVE_THRESHOLD_MM"
+    assert script_val == cfg.EVENT_ACTIVE_THRESH_MM, (
+        f"Stage 08 event threshold {script_val} != _config {cfg.EVENT_ACTIVE_THRESH_MM}"
     )
 
 
@@ -214,7 +213,7 @@ def test_max_hail_mm_consumers_match_config(script):
 
 @pytest.mark.parametrize("name", [
     "NROWS", "NCOLS", "DX", "LAT_MAX", "LON_MIN",
-    "DAMAGE_THRESH_MM", "MAX_HAIL_MM",
+    "DAMAGE_THRESH_MM", "EVENT_ACTIVE_THRESH_MM", "MAX_HAIL_MM",
     "RP_YEARS", "POOL_RADIUS_KM", "DECAY_KM",
     "N_REGIONS_DEFAULT", "GPD_THRESH_MM_DEFAULT",
     "RNG_SEED", "N_SIM_YEARS", "TRANSLATE_CELLS",

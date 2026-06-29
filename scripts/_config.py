@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 # ── Model version ─────────────────────────────────────────────────────────────
-MODEL_VERSION: str = "2.2.0"
+MODEL_VERSION: str = "2.2.1"
 
 # Daily hail rasters use a 12 UTC → 12 UTC convective day (see scripts/_io.py).
 CONVECTIVE_DAY_START_HOUR_UTC: int = 12
@@ -71,6 +71,9 @@ MASK_DIR: Path = ANALYSIS / "conus_mask"
 
 # ── Physical constants and thresholds ────────────────────────────────────────
 DAMAGE_THRESH_MM: float = 25.4   # 1.0 inch — minimum hail for damage consideration
+# Cintineo et al. (2012) / Wendt & Jirak (2021) MRMS skill threshold for severe-hail
+# identification; used for Stage 08 event footprints and Stage 05 winter filter.
+EVENT_ACTIVE_THRESH_MM: float = 29.0
 MM_PER_INCH: float = 25.4        # unit conversion
 MAX_HAIL_MM: float = 300.0       # QA cap; conservative physical plausibility ceiling
 MAX_HAIL_IN: float = MAX_HAIL_MM / MM_PER_INCH
@@ -138,7 +141,7 @@ __all__ = [
     "MESH_CORR_DIR", "MESH_CLIMO_DIR", "ERA5_DIR", "SPC_DIR",
     "EVENTS_DIR", "CDF_DIR", "OCC_DIR", "TOPO_DIR", "VULN_DIR", "MASK_DIR",
     # Physical constants
-    "DAMAGE_THRESH_MM", "MAX_HAIL_IN", "MAX_HAIL_MM", "NODATA", "MM_PER_INCH",
+    "DAMAGE_THRESH_MM", "EVENT_ACTIVE_THRESH_MM", "MAX_HAIL_IN", "MAX_HAIL_MM", "NODATA", "MM_PER_INCH",
     "MESH75_A", "MESH75_B",
     "WITT_INCH_TO_CM", "WITT_RATIO_EXP",
     # EVT / RP

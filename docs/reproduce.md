@@ -242,6 +242,14 @@ re-run 04c for those dates (see `docs/technical_documentation.md` §8.3).
 Writes `data/analysis/mesh_daily_peaks/` (`mesh_daily_peaks.csv`, percentiles, ECDF plot).
 Re-run after ingest stages complete (or while Stage 04c is in progress) to compare hail distributions by radar era.
 
+**Per-cell hail-day climatology (optional diagnostic):**
+
+```bash
+.venv/bin/python scripts/diagnostics/hail_day_climatology.py
+```
+
+Writes `data/analysis/hail_day_climatology/` (per-cell GeoTIFFs, threshold benchmark CSV, seasonal plots). Run after Stage 05 completes to compare against Cintineo et al. (2012) and Murillo et al. (2021) hail-day climatologies at literature MESH75 thresholds (25.4–63.25 mm).
+
 ## 6. Stage 05 Modes
 
 Default:

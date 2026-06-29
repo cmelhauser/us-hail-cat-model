@@ -50,6 +50,17 @@ The goal is not to re-optimize every parameter on the first run. It is to verify
 | Primary output | `merge_quality_flag` rate |
 | Cliff risk | Low. Affects ~2–5% of potential merges. |
 
+### 1.4 MESH75 hail-day threshold (diagnostic benchmark)
+
+| Field | Value |
+|-------|-------|
+| Default | 25.4 mm (Stage 08 damage threshold) |
+| Diagnostic | `scripts/diagnostics/hail_day_climatology.py` |
+| Justification | Cintineo et al. (2012) and Murillo et al. (2021) benchmark per-cell hail days at skill thresholds (29–63 mm); conventional 25.4 mm over-diagnoses vs SPC report days, especially off-season. |
+| Sweep | {25.4, 29.0, 35.56, 41.91, 50.8, 63.25} mm |
+| Primary output | `data/analysis/hail_day_climatology/threshold_benchmark_summary.csv` |
+| Cliff risk | High for interpreting Stage 08 λ as literature hail-alley frequency; GP max drops from ~5.5 to ~1.6 days/yr (25.4 → 41.9 mm) on production archive. |
+
 ---
 
 ## 2. Stage 09 — EVT Fitting Parameters

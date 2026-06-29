@@ -4,6 +4,8 @@ data/**
 data/analysis/**
 !data/analysis/mesh_daily_peaks/
 !data/analysis/mesh_daily_peaks/**
+!data/analysis/hail_day_climatology/
+!data/analysis/hail_day_climatology/**
 
 # ── Local scratch (ad-hoc scripts, plots, draft PDFs) ─────────────────────────
 tmp/

@@ -535,6 +535,19 @@ Dense event cubes are prohibited as production event storage. They are memory-in
 - Peak hail values are plausible.
 - Physical merge constraints are audited.
 
+### 12.5 Post-run hail-day climatology diagnostic
+
+**Script:** `scripts/diagnostics/hail_day_climatology.py` (optional, not a pipeline stage)  
+**Output:** `data/analysis/hail_day_climatology/`
+
+Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al. (2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm.
+
+Review:
+
+- `threshold_benchmark_summary.csv` — Great Plains max/mean days/yr vs literature;
+- `national_annual_hail_days.csv` — CONUS any-cell counts (comparable to Stage 08 λ);
+- seasonal PNG — winter inflation at conventional 25.4 mm vs SPC report-day seasonality.
+
 ---
 
 ## 13. Stage 09 - Regional CDF Fitting

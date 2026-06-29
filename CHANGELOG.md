@@ -9,6 +9,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`scripts/diagnostics/hail_day_climatology.py`:** per-cell hail-days-per-year climatology
+  at six literature MESH75 thresholds; tracked outputs under `data/analysis/hail_day_climatology/`.
+
+### Changed
+
+- **Model v2.2.1:** `EVENT_ACTIVE_THRESH_MM = 29.0` (Cintineo 2012; Wendt & Jirak 2021) for
+  Stage 08 event footprints and Stage 05 subtropical-winter environmental filter; `DAMAGE_THRESH_MM`
+  (25.4 mm) unchanged for damage/vulnerability stages.
+- **Stage 05:** era-pooled MYRORSS (2005–2011) vs GridRad (2012–2019) quantile mapping when
+  same-day overlap is insufficient (replaces identity fallback for gap-era calibration).
+
 ## [2.2.1] — 2026-06-27
 
 ### Added

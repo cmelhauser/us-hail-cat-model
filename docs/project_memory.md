@@ -35,7 +35,8 @@ First full pipeline run started 2026-05-01. Production progress:
 - Stages 05–15: placeholder outputs from May-2011 smoke only — not production.
 - **Mesh archive:** **9,584** convective-day `mesh_*.tif` (5,023 + **2,501** + 2,060).
 - **Disk:** ~173 GiB free (2026-06-27).
-- **Mesh peak diagnostic:** regenerated 2026-06-27 — `scripts/diagnostics/summarize_mesh_daily_peaks.py` + `data/analysis/mesh_daily_peaks/`.
+- **Mesh peak diagnostic:** `scripts/diagnostics/summarize_mesh_daily_peaks.py` + `data/analysis/mesh_daily_peaks/`.
+- **Hail-day climatology diagnostic:** `scripts/diagnostics/hail_day_climatology.py` + `data/analysis/hail_day_climatology/` (per-cell days/yr at literature MESH75 thresholds).
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -266,6 +267,7 @@ In order:
 2. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset; this includes Stage 11b DEM preparation before Stage 12.
 3. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
 4. **Regenerate mesh-era diagnostic** if ingest changes (`scripts/diagnostics/summarize_mesh_daily_peaks.py`).
+5. **Regenerate hail-day climatology** after Stage 05 (`scripts/diagnostics/hail_day_climatology.py`).
 5. **Review Stage 15 figures** once production outputs exist.
 6. **Regression tests** — freeze golden outputs after first production run.
 7. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist.
@@ -301,6 +303,7 @@ Stage 04a complete; Stage 04c primary ingest complete (2,501 gap TIFFs, 2026-06-
 9,584 mesh TIFFs on disk. Stages 05–15 are the active blocker (placeholder smoke outputs only).
 Stage 01/02 manifests distinguish missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.
+Hail-day climatology: scripts/diagnostics/hail_day_climatology.py.
 scripts/_config.py = single source of truth for all grid constants and is imported by all stage scripts.
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 MAX_CENTROID_KM_DAY=150.0 canonical (stage 08 corrected 2026-05-03; matches _config.py and methodology.md §8.2).

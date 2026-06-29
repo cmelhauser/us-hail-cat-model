@@ -141,7 +141,7 @@ MYRORSS and MRMS MESH products are converted to corrected MESH75. GridRad-derive
 
 ### Event identification
 
-Daily corrected rasters are thresholded at 25.4 mm. Spatially and temporally coherent footprints are merged into events under five constraints: temporal gap between active days (≤ 2 days), buffered spatial overlap, event duration (≤ 10 days), centroid displacement (≤ 150 km per day), and peak intensity jump (≤ 3× between consecutive days). Each merge decision is recorded in a `merge_quality_flag` column that documents which constraints were active, supporting post-run audit and sensitivity analysis. Events are stored as sparse arrays:
+Daily corrected rasters are thresholded at 25.4 mm. Spatially and temporally coherent footprints are merged into events under five constraints: temporal gap between active days (≤ 2 days), buffered spatial overlap, event duration (≤ 5 days), centroid displacement (≤ 150 km per day), and peak intensity jump (≤ 3× between consecutive days). Each merge decision is recorded in a `merge_quality_flag` column that documents which constraints were active, supporting post-run audit and sensitivity analysis. Events are stored as sparse arrays:
 
 ```text
 rows_event_id
@@ -150,6 +150,21 @@ vals_event_id
 ```
 
 This sparse representation is central to memory safety in the stochastic catalog. Storing the complete historical catalog as dense grids would require on the order of tens of gigabytes of RAM; sparse templates reduce that by two to three orders of magnitude.
+
+### Per-cell hail-day climatology diagnostic
+
+Stage 08's annual event count (~306 events/yr on the 2026 production run) is a **CONUS-wide any-severe-MESH-day** metric, not a per-cell hail-alley frequency. To benchmark against Cintineo et al. (2012) and Murillo et al. (2021), we added `scripts/diagnostics/hail_day_climatology.py`, which computes mean **hail days per year** at each 0.05° cell for six literature MESH75 thresholds on the corrected archive.
+
+Production summary (9,797 convective days, 1998–2026):
+
+| Threshold | GP max days/yr | National any-cell days/yr (1999–2025 mean) |
+|-----------|---------------:|---------------------------------------------:|
+| 25.4 mm conventional | 5.5 | 344 |
+| 29.0 mm Cintineo/MRMS skill | 3.7 | 341 |
+| 41.9 mm MESH75 skill | 1.6 | 287 |
+| 50.8 mm significant severe | 0.6 | 229 |
+
+At 29 mm the Great Plains maximum (~3.7 days/yr at 0.05°) is below Cintineo's ~11–12 days/yr at coarser resolution but directionally consistent. The conventional threshold yields nearly uniform national any-cell counts across months (radar oversampling), whereas SPC report-day climatologies peak in late spring. Outputs: `data/analysis/hail_day_climatology/`.
 
 ### Extreme value modeling
 
@@ -270,18 +285,16 @@ AI use is disclosed in the Materials and Methods section. The disclosure names t
 
 ### Stage completion and data coverage
 
-Values as of 2026-06-27 (convective-day v2.2.0 definition):
+Values as of 2026-06-29 (convective-day v2.2.0 definition):
 
 ```text
-Total daily MESH rasters:                 9,584+ (growing with --missing-only backfill)
+Total daily MESH rasters:                 9,797
   MYRORSS (1998–2011):                    5,023
-  GridRad gap-fill (2012–2020-10-13):     2,501 primary ingest (+ V4.2 backfill in progress)
+  GridRad gap-fill (2012–2020-10-13):     2,714
   MRMS (2020-10-14–present):              2,060
-MYRORSS manifest rows:                    5,023 (4,989 ok; 20 missing_source; 11 ok_with_read_errors; 3 no_hail_pixels)
-Stage 04c manifest rows:                  3,209 (2,452 ok; 44 ok_with_read_errors; 712 missing_source; 1 error)
-Corrected MESH75 rasters:                 pending Stage 05 production run
-Historical event count:                   pending Stage 08 production run
-Years represented in annual maxima:       pending Stage 07 production run
+Corrected MESH75 rasters:                 9,797 (Stage 05 complete)
+Historical event count (Stage 08):        8,871 (~306/yr; 1998–2026)
+Per-cell hail-day diagnostic:             data/analysis/hail_day_climatology/
 ```
 
 ### Validation against SPC reports
@@ -319,7 +332,9 @@ Placeholder values to insert:
 ```text
 Simulated years:
 Synthetic events:
-Mean annual event count:
+Mean annual event count:                  ~306 (Stage 08 historical; Poisson λ baseline)
+Per-cell hail days/yr (GP max @ 29 mm):   ~3.7 (hail_day_climatology diagnostic)
+```
 Index of dispersion:
 Empirical RP map agreement with analytical RP:
 PET occurrence table summary:

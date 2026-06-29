@@ -1,0 +1,7 @@
+threshold_key,threshold_mm,threshold_label,month_01,month_02,month_03,month_04,month_05,month_06,month_07,month_08,month_09,month_10,month_11,month_12
+conv_25p4mm,25.4,Conventional severe (1.0 in),763,705,788,845,898,844,868,868,767,791,770,782
+skill_29mm,29.0,MRMS/Cintineo skill (~1.14 in),744,698,779,843,893,844,868,868,766,781,748,765
+meshwitt_35p6mm,35.56,MESHWitt skill (1.14 in),649,609,718,816,884,842,868,867,752,736,640,662
+mesh75_41p9mm,41.91,MESH75 skill (1.65 in),486,468,610,751,853,840,867,865,715,639,492,524
+sig_50p8mm,50.8,Significant severe (2.0 in),299,291,435,606,776,803,825,790,580,438,314,319
+mesh95_63p3mm,63.25,MESH95 skill (2.49 in),127,132,203,329,499,531,549,440,258,173,141,150

@@ -14,7 +14,8 @@ Two consecutive hail days belong to the same event if ALL conditions hold:
      At 0.05° resolution, 83 km ≈ 15 cells
   3. Hard cap: events longer than 5 calendar days are forcibly split
 
-Damage threshold: 25.4 mm (1.0 inch) — residential asphalt shingle onset.
+Damage threshold: 29.0 mm (Cintineo/MRMS skill) for event active cells; 25.4 mm
+remains the canonical damage threshold elsewhere (`DAMAGE_THRESH_MM`).
 
 Sparse Storage
 --------------
@@ -52,11 +53,11 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_CENTROID_KM_DAY, MAX_INTENSITY_RATIO
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, EVENT_ACTIVE_THRESH_MM, MAX_CENTROID_KM_DAY, MAX_INTENSITY_RATIO
     from _io import haversine_km
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_CENTROID_KM_DAY, MAX_INTENSITY_RATIO
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, EVENT_ACTIVE_THRESH_MM, MAX_CENTROID_KM_DAY, MAX_INTENSITY_RATIO
     from scripts._io import haversine_km
     from scripts._logging import get_logger
 
@@ -65,8 +66,9 @@ OUT_DIR   = DATA_ROOT / "historical" / "events"
 LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "08_build_event_catalog.log"
 
-# Event identification parameters
-DAMAGE_THRESHOLD_MM = DAMAGE_THRESH_MM
+# Event identification: literature skill threshold (Cintineo 2012; Wendt & Jirak 2021)
+EVENT_ACTIVE_THRESHOLD_MM = EVENT_ACTIVE_THRESH_MM
+DAMAGE_THRESHOLD_MM = EVENT_ACTIVE_THRESHOLD_MM  # alias for tests/logging
 BUFFER_CELLS        = 15     # ~83 km at 0.05° (~5.5 km/cell)
 MAX_DURATION_DAYS   = 5      # hard cap per AIR/RMS conventions
 MAX_TEMPORAL_GAP    = 2      # max gap in days (1=consecutive, 2=one quiet day)

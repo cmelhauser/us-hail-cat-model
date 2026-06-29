@@ -41,7 +41,7 @@ GridRad Cross-Calibration
 Environmental Filtering (all sources)
 --------------------------------------
   1. Noise floor: MESH75 < 5 mm → 0
-  2. Subtropical winter (Nov–Feb): lat < 30°N requires MESH75 ≥ 25.4 mm
+  2. Subtropical winter (Nov–Feb): lat < 30°N requires MESH75 ≥ 29.0 mm (skill threshold)
 
 Usage
 -----
@@ -65,11 +65,11 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM
     from _io import sanitize_hail_values, write_geotiff
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM
     from scripts._io import sanitize_hail_values, write_geotiff
     from scripts._logging import get_logger
 
@@ -97,10 +97,12 @@ MH19_B     = 0.206
 RATIO_EXP  = 2.0 * MH19_B
 
 MIN_MESH75_MM     = 5.0
-MIN_MESH75_SEVERE = 25.4
+MIN_MESH75_SEVERE = EVENT_ACTIVE_THRESH_MM
 
 OVERLAP_START_YEAR = 2005
 OVERLAP_END_YEAR   = 2011
+GRIDRAD_CALIB_START_YEAR = 2012
+GRIDRAD_CALIB_END_YEAR   = 2019
 N_PERCENTILES      = 200
 PERCENTILES        = np.linspace(0, 100, N_PERCENTILES + 1)
 MIN_PAIRS          = 1000
@@ -137,6 +139,74 @@ def apply_mesh75_correction(data: np.ndarray) -> np.ndarray:
         shi_proxy = (data[mask] / WITT_A) ** (1.0 / WITT_B)
         out[mask] = MH19_A * (shi_proxy ** MH19_B)
     return out
+
+def _collect_active_pixels(tif_path, *, as_mesh75: bool) -> list[float]:
+    import rasterio
+
+    try:
+        with rasterio.open(tif_path) as src:
+            data = src.read(1)
+    except Exception:
+        return []
+    if as_mesh75:
+        data = apply_mesh75_correction(data)
+    active = data[data > MIN_MESH75_MM]
+    return active.tolist() if active.size else []
+
+
+def _collect_era_pooled_calibration() -> tuple[np.ndarray, np.ndarray]:
+    """Pool MYRORSS-era and GridRad-era active pixels when same-day overlap is absent."""
+    myrorss_vals: list[float] = []
+    gridrad_vals: list[float] = []
+
+    for year in range(OVERLAP_START_YEAR, OVERLAP_END_YEAR + 1):
+        year_dir = IN_DIR / str(year)
+        if not year_dir.exists():
+            continue
+        for tif_path in sorted(year_dir.glob("mesh_????????.tif")):
+            datestr = tif_path.stem.replace("mesh_", "")
+            if is_gridrad_source(datestr):
+                continue
+            myrorss_vals.extend(_collect_active_pixels(tif_path, as_mesh75=True))
+
+    for year in range(GRIDRAD_CALIB_START_YEAR, GRIDRAD_CALIB_END_YEAR + 1):
+        year_dir = IN_DIR / str(year)
+        if not year_dir.exists():
+            continue
+        for tif_path in sorted(year_dir.glob("mesh_????????.tif")):
+            datestr = tif_path.stem.replace("mesh_", "")
+            if not is_gridrad_source(datestr):
+                continue
+            gridrad_vals.extend(_collect_active_pixels(tif_path, as_mesh75=False))
+
+    return np.array(myrorss_vals, dtype=np.float32), np.array(gridrad_vals, dtype=np.float32)
+
+
+def _save_quantile_map(gridrad_arr: np.ndarray, myrorss_arr: np.ndarray, correction_type: str) -> None:
+    gr_q = np.percentile(gridrad_arr, PERCENTILES)
+    my_q = np.percentile(myrorss_arr, PERCENTILES)
+    CAL_DIR.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        QQ_FILE,
+        percentiles=PERCENTILES,
+        gridrad_quantiles=gr_q,
+        myrorss_quantiles=my_q,
+        correction_type=correction_type,
+        n_gridrad=len(gridrad_arr),
+        n_myrorss=len(myrorss_arr),
+    )
+    with open(DIAG_FILE, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["percentile", "gridrad_mm", "myrorss_mm", "ratio"])
+        for p, g, m in zip(PERCENTILES, gr_q, my_q):
+            ratio = m / g if g > 0 else np.nan
+            w.writerow([f"{p:.1f}", f"{g:.2f}", f"{m:.2f}",
+                        f"{ratio:.3f}" if np.isfinite(ratio) else ""])
+    median_ratio = np.nanmedian(my_q[gr_q > 10] / gr_q[gr_q > 10])
+    log(f"  Quantile map built ({correction_type}): median ratio (>10mm) = {median_ratio:.3f}")
+    log(f"  GridRad p50={np.median(gridrad_arr):.1f} → MYRORSS p50={np.median(myrorss_arr):.1f} mm")
+    log(f"  GridRad p95={np.percentile(gridrad_arr,95):.1f} → MYRORSS p95={np.percentile(myrorss_arr,95):.1f} mm")
+
 
 def build_cross_calibration():
     """Phase A: build quantile mapping from overlap period."""
@@ -186,34 +256,18 @@ def build_cross_calibration():
     log(f"  GridRad pixel values: {len(gridrad_arr):,}")
 
     if len(gridrad_arr) < MIN_PAIRS or len(myrorss_arr) < MIN_PAIRS:
-        log("  Insufficient data for quantile mapping — using identity")
-        _save_default_calibration()
+        log("  Insufficient same-day overlap — trying era-pooled MYRORSS vs GridRad calibration")
+        myrorss_arr, gridrad_arr = _collect_era_pooled_calibration()
+        log(f"  Era-pooled MYRORSS pixel values: {len(myrorss_arr):,}")
+        log(f"  Era-pooled GridRad pixel values: {len(gridrad_arr):,}")
+        if len(gridrad_arr) < MIN_PAIRS or len(myrorss_arr) < MIN_PAIRS:
+            log("  Insufficient era-pooled data — using identity")
+            _save_default_calibration()
+            return
+        _save_quantile_map(gridrad_arr, myrorss_arr, "era_pooled_quantile_mapping")
         return
 
-    gr_q = np.percentile(gridrad_arr, PERCENTILES)
-    my_q = np.percentile(myrorss_arr, PERCENTILES)
-
-    CAL_DIR.mkdir(parents=True, exist_ok=True)
-    np.savez(QQ_FILE,
-             percentiles=PERCENTILES,
-             gridrad_quantiles=gr_q,
-             myrorss_quantiles=my_q,
-             correction_type="quantile_mapping",
-             n_gridrad=len(gridrad_arr),
-             n_myrorss=len(myrorss_arr))
-
-    with open(DIAG_FILE, "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["percentile", "gridrad_mm", "myrorss_mm", "ratio"])
-        for p, g, m in zip(PERCENTILES, gr_q, my_q):
-            ratio = m / g if g > 0 else np.nan
-            w.writerow([f"{p:.1f}", f"{g:.2f}", f"{m:.2f}",
-                        f"{ratio:.3f}" if np.isfinite(ratio) else ""])
-
-    median_ratio = np.nanmedian(my_q[gr_q > 10] / gr_q[gr_q > 10])
-    log(f"  Quantile map built: median ratio (>10mm) = {median_ratio:.3f}")
-    log(f"  GridRad p50={np.median(gridrad_arr):.1f} → MYRORSS p50={np.median(myrorss_arr):.1f} mm")
-    log(f"  GridRad p95={np.percentile(gridrad_arr,95):.1f} → MYRORSS p95={np.percentile(myrorss_arr,95):.1f} mm")
+    _save_quantile_map(gridrad_arr, myrorss_arr, "quantile_mapping")
 
 def _save_default_calibration():
     CAL_DIR.mkdir(parents=True, exist_ok=True)

@@ -37,7 +37,7 @@ bump.
 | 4 | `event_peaks.npz` is authoritative for Stage 13. Sparse arrays are the source of truth. |
 | 5 | The 0.05 degree grid is fixed. Convective-day definition (12 UTC start) is versioned in v2.2; any change requires a version bump and full rerun. |
 | 11 | Daily MESH labels use **convective days** (12 UTC → 12 UTC). Stages 01, 02, 04b, 04c filter timesteps with `scripts/_io.py` helpers; do not revert to calendar UTC midnight without a version bump. |
-| 6 | Never commit generated data files, logs, figures, model artifacts, or local bootstrap files. **Exception:** `data/analysis/mesh_daily_peaks/` diagnostic summaries (CSV/PNG + README). |
+| Rule | 6 | Never commit generated data files, logs, figures, model artifacts, or local bootstrap files. **Exception:** `data/analysis/mesh_daily_peaks/` and `data/analysis/hail_day_climatology/` diagnostic summaries (CSV/PNG/TIFF + README). |
 | 7 | Update tests and docs whenever methodology, output schemas, or stage behavior changes. |
 | 8 | Grid constants come from `scripts/_config.py`. Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, or `LON_MIN` in stage scripts. |
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
@@ -92,7 +92,9 @@ us-hail-cat-model/
 |   |-- 14_build_vulnerability.py
 |   |-- 15_render_figures.py
 |   `-- diagnostics/
-|       `-- summarize_mesh_daily_peaks.py  <- mesh archive peak CSV/ECDF (optional)
+|       |-- summarize_mesh_daily_peaks.py  <- mesh archive peak CSV/ECDF (optional)
+|       `-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
+|       `-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
 |-- tests/                      <- unit and synthetic integration tests
 |-- docs/                       <- full documentation
 |-- data/                       <- gitignored generated data (except data/analysis/mesh_daily_peaks/)
@@ -251,7 +253,8 @@ As of 2026-06-27:
 | First full pipeline run | Stage 01 ✅; Stage 02 ✅; Stage 03 ✅; Stage 04a ✅; **Stage 04c** ✅ primary ingest complete; optional `--missing-only` backfill may still be running |
 | Mesh archive | **9,584** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,501** GridRad + 2,060 MRMS) |
 | Stage 04c manifest | **3,209** gap-era rows in `manifest_stage04c_gridrad.csv` (2,496 `ok` / `ok_with_read_errors`; 712 `missing_source`; 1 `error`) |
-| Mesh peak diagnostic | `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/` (regenerated 2026-06-27) |
+| Mesh peak diagnostic | `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/` |
+| Hail-day climatology | `scripts/diagnostics/hail_day_climatology.py` + tracked `data/analysis/hail_day_climatology/` |
 | Project metadata | LICENSE, CHANGELOG, CITATION, CONTRIBUTING, COC, SECURITY |
 | Python project config | pyproject.toml, .pre-commit-config.yaml |
 | CI/CD | `.github/workflows/tests.yml` |
@@ -278,6 +281,7 @@ The remaining production sequence is:
 3. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
 4. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.
 5. Regenerate mesh-era QA if ingest changed: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
+6. Regenerate hail-day climatology after Stage 05/08: `scripts/diagnostics/hail_day_climatology.py`.
 6. Freeze regression/golden outputs and add bootstrap CIs to Stage 09.
 7. Upgrade `.venv` to Python 3.10+ after the active run.
 

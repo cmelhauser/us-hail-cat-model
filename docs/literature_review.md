@@ -62,15 +62,40 @@ MYRORSS provides historical radar reanalysis for the contiguous United States.
 
 ### Wendt and Jirak (2021)
 
-This work compares operational MRMS MESH hail climatology with Storm Data.
+This work compares operational MRMS MESH hail climatology with Storm Data. MRMS severe MESH hail hours/days can exceed report-based estimates by **2–4×** locally, especially in low-population regions.
 
-**Model implication:** Radar captures hail in underreported regions and times.
+**Model implication:** Radar captures hail in underreported regions and times. Use this range when interpreting Stage 08 CONUS-wide event totals vs SPC validation.
 
 ### Murillo, Homeyer, and Allen (2021)
 
-This GridRad-based hail climatology supports using GridRad to extend radar hail records.
+This GridRad-based hail climatology quantifies **severe hail days** on an 80 km grid using MESH at conventional (25.4 mm), skill-optimized (Table 1: MESHWitt 35.56 mm, MESH75 41.91 mm, MESH95 63.25 mm), and environmentally filtered thresholds. Unfiltered MESH75 at 25.4 mm over-diagnoses warm-season Gulf Coast convection relative to reports.
 
-**Model implication:** GridRad can fill temporal gaps but requires calibration. v2.1 gap-fill runs through **2020-10-13**; Murillo et al. (2021) climatology is most directly comparable for **2012–2019**.
+**Model implication:** GridRad can fill temporal gaps but requires calibration. Gap-fill runs through **2020-10-13**. Benchmark Stage 08 and per-cell hail-day diagnostics against Murillo et al. skill thresholds, not only 25.4 mm.
+
+### Cintineo, Smith, Lakshmanan, and coauthors (2012)
+
+Objective MESH climatology on a ~0.88° grid: with ≥ five pixels at 29 mm, the Great Plains shows maximum **severe hail days per year of roughly 11–12**; winter months are nearly devoid of severe hail CONUS-wide.
+
+**Model implication:** Compare per-cell hail-day rates at **≥ 29 mm** (or Murillo MESH75 skill thresholds), not 25.4 mm alone. Implemented in `scripts/diagnostics/hail_day_climatology.py`.
+
+### Per-cell hail-day climatology diagnostic (v2.2.1)
+
+Stage 08 groups **CONUS-wide** active days into sparse events at the 25.4 mm damage threshold. That metric is not directly comparable to per-cell hail-day maps in Cintineo et al. (2012) or Murillo et al. (2021). The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` therefore computes, for each 0.05° cell, mean annual **hail days per year** at six literature thresholds on the Stage 05 corrected archive, plus national any-cell totals and seasonal curves.
+
+**Production run (2026-06, 9,797 convective days, 1998–2026):**
+
+| Threshold | Great Plains max days/yr | GP mean days/yr | National any-cell days/yr (mean) |
+|-----------|-------------------------:|----------------:|---------------------------------:|
+| 25.4 mm conventional | 5.5 | 2.2 | 344 |
+| 29.0 mm Cintineo/MRMS skill | 3.7 | 1.4 | 341 |
+| 35.6 mm MESHWitt skill | 2.3 | 0.6 | 321 |
+| 41.9 mm MESH75 skill | 1.6 | 0.2 | 287 |
+| 50.8 mm significant severe | 0.6 | 0.1 | 229 |
+| 63.3 mm MESH95 skill | 0.2 | 0.04 | 126 |
+
+At 29 mm the Great Plains maximum (~3.7 days/yr at 0.05°) is below Cintineo's ~11–12 days/yr at coarser resolution but directionally consistent; the conventional 25.4 mm threshold inflates winter any-cell counts relative to SPC report-day seasonality. Stage 08's ~306 events/year aligns with national any-cell hail days, not with per-cell hail-alley maxima.
+
+**Model implication:** Interpret Stage 08 λ (Poisson rate) as a national any-severe-MESH-day count. For literature benchmarking and threshold sensitivity, use `data/analysis/hail_day_climatology/`.
 
 ### GridRad reflectivity and SHI (implementation note)
 
@@ -338,6 +363,8 @@ Brown, T.M., et al., 2015: Evaluating hail damage using property insurance claim
 Coles, S., 2001: *An Introduction to Statistical Modeling of Extreme Values.* Springer.
 
 Cooley, D., D. Nychka, and P. Naveau, 2007: Bayesian spatial modeling of extreme precipitation return levels. *Journal of the American Statistical Association*, 102(479), 824–840.
+
+Cintineo, J.L., K.M. Kuhl, J.A. Smith, M.L. Thomas, K.L. Ortega, T.M. Smith, and J. Gao, 2012: An objective high-resolution hail climatology of the contiguous United States. *Weather and Forecasting*, 27, 1235–1248.
 
 Davison, A.C., S.A. Padoan, and M. Ribatet, 2012: Statistical modeling of spatial extremes. *Statistical Science*, 27(2), 161–186.
 

@@ -350,10 +350,13 @@ Leap day is represented explicitly as day 366. Downstream smoothing or calendar-
 
 ## 8. Event Identification
 
-Stage 08 converts daily rasters into event footprints. The model uses a 25.4 mm damage threshold:
+Stage 08 converts daily rasters into event footprints. Event active cells use the
+literature severe-hail skill threshold (29.0 mm; Cintineo et al. 2012; Wendt &
+Jirak 2021). The 25.4 mm damage threshold (`DAMAGE_THRESH_MM`) remains canonical
+for vulnerability and occurrence products.
 
 ```text
-active(i, j, d) = 1 if MESH75_corrected(i, j, d) >= 25.4 mm
+active(i, j, d) = 1 if MESH75_corrected(i, j, d) >= 29.0 mm
 ```
 
 ### 8.1 Base merge rules
@@ -388,6 +391,12 @@ vals_event_id
 ```
 
 The event peak is the maximum hail size at each active cell during the event. Duration, start/end date, maximum size, active-cell count, and other event metadata are recorded in `event_catalog.csv`.
+
+### 8.4 Literature benchmarking (per-cell hail days)
+
+Stage 08's annual event count is a **CONUS-wide** metric: any day with at least one cell ≥ 25.4 mm contributes at least one event (92% are single-day events on the 2026 production run). That count (~306 events/yr) is not directly comparable to per-cell hail-day climatologies in Cintineo et al. (2012) or Murillo et al. (2021), which report **hail days per grid cell per year** at literature MESH thresholds.
+
+The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` computes per-cell mean annual hail days at six thresholds (25.4–63.25 mm) on the corrected archive. On the 2026 production archive, Great Plains maxima range from ~5.5 days/yr at 25.4 mm to ~1.6 days/yr at the Murillo MESH75 skill threshold (41.9 mm), compared with Cintineo's ~11–12 days/yr at coarser resolution and 29 mm. See `data/analysis/hail_day_climatology/` and `docs/literature_review.md` §3.
 
 ---
 

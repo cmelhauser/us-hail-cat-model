@@ -51,6 +51,7 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 07_build_hail_climo.py          15_render_figures.py
 
 scripts/diagnostics/summarize_mesh_daily_peaks.py  ← optional mesh-era peak CSV/ECDF
+scripts/diagnostics/hail_day_climatology.py      ← per-cell hail-day threshold sensitivity
 
 scripts/_config.py   ← all grid constants, paths, EVT defaults (wired into all stage scripts)
 scripts/_logging.py  ← get_logger() factory (wired into all stage scripts)
@@ -68,7 +69,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 3. **SPC = validation only.** Never a hazard input.
 4. **`event_peaks.npz`** (rows/cols/vals per event_id) is the authoritative event store.
 5. **0.05° grid is fixed.** Convective-day definition (12 UTC start) is versioned in v2.2; see `docs/methodology.md` §2.6.
-6. **Never commit data files.** `.tif`, `.npy`, `.npz`, `.grib2`, `.parquet`, and most `.csv` outputs are gitignored. **Exception:** `data/analysis/mesh_daily_peaks/` (tracked diagnostic summaries).
+6. **Never commit data files.** `.tif`, `.npy`, `.npz`, `.grib2`, `.parquet`, and most `.csv` outputs are gitignored. **Exception:** `data/analysis/mesh_daily_peaks/` and `data/analysis/hail_day_climatology/` (tracked diagnostic summaries).
 7. **`scripts/_config.py` is the single source of truth for grid constants.** Never define `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` inline in a stage script.
 8. **Stage 01 manifest is authoritative** for distinguishing missing-source days from true no-hail days. Do not infer source availability from GeoTIFF values alone.
 9. **Convective days:** Stages 01/02/04b/04c use 12 UTC → 12 UTC windows; see `docs/literature_review.md` §3.6.
@@ -150,7 +151,11 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 **Stage 04c (2026-06-27):** GridRad gap-fill **primary ingest complete**. Production runs **2026-06-08 → 2026-06-27** wrote **2,501** gap-era TIFFs (**2012-01-01 → 2020-10-10**). Manifest `manifest_stage04c_gridrad.csv`: **3,209** rows — 2,452 `ok`, 44 `ok_with_read_errors`, 712 `missing_source`, 1 `error`. **2012–2017** essentially complete. Optional **`--missing-only`** backfill may still be running in `screen` session `hail_stage04c` (`--workers 4`). Monitor `logs/04c_fill_gridrad_gap.run.log`. ~173 GiB disk free.
 
-**Mesh peak diagnostic:** Regenerated **2026-06-27** via `scripts/diagnostics/summarize_mesh_daily_peaks.py` → `data/analysis/mesh_daily_peaks/`.
+**Mesh peak diagnostic:** `data/analysis/mesh_daily_peaks/` (regenerated via `summarize_mesh_daily_peaks.py`).
+
+**Hail-day climatology:** `data/analysis/hail_day_climatology/` (via `hail_day_climatology.py`; GP max ~3.7 days/yr at 29 mm on 2026 production archive).
+
+**Stage 08 (2026-06-29):** **8,871** events (~306/yr); validation passed. See hail-day diagnostic for literature context.
 
 The Codex-run pipeline on 2026-05-01 ran **Stages 05–15 prematurely** before Stage 01 finished.
 All Stages 05–15 output is **placeholder, not production** — built on 31 events from May 2011 only.
@@ -179,6 +184,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 .venv/bin/python run_pipeline.py --only 15
 .venv/bin/python run_pipeline.py --validate
 .venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py
+.venv/bin/python scripts/diagnostics/hail_day_climatology.py
 ```
 
 ---

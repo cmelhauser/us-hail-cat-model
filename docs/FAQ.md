@@ -130,6 +130,10 @@ The historical event catalog contains thousands of events. Each event covers at 
 
 The Stage 08 output that stores each historical event as sparse arrays: `rows`, `cols`, and `vals` for every cell in the event footprint, keyed by `event_id`. This is the authoritative event store consumed by Stage 13. Never reconstruct these events into dense grids.
 
+**Q: Stage 08 reports ~300 events per year. Is that reasonable?**
+
+Stage 08 counts **CONUS-wide** days/clusters with at least one cell ≥ 25.4 mm (~306 events/yr on the 2026 production run). That is comparable to national any-cell MESH hail days (~344/yr) and is **not** the same as per-cell hail-alley frequencies in Cintineo et al. (2012) (~11–12 days/yr max at 29 mm on a coarser grid) or GridRad-Severe episode counts (~100/yr). Run `scripts/diagnostics/hail_day_climatology.py` for per-cell benchmarks at literature MESH75 thresholds; see `data/analysis/hail_day_climatology/` and `docs/methodology.md` §8.4.
+
 ---
 
 ## Statistics and Methodology

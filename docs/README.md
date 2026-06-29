@@ -30,6 +30,7 @@ Use the reading paths below to orient yourself quickly.
 4. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
 5. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
 6. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
+7. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
 
 **AI agent or future developer:**
 1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation
@@ -58,6 +59,7 @@ Use the reading paths below to orient yourself quickly.
 | [`benchmarks.md`](benchmarks.md) | Scientific | Published RP comparison framework; post-run validation targets |
 | [`vulnerability_derivation.md`](vulnerability_derivation.md) | Scientific | MDR curve derivation, placeholder limitations, calibration roadmap |
 | [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) | Manuscript | Draft PNAS-style article on AI-assisted catastrophe model development |
+| [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) | Diagnostic | Per-cell hail-day climatology vs Cintineo/Murillo thresholds |
 | [`pnas_publication_readiness.md`](pnas_publication_readiness.md) | Manuscript | PNAS novelty assessment, reviewer risks, evidence plan, go/no-go criteria |
 | [`technical_documentation.md`](technical_documentation.md) | Engineering | Per-stage implementation: inputs, outputs, algorithms, CLI |
 | [`data_dictionary.md`](data_dictionary.md) | Engineering | All output files: paths, schemas, units, nodata conventions |
