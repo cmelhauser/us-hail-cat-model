@@ -477,6 +477,8 @@ annual_hail_days.tif
 
 Stage 07 averages corrected daily MESH75 by day-of-year across available years. Zeros remain in the average because the output is expected daily hazard activity, not size conditional on hail occurrence.
 
+Input is the **Stage 05 unified archive** (`mesh_0.05deg_corrected/`). MYRORSS, GridRad (all 04c products), and MRMS are already harmonized there; Stage 07 does not read raw source trees or GridRad version tags.
+
 Stage 07 supports bounded concurrency via `--workers N` (threaded per-DOY raster reads). Use `--workers 1` for strictly sequential behavior.
 
 ### 11.3 Validation

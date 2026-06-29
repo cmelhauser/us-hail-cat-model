@@ -100,6 +100,9 @@ Diagnostic summaries of daily peak hail across the unified `mesh_0.05deg` archiv
 | `mesh_daily_peaks.csv` | Per-day peak hail (mm), source era, active cells, GeoTIFF path |
 | `mesh_daily_peak_percentiles.csv` | Percentile tables by source (all months and May-only) |
 | `mesh_daily_peak_ecdf.png` | ECDF comparison plot by radar era |
+| `mesh_calibration_peaks.csv` | Paired raw vs Stage 05 corrected daily peaks (when `mesh_0.05deg_corrected/` exists) |
+| `mesh_calibration_percentiles.csv` | Raw vs corrected percentiles by source era |
+| `mesh_calibration_ecdf.png` | ECDF overlay: dashed = uncalibrated, solid = Stage 05 corrected |
 
 ### `data/historical/gridrad/` and `data/historical/gridrad_severe/`
 

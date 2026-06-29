@@ -71,7 +71,35 @@ FIG_DIR = REPO_ROOT / "docs" / "figures" / "historical"
 LOG_DIR = LOG_ROOT
 LOG_FILE = LOG_DIR / "07_build_hail_climo.log"
 
+MRMS_START = date(2020, 10, 14)
+GRIDRAD_START = date(2012, 1, 1)
+GRIDRAD_END = date(2020, 10, 13)
+
 log = get_logger("07_build_hail_climo", LOG_ROOT).info
+
+
+def classify_mesh_era(day: date) -> str:
+    """Label radar era from convective-day date (post-Stage-05 archive is unified)."""
+    if day >= MRMS_START:
+        return "MRMS"
+    if GRIDRAD_START <= day <= GRIDRAD_END:
+        return "GridRad"
+    return "MYRORSS"
+
+
+def summarize_input_coverage(files: list[Path]) -> dict:
+    """Count corrected daily rasters by radar era for logging."""
+    counts: dict[str, int] = {"MYRORSS": 0, "GridRad": 0, "MRMS": 0}
+    years: set[int] = set()
+    for path in files:
+        datestr = path.stem.replace("mesh_", "")
+        try:
+            day = date(int(datestr[:4]), int(datestr[4:6]), int(datestr[6:8]))
+        except ValueError:
+            continue
+        years.add(day.year)
+        counts[classify_mesh_era(day)] += 1
+    return {"eras": counts, "years": years, "n_files": len(files)}
 
 
 def build_doy_index() -> dict:
@@ -93,8 +121,18 @@ def build_climatology():
 
     log("\n  Building DOY index ...")
     doy_files = build_doy_index()
-    total_files = sum(len(v) for v in doy_files.values())
+    all_files = [p for paths in doy_files.values() for p in paths]
+    total_files = len(all_files)
+    coverage = summarize_input_coverage(all_files)
     log(f"  Found {total_files:,} corrected MESH75 rasters across {len(doy_files)} DOYs")
+    log(
+        f"  Calendar years: {len(coverage['years'])} "
+        f"({min(coverage['years'])}–{max(coverage['years'])})"
+    )
+    log(
+        "  By radar era (via Stage 05 unified archive): "
+        + ", ".join(f"{k}={v:,}" for k, v in coverage["eras"].items())
+    )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -162,9 +200,9 @@ def build_climatology():
             log(f"    DOY {doy}/366  ({elapsed:.0f}s)")
 
     # Write annual summary stats
-    total_years = len(set(int(f.parent.name) for f in IN_DIR.rglob("mesh_????????.tif")))
-    if total_years > 0:
-        ann_mean = (annual_mean / total_years).astype(np.float32)
+    total_years = len(coverage["years"])
+    if total_files > 0 and total_years > 0:
+        ann_mean = (annual_mean / total_files).astype(np.float32)
         ann_pocc = (annual_p_occ / total_years).astype(np.float32)
         write_geotiff(ann_mean, OUT_DIR / "annual_mean_mesh75.tif")
         write_geotiff(ann_pocc, OUT_DIR / "annual_hail_days.tif")

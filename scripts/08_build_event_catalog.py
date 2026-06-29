@@ -75,20 +75,22 @@ MAX_TEMPORAL_GAP    = 2      # max gap in days (1=consecutive, 2=one quiet day)
 
 log = get_logger("08_build_event_catalog", LOG_ROOT).info
 
-def load_daily_data() -> tuple:
+def load_daily_data() -> tuple[list, list]:
     """
-    Load all corrected MESH75 rasters. Returns (dates, daily_footprints, daily_peaks).
-    daily_footprints[i] = boolean mask of cells ≥ threshold
-    daily_peaks[i] = float32 array of peak MESH75 values
+    Load all corrected MESH75 rasters.
+
+    Returns (dates, daily_cells) where daily_cells[i] holds sparse
+    (rows, cols, vals) for cells ≥ DAMAGE_THRESHOLD_MM only. Keeping active
+    cells sparse avoids holding ~30 GB of full-grid arrays for ~9,800 days.
     """
     import rasterio
 
     tif_files = sorted(IN_DIR.rglob("mesh_????????.tif"))
     log(f"  Found {len(tif_files):,} corrected MESH75 rasters")
 
-    dates = []
-    footprints = []
-    peaks = []
+    dates: list = []
+    daily_cells: list = []
+    total_active_cells = 0
 
     for i, fpath in enumerate(tif_files):
         datestr = fpath.stem.replace("mesh_", "")
@@ -100,88 +102,130 @@ def load_daily_data() -> tuple:
         with rasterio.open(fpath) as src:
             data = src.read(1)
 
-        fp = data >= DAMAGE_THRESHOLD_MM
-        if np.any(fp):
+        rows, cols = np.where(data >= DAMAGE_THRESHOLD_MM)
+        if rows.size:
             dates.append(dt)
-            footprints.append(fp)
-            peaks.append(data)
+            daily_cells.append({
+                "rows": rows.astype(np.int16),
+                "cols": cols.astype(np.int16),
+                "vals": data[rows, cols].astype(np.float32),
+            })
+            total_active_cells += rows.size
 
         if (i + 1) % 1000 == 0:
             log(f"    Loaded {i+1:,}/{len(tif_files):,}  "
                 f"({len(dates):,} active hail days so far)")
 
     log(f"  Active hail days (≥{DAMAGE_THRESHOLD_MM:.0f} mm): {len(dates):,}")
-    return dates, footprints, peaks
+    if dates:
+        mean_cells = total_active_cells / len(dates)
+        est_mb = total_active_cells * 8 / 1e6
+        log(f"  Sparse footprint: {total_active_cells:,} cells "
+            f"(mean {mean_cells:,.0f}/day, ~{est_mb:.0f} MB in RAM)")
+    return dates, daily_cells
+
+def footprints_overlap_sparse(
+    rows1: np.ndarray,
+    cols1: np.ndarray,
+    rows2: np.ndarray,
+    cols2: np.ndarray,
+    buffer: int = BUFFER_CELLS,
+) -> bool:
+    """Check if two sparse footprints overlap after buffering fp1 by buffer cells."""
+    if rows1.size == 0 or rows2.size == 0:
+        return False
+
+    r1min, r1max = int(rows1.min()), int(rows1.max())
+    c1min, c1max = int(cols1.min()), int(cols1.max())
+    if (rows2.max() < r1min - buffer or rows2.min() > r1max + buffer or
+        cols2.max() < c1min - buffer or cols2.min() > c1max + buffer):
+        return False
+
+    mask = (
+        (rows2 >= r1min - buffer) & (rows2 <= r1max + buffer) &
+        (cols2 >= c1min - buffer) & (cols2 <= c1max + buffer)
+    )
+    r2f, c2f = rows2[mask], cols2[mask]
+    if r2f.size == 0:
+        return False
+
+    # Chunk fp2 queries so very large footprints do not allocate n1×n2 arrays.
+    chunk = 2048
+    for start in range(0, r2f.size, chunk):
+        rr = r2f[start:start + chunk]
+        cc = c2f[start:start + chunk]
+        dr = np.abs(rr[:, None] - rows1[None, :])
+        dc = np.abs(cc[:, None] - cols1[None, :])
+        if np.any((dr <= buffer) & (dc <= buffer)):
+            return True
+    return False
 
 def footprints_overlap(fp1: np.ndarray, fp2: np.ndarray) -> bool:
-    """Check if two footprints overlap after buffering fp1 by BUFFER_CELLS.
-
-    Implemented with an integral image instead of scipy.ndimage so Stage 08
-    remains lightweight and avoids dependency/import failures in production runs.
-    The buffer is a conservative square approximation to the 83 km dilation.
-    """
-    if not np.any(fp1) or not np.any(fp2):
-        return False
-
+    """Dense-grid overlap check (tests and small synthetic grids)."""
     r1, c1 = np.where(fp1)
     r2, c2 = np.where(fp2)
+    return footprints_overlap_sparse(r1, c1, r2, c2)
 
-    # Fast bounding-box rejection.
-    if (r2.max() < r1.min() - BUFFER_CELLS or r2.min() > r1.max() + BUFFER_CELLS or
-        c2.max() < c1.min() - BUFFER_CELLS or c2.min() > c1.max() + BUFFER_CELLS):
-        return False
-
-    # Integral image lets us query whether each fp2 cell falls inside any
-    # buffered fp1 rectangle in O(n_active_fp2).
-    padded = np.pad(fp1.astype(np.int16), BUFFER_CELLS, mode="constant")
-    integral = padded.cumsum(axis=0).cumsum(axis=1)
-    rr = r2 + BUFFER_CELLS
-    cc = c2 + BUFFER_CELLS
-    rlo = rr - BUFFER_CELLS
-    rhi = rr + BUFFER_CELLS
-    clo = cc - BUFFER_CELLS
-    chi = cc + BUFFER_CELLS
-
-    def rect_sum(a, r0, c0, r1, c1):
-        total = a[r1, c1]
-        total = total - np.where(r0 > 0, a[r0 - 1, c1], 0)
-        total = total - np.where(c0 > 0, a[r1, c0 - 1], 0)
-        total = total + np.where((r0 > 0) & (c0 > 0), a[r0 - 1, c0 - 1], 0)
-        return total
-
-    return bool(np.any(rect_sum(integral, rlo, clo, rhi, chi) > 0))
-
-def footprint_centroid(fp: np.ndarray, peak: np.ndarray | None = None) -> tuple[float, float]:
-    """Return an intensity-weighted centroid for an active footprint."""
-    rows, cols = np.where(fp)
-    if len(rows) == 0:
+def footprint_centroid_sparse(
+    rows: np.ndarray,
+    cols: np.ndarray,
+    vals: np.ndarray | None = None,
+) -> tuple[float, float]:
+    """Return an intensity-weighted centroid for sparse active cells."""
+    if rows.size == 0:
         return np.nan, np.nan
     lats = LAT_MAX - (rows + 0.5) * DX
     lons = LON_MIN + (cols + 0.5) * DX
-    if peak is not None:
-        w = peak[rows, cols].astype(float)
+    if vals is not None and vals.size:
+        w = vals.astype(float)
         if np.isfinite(w).all() and w.sum() > 0:
             return float(np.average(lats, weights=w)), float(np.average(lons, weights=w))
     return float(lats.mean()), float(lons.mean())
 
-def peak_intensity(peak: np.ndarray, fp: np.ndarray) -> float:
-    """Maximum hail intensity inside a footprint."""
-    vals = peak[fp]
-    return float(vals.max()) if vals.size else 0.0
-
-def physically_coherent_merge(dates, footprints, peaks, prev_idx: int, curr_idx: int) -> tuple[bool, float, float]:
+def physically_coherent_merge(
+    dates,
+    daily_cells: list,
+    prev_idx: int,
+    curr_idx: int,
+) -> tuple[bool, float, float]:
     """v2.1 merge sanity checks: centroid speed and peak-intensity jump."""
     gap_days = max(1, (dates[curr_idx] - dates[prev_idx]).days)
-    c1 = footprint_centroid(footprints[prev_idx], peaks[prev_idx])
-    c2 = footprint_centroid(footprints[curr_idx], peaks[curr_idx])
+    prev = daily_cells[prev_idx]
+    curr = daily_cells[curr_idx]
+    c1 = footprint_centroid_sparse(prev["rows"], prev["cols"], prev["vals"])
+    c2 = footprint_centroid_sparse(curr["rows"], curr["cols"], curr["vals"])
     speed = np.inf if not np.all(np.isfinite(c1 + c2)) else haversine_km(c1[0], c1[1], c2[0], c2[1]) / gap_days
-    p1 = max(peak_intensity(peaks[prev_idx], footprints[prev_idx]), 1e-6)
-    p2 = max(peak_intensity(peaks[curr_idx], footprints[curr_idx]), 1e-6)
+    p1 = max(float(prev["vals"].max()) if prev["vals"].size else 0.0, 1e-6)
+    p2 = max(float(curr["vals"].max()) if curr["vals"].size else 0.0, 1e-6)
     ratio = max(p1, p2) / min(p1, p2)
     ok = (speed <= MAX_CENTROID_KM_DAY) and (ratio <= MAX_INTENSITY_RATIO)
     return ok, float(speed), float(ratio)
 
-def group_events(dates: list, footprints: list, peaks: list | None = None) -> list:
+def merge_event_peak(grp: list, daily_cells: list) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Cell-wise max hail across grouped days, returned as sparse triplets."""
+    peak_map: dict[tuple[int, int], float] = {}
+    for idx in grp:
+        dc = daily_cells[idx]
+        for r, c, v in zip(dc["rows"], dc["cols"], dc["vals"]):
+            key = (int(r), int(c))
+            fv = float(v)
+            prev = peak_map.get(key)
+            if prev is None or fv > prev:
+                peak_map[key] = fv
+    if not peak_map:
+        return (
+            np.empty(0, dtype=np.int16),
+            np.empty(0, dtype=np.int16),
+            np.empty(0, dtype=np.float32),
+        )
+    keys = list(peak_map.keys())
+    rows = np.array([k[0] for k in keys], dtype=np.int16)
+    cols = np.array([k[1] for k in keys], dtype=np.int16)
+    vals = np.array([peak_map[k] for k in keys], dtype=np.float32)
+    keep = vals >= DAMAGE_THRESHOLD_MM
+    return rows[keep], cols[keep], vals[keep]
+
+def group_events(dates: list, daily_cells: list) -> list:
     """Group active days into events using synoptic rules."""
     if not dates:
         return []
@@ -197,10 +241,10 @@ def group_events(dates: list, footprints: list, peaks: list | None = None) -> li
         gap_days = (dates[k] - dates[k - 1]).days
 
         if gap_days <= MAX_TEMPORAL_GAP:
-            if footprints_overlap(footprints[k - 1], footprints[k]):
-                coherent = True
-                if peaks is not None:
-                    coherent, _, _ = physically_coherent_merge(dates, footprints, peaks, k - 1, k)
+            prev = daily_cells[k - 1]
+            curr = daily_cells[k]
+            if footprints_overlap_sparse(prev["rows"], prev["cols"], curr["rows"], curr["cols"]):
+                coherent, _, _ = physically_coherent_merge(dates, daily_cells, k - 1, k)
                 if coherent:
                     current.append(k)
                     continue
@@ -239,54 +283,38 @@ def group_events(dates: list, footprints: list, peaks: list | None = None) -> li
     log(f"  Final events (after {MAX_DURATION_DAYS}-day cap): {len(final_groups):,}  ({elapsed:.0f}s)")
     return final_groups
 
-def build_catalog(dates, footprints, peaks, groups):
+def build_catalog(dates, daily_cells, groups):
     """Build event catalog DataFrame and sparse peak arrays."""
     import pandas as pd
 
-    # Lat/lon grids for centroid computation
     lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
-    lons = LON_MIN + (np.arange(NCOLS) + 0.5) * DX
-    lat_grid, lon_grid = np.meshgrid(lats, lons, indexing="ij")
-
-    # Cell area approximation (varies by latitude)
     cell_area_km2 = (DX * 111.32) * (DX * 111.32 * np.cos(np.radians(lats)))
-    # Mean cell area for reporting
     mean_cell_area = float(cell_area_km2.mean())
 
     records = []
     sparse_events = {}  # event_id -> {rows, cols, vals}
 
     for event_id, grp in enumerate(groups):
-        # Compute event peak: max across all days
-        if len(grp) == 1:
-            peak = peaks[grp[0]].copy()
-        else:
-            peak = np.maximum.reduce([peaks[i] for i in grp])
-
-        # Active cells
-        active = peak >= DAMAGE_THRESHOLD_MM
-        n_cells = int(active.sum())
+        rows, cols, vals = merge_event_peak(grp, daily_cells)
+        n_cells = int(rows.size)
         if n_cells == 0:
             continue
 
-        # Sparse storage
-        rows, cols = np.where(active)
-        vals = peak[rows, cols]
         sparse_events[event_id] = {
-            "rows": rows.astype(np.int16),
-            "cols": cols.astype(np.int16),
-            "vals": vals.astype(np.float32),
+            "rows": rows,
+            "cols": cols,
+            "vals": vals,
         }
 
-        # Centroid (intensity-weighted)
-        weights = peak * active
-        total_w = float(weights.sum())
+        cell_lats = LAT_MAX - (rows + 0.5) * DX
+        cell_lons = LON_MIN + (cols + 0.5) * DX
+        total_w = float(vals.sum())
         if total_w > 0:
-            centroid_lat = float((lat_grid * weights).sum() / total_w)
-            centroid_lon = float((lon_grid * weights).sum() / total_w)
+            centroid_lat = float((cell_lats * vals).sum() / total_w)
+            centroid_lon = float((cell_lons * vals).sum() / total_w)
         else:
-            centroid_lat = float(lats[rows].mean())
-            centroid_lon = float(lons[cols].mean())
+            centroid_lat = float(cell_lats.mean())
+            centroid_lon = float(cell_lons.mean())
 
         start = dates[grp[0]]
         end = dates[grp[-1]]
@@ -298,7 +326,7 @@ def build_catalog(dates, footprints, peaks, groups):
             speeds = []
             ratios = []
             for a, b in zip(grp[:-1], grp[1:]):
-                _, speed, ratio = physically_coherent_merge(dates, footprints, peaks, a, b)
+                _, speed, ratio = physically_coherent_merge(dates, daily_cells, a, b)
                 speeds.append(speed)
                 ratios.append(ratio)
             centroid_speed_km_day = float(np.nanmax(speeds)) if speeds else 0.0
@@ -429,7 +457,7 @@ def main():
 
     # Load data
     log("\n[1/3] Loading daily corrected MESH75 rasters")
-    dates, footprints, peaks = load_daily_data()
+    dates, daily_cells = load_daily_data()
 
     if not dates:
         log("  ERROR: No active hail days found. Check stage 05 outputs.")
@@ -437,11 +465,11 @@ def main():
 
     # Group events
     log("\n[2/3] Identifying events")
-    groups = group_events(dates, footprints, peaks)
+    groups = group_events(dates, daily_cells)
 
     # Build catalog
     log("\n[3/3] Building catalog and sparse peak arrays")
-    event_df, sparse_events = build_catalog(dates, footprints, peaks, groups)
+    event_df, sparse_events = build_catalog(dates, daily_cells, groups)
 
     save_outputs(event_df, sparse_events)
     print_summary(event_df)
