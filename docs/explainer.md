@@ -1,6 +1,6 @@
 # What This Model Does — Plain-Language Explainer
 
-**CONUS Hail Catastrophe Model v2.1**
+**CONUS Hail Catastrophe Model v2.2.1**
 
 ---
 
@@ -47,11 +47,11 @@ Radar hail estimates are not perfect. Some sources overestimate hail. Some may m
 
 ### Step 4 — Filter unlikely hail
 
-Some radar signals can look hail-like even if hail is unlikely to reach the ground. v2.1 supports probability-based filtering so questionable signals can be reduced instead of simply removed.
+Some radar signals can look hail-like even if hail is unlikely to reach the ground. The model applies a noise floor (5 mm) and, in subtropical winter, requires hail estimates of at least **29 mm** (about 1.1 inches) before counting a cell as active — a threshold supported by hail climatology research.
 
-### Step 5 — Identify hail events
+### Step 5 — Group storms into events
 
-The model groups hail days into storm events. v2.1 adds checks so unrelated storms are less likely to be merged into one event.
+The model identifies hail **events** using a **29 mm** skill threshold (not the 1-inch damage threshold used elsewhere). Nearby hail days that likely belong to the same storm system are grouped together, with checks so unrelated storms are less likely to be merged into one event.
 
 ### Step 6 — Fit rare-event statistics
 
@@ -84,6 +84,16 @@ v2.1 improves:
 - topographic correction;
 - validation and diagnostics;
 - tests and documentation.
+
+---
+
+## 4.1 What v2.2.1 Adds (2026)
+
+After analyzing per-cell hail-day frequencies across six literature thresholds, v2.2.1:
+
+- uses **29 mm** (not 1 inch) to define severe hail **events**;
+- keeps **1 inch (25.4 mm)** for damage-oriented products;
+- calibrates GridRad to MYRORSS using era-pooled quantile mapping when same-day overlap is unavailable.
 
 ---
 

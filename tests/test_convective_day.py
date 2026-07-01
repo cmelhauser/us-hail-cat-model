@@ -21,7 +21,7 @@ UTC = timezone.utc
 
 
 def test_model_version_and_convective_hour() -> None:
-    assert MODEL_VERSION == "2.2.0"
+    assert MODEL_VERSION == "2.2.1"
     assert CONVECTIVE_DAY_START_HOUR_UTC == 12
 
 

@@ -1,7 +1,7 @@
 # Hail Catastrophe Model — Executive Summary
 
-**Version:** 2.2.0 (model); active dev branch `v2.2.1`  
-**Status:** Convective-day daily MESH on `main`; full mesh re-ingest required after v2.1 calendar-UTC rasters  
+**Version:** 2.2.1 (model); **`2.2.0`** on `main` until v2.2.1 merge  
+**Status:** Full v2.2.1 production run complete (2026-06-30); Stages 01–15 validated  
 **Primary use:** CONUS hail hazard modeling, stochastic event simulation, validation, and model-risk diagnostics
 
 ---
@@ -30,6 +30,13 @@ The main goal of v2.1 is not to add complexity for its own sake. The goal is to 
 
 **v2.2.0** changes how a “daily” hail raster is defined: each `mesh_YYYYMMDD.tif` is the cell-wise maximum over **12 UTC → 12 UTC** (label = date at window start), not UTC calendar midnight. This reduces splitting afternoon convection across two UTC dates and is documented in `docs/methodology.md` §2.6 with literature support in `docs/literature_review.md` §3.6. v2.1 calendar-UTC production GeoTIFFs require full re-ingest from Stages 01, 02, and 04c.
 
+**v2.2.1** (2026-06) refines severe-hail identification after per-cell hail-day diagnostics:
+
+- **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for Stage 08 events and Stage 05 subtropical winter filter (Cintineo 2012; Wendt & Jirak 2021).
+- **`DAMAGE_THRESH_MM = 25.4 mm`** unchanged for damage-oriented products.
+- **Era-pooled GridRad quantile mapping** (MYRORSS 2005–2011 vs GridRad 2012–2019) replaces identity fallback; median ratio ~1.10.
+- **`scripts/diagnostics/hail_day_climatology.py`** benchmarks per-cell hail days at six literature thresholds.
+
 ---
 
 ## 3. Major v2.1 Improvements
@@ -44,7 +51,7 @@ v2.1 supports optional probabilistic hail-realness filtering. Hard thresholds re
 
 ### Event grouping
 
-Stage 08 keeps the v2.0 synoptic grouping logic but adds centroid-displacement and intensity-jump checks. These reduce the chance of merging unrelated convective systems into a single event.
+Stage 08 uses the **29 mm** severe-hail skill threshold for active cells (v2.2.1), with synoptic grouping logic, centroid-displacement and intensity-jump checks, and sparse storage.
 
 ### Extreme-value modeling
 
@@ -136,4 +143,4 @@ For underwriting or regulatory use, the model should be accompanied by:
 
 ## 8. Bottom Line
 
-v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. Radar ingest (MYRORSS, GridRad gap-fill, MRMS) is complete on convective-day v2.2.0 labels; hazard stages 05–15 await full production run. It is a strong transparent hazard-modeling framework, but not yet a complete production loss model.
+v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. The **v2.2.1** production hazard layer is complete on **9,797** convective days: **8,798** historical events at **29 mm** (~**303 yr⁻¹**), analytical and **50,000-year** stochastic return-period maps, and **15.17 million** synthetic catalog events. It is a strong transparent hazard-modeling framework, but not yet a complete production loss model (placeholder vulnerability curves only).

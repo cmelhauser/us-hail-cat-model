@@ -248,9 +248,15 @@ Re-run after ingest stages complete (or while Stage 04c is in progress) to compa
 .venv/bin/python scripts/diagnostics/hail_day_climatology.py
 ```
 
-Writes `data/analysis/hail_day_climatology/` (per-cell GeoTIFFs, threshold benchmark CSV, seasonal plots). Run after Stage 05 completes to compare against Cintineo et al. (2012) and Murillo et al. (2021) hail-day climatologies at literature MESH75 thresholds (25.4–63.25 mm).
+Writes `data/analysis/hail_day_climatology/` (per-cell GeoTIFFs, threshold benchmark CSV, seasonal plots). Run after Stage 05 completes to compare against Cintineo et al. (2012) and Murillo et al. (2021) hail-day climatologies at literature MESH75 thresholds (25.4–63.25 mm). **v2.2.1** adopted **29.0 mm** for Stage 08 event footprints based on this diagnostic.
 
 ## 6. Stage 05 Modes
+
+**v2.2.1 rerun:** Stage 05 skips days whose corrected GeoTIFF already exists. To apply era-pooled GridRad calibration and the 29 mm winter filter, delete the corrected archive first:
+
+```bash
+rm -rf data/historical/mesh_0.05deg_corrected/
+```
 
 Default:
 

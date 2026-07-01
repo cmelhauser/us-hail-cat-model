@@ -49,6 +49,8 @@ Usage
   python scripts/13_generate_stochastic_catalog.py --validate
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 import time
@@ -70,6 +72,11 @@ except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._io import write_geotiff
     from scripts._logging import get_logger
 
+# Keep ann_max in RAM only for small simulations; full 50k-yr runs use memmap.
+ANN_MAX_INMEM_BYTES = 512 * 1024 * 1024
+STOCH_RECORD_BATCH = 100_000
+RP_COMPUTE_CHUNK = 512
+
 EVENT_DIR = DATA_ROOT / "historical" / "events"
 MASK_DIR  = DATA_ROOT / "analysis" / "conus_mask"
 OUT_DIR   = DATA_ROOT / "stochastic"
@@ -84,6 +91,65 @@ SPATIAL_TRANSLATE  = True
 RP_YEARS = list(RP_YEARS)  # mutable copy for legacy call sites
 
 log = get_logger("13_generate_stochastic_catalog", LOG_ROOT).info
+
+
+class StochasticEventWriter:
+    """Append simulated event metadata to Parquet without holding all rows in RAM."""
+
+    def __init__(self, path: Path, batch_size: int = STOCH_RECORD_BATCH):
+        self.path = path
+        self.batch_size = batch_size
+        self._buffer: list[dict] = []
+        self._writer = None
+        self.total = 0
+
+    def append(self, record: dict) -> None:
+        self._buffer.append(record)
+        if len(self._buffer) >= self.batch_size:
+            self.flush()
+
+    def flush(self) -> None:
+        if not self._buffer:
+            return
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        table = pa.Table.from_pandas(pd.DataFrame(self._buffer), preserve_index=False)
+        if self._writer is None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._writer = pq.ParquetWriter(self.path, table.schema)
+        self._writer.write_table(table)
+        self.total += len(self._buffer)
+        self._buffer.clear()
+
+    def close(self) -> None:
+        self.flush()
+        if self._writer is not None:
+            self._writer.close()
+
+
+def _open_ann_max_store(n_years: int, n_active: int, work_dir: Path):
+    """Allocate annual-max storage in RAM or on a memmap file when large."""
+    nbytes = n_years * n_active * np.dtype(np.float32).itemsize
+    if nbytes <= ANN_MAX_INMEM_BYTES:
+        return np.zeros((n_years, n_active), dtype=np.float32), None
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    path = work_dir / "_ann_max_simulation.mmap"
+    if path.exists():
+        path.unlink()
+    log(
+        f"  ann_max store: memmap {n_years:,} × {n_active:,} "
+        f"({nbytes / 1e9:.1f} GB on disk; one year row in RAM)"
+    )
+    mmap = np.memmap(path, dtype=np.float32, mode="w+", shape=(n_years, n_active))
+    return mmap, path
+
+
+def _should_stream_events(n_years: int, lam: float, catalog_path: Path | None) -> bool:
+    if catalog_path is None:
+        return False
+    return n_years >= 1000 or lam * n_years > 50_000
 
 def load_historical_events():
     """Load event catalog and sparse peak arrays without dense reconstruction."""
@@ -214,7 +280,7 @@ def update_sparse_annual_max(target_row, active_lookup, rows, cols, vals):
     }
     update_sparse_max(target_row, rows, cols, vals, tuple_lookup)
 
-def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years):
+def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years, catalog_path=None, work_dir=None):
     """Run sparse-safe stochastic simulation."""
     rng = np.random.default_rng(RNG_SEED)
     n_hist = len(event_df)
@@ -231,18 +297,25 @@ def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years):
     active_rows, active_cols, active_lookup = build_active_index(sparse_events)
     n_active = len(active_rows)
     log(f"  Active cells: {n_active:,}")
-    ann_max = np.zeros((n_years, n_active), dtype=np.float32)
+    work_dir = Path(work_dir or OUT_DIR)
+    catalog_path = Path(catalog_path) if catalog_path is not None else None
+    ann_max, ann_max_mmap_path = _open_ann_max_store(n_years, n_active, work_dir / "_work")
+    year_row = np.zeros(n_active, dtype=np.float32)
 
     ann_occ_peak = np.zeros(n_years, dtype=np.float32)
     ann_occ_cells = np.zeros(n_years, dtype=np.int32)
     ann_agg_cells = np.zeros(n_years, dtype=np.int32)
     ann_n_events = np.zeros(n_years, dtype=np.int32)
-    stoch_records = []
+    stream_events = _should_stream_events(n_years, lam, catalog_path)
+    event_writer = StochasticEventWriter(catalog_path) if stream_events else None
+    stoch_records: list[dict] = []
     t0 = time.time()
 
     for yr in range(n_years):
+        year_row.fill(0.0)
         n_ev = int(rng.poisson(lam))
         if n_ev == 0:
+            ann_max[yr, :] = year_row
             continue
         ann_n_events[yr] = n_ev
         ev_doys = np.searchsorted(doy_cdf, rng.random(n_ev)) + 1
@@ -273,21 +346,26 @@ def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years):
                 rows_new, cols_new, dr, dc = rows, cols, 0, 0
 
             rows_new, cols_new, vals_new, perturbation_type = sparse_shape_perturb(rows_new, cols_new, vals_new, rng)
-            n_cells, peak_val = update_sparse_max(ann_max[yr], rows_new, cols_new, vals_new, active_lookup)
+            n_cells, peak_val = update_sparse_max(year_row, rows_new, cols_new, vals_new, active_lookup)
             ann_agg_cells[yr] += n_cells
             if peak_val > year_max_peak:
                 year_max_peak = peak_val
                 year_max_cells = n_cells
 
-            stoch_records.append({
+            record = {
                 "sim_year": yr, "event_idx": ei, "template_id": int(event_ids[template_idx]),
                 "doy": int(doy), "scale_factor": round(scale, 4),
                 "peak_hail_mm": round(peak_val, 1), "n_cells": n_cells,
                 "drow": int(dr), "dcol": int(dc),
                 "perturbation_type": perturbation_type,
                 "template_peak_percentile": round(pct, 4),
-            })
+            }
+            if event_writer is not None:
+                event_writer.append(record)
+            else:
+                stoch_records.append(record)
 
+        ann_max[yr, :] = year_row
         ann_occ_peak[yr] = year_max_peak
         ann_occ_cells[yr] = year_max_cells
         if yr > 0 and yr % 5000 == 0:
@@ -298,11 +376,17 @@ def simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years):
 
     elapsed = time.time() - t0
     log(f"  Simulation complete: {elapsed/60:.1f} min")
-    log(f"  Total stochastic events: {len(stoch_records):,}")
+    if event_writer is not None:
+        event_writer.close()
+        log(f"  Total stochastic events: {event_writer.total:,}")
+        stoch_df = pd.DataFrame()
+    else:
+        log(f"  Total stochastic events: {len(stoch_records):,}")
+        stoch_df = pd.DataFrame(stoch_records)
     return (ann_max, active_rows, active_cols, ann_occ_peak, ann_occ_cells,
-            ann_agg_cells, ann_n_events, __import__("pandas").DataFrame(stoch_records))
+            ann_agg_cells, ann_n_events, stoch_df, ann_max_mmap_path)
 
-def compute_empirical_rps(ann_max, active_rows, active_cols, n_years):
+def compute_empirical_rps(ann_max, active_rows, active_cols, n_years, chunk_size=RP_COMPUTE_CHUNK):
     """Compute empirical return periods from annual max at each active cell."""
     log(f"  Computing empirical return periods ...")
 
@@ -311,14 +395,16 @@ def compute_empirical_rps(ann_max, active_rows, active_cols, n_years):
         rp_maps[rp] = np.zeros((NROWS, NCOLS), dtype=np.float32)
 
     n_active = len(active_rows)
-    for ci in range(n_active):
-        series = ann_max[:, ci]
-        sorted_desc = np.sort(series)[::-1]
-
-        for rp in RP_YEARS:
-            rank = max(1, int(n_years / rp))
-            if rank <= len(sorted_desc):
-                rp_maps[rp][active_rows[ci], active_cols[ci]] = sorted_desc[rank - 1]
+    ranks = {rp: max(1, int(n_years / rp)) for rp in RP_YEARS}
+    for ci_start in range(0, n_active, chunk_size):
+        ci_end = min(ci_start + chunk_size, n_active)
+        block = np.asarray(ann_max[:, ci_start:ci_end])
+        for j, ci in enumerate(range(ci_start, ci_end)):
+            sorted_desc = np.sort(block[:, j])[::-1]
+            for rp in RP_YEARS:
+                rank = ranks[rp]
+                if rank <= len(sorted_desc):
+                    rp_maps[rp][active_rows[ci], active_cols[ci]] = sorted_desc[rank - 1]
 
     return rp_maps
 
@@ -418,46 +504,69 @@ def main():
 
     # Simulate
     log(f"\n[4/5] Simulating {n_years:,} years (σ={sigma:.3f})")
-    (ann_max, active_rows, active_cols,
-     ann_occ_peak, ann_occ_cells, ann_agg_cells, ann_n_events,
-     stoch_df) = simulate_catalog(event_df, sparse_events, sigma, doy_cdf, n_years)
+    catalog_path = CAT_DIR / "stochastic_event_summary.parquet"
+    if catalog_path.exists():
+        catalog_path.unlink()
+    ann_max_mmap_path = None
+    ann_n_events = ann_occ_peak = None
+    try:
+        (ann_max, active_rows, active_cols,
+         ann_occ_peak, ann_occ_cells, ann_agg_cells, ann_n_events,
+         stoch_df, ann_max_mmap_path) = simulate_catalog(
+            event_df, sparse_events, sigma, doy_cdf, n_years,
+            catalog_path=catalog_path, work_dir=OUT_DIR,
+        )
 
-    # Outputs
-    log("\n[5/5] Computing return periods and saving outputs")
+        # Outputs
+        log("\n[5/5] Computing return periods and saving outputs")
 
-    # Empirical RP maps
-    rp_maps = compute_empirical_rps(ann_max, active_rows, active_cols, n_years)
-    conus_mask = load_conus_mask()
-    MAP_DIR.mkdir(parents=True, exist_ok=True)
-    for rp, data in rp_maps.items():
-        if conus_mask is not None:
-            data = np.where(conus_mask, data, 0.0).astype(np.float32)
-        path = MAP_DIR / f"rp_{rp:05d}yr_stochastic.tif"
-        write_geotiff(data, path)
-        peak = float(data.max())
-        log(f"  {path.name}: peak = {peak:.1f} mm ({peak/25.4:.2f} in)")
+        # Empirical RP maps
+        rp_maps = compute_empirical_rps(ann_max, active_rows, active_cols, n_years)
+        conus_mask = load_conus_mask()
+        MAP_DIR.mkdir(parents=True, exist_ok=True)
+        for rp, data in rp_maps.items():
+            if conus_mask is not None:
+                data = np.where(conus_mask, data, 0.0).astype(np.float32)
+            path = MAP_DIR / f"rp_{rp:05d}yr_stochastic.tif"
+            write_geotiff(data, path)
+            peak = float(data.max())
+            log(f"  {path.name}: peak = {peak:.1f} mm ({peak/25.4:.2f} in)")
 
-    # PET
-    PET_DIR.mkdir(parents=True, exist_ok=True)
-    occ_pet, agg_pet = build_pet(ann_occ_peak, ann_occ_cells,
-                                  ann_agg_cells, ann_n_events, n_years)
-    occ_pet.to_csv(PET_DIR / "pet_occurrence.csv", index=False)
-    agg_pet.to_csv(PET_DIR / "pet_aggregate.csv", index=False)
-    log(f"  PET tables written")
+        # PET
+        PET_DIR.mkdir(parents=True, exist_ok=True)
+        occ_pet, agg_pet = build_pet(ann_occ_peak, ann_occ_cells,
+                                      ann_agg_cells, ann_n_events, n_years)
+        occ_pet.to_csv(PET_DIR / "pet_occurrence.csv", index=False)
+        agg_pet.to_csv(PET_DIR / "pet_aggregate.csv", index=False)
+        log(f"  PET tables written")
 
-    # Event summary
-    CAT_DIR.mkdir(parents=True, exist_ok=True)
-    stoch_df.to_parquet(CAT_DIR / "stochastic_event_summary.parquet", index=False)
-    log(f"  Stochastic events: {len(stoch_df):,} saved to Parquet")
+        # Event summary
+        CAT_DIR.mkdir(parents=True, exist_ok=True)
+        if not stoch_df.empty:
+            stoch_df.to_parquet(catalog_path, index=False)
+            log(f"  Stochastic events: {len(stoch_df):,} saved to Parquet")
+        elif catalog_path.exists():
+            log(f"  Stochastic events saved to Parquet (streamed)")
+        else:
+            log("  WARN: no stochastic event summary written")
 
-    # Summary
-    log(f"\n  ── Stochastic Summary ──")
-    log(f"  Years: {n_years:,}")
-    log(f"  σ_perturb: {sigma:.3f}")
-    log(f"  Mean events/yr: {ann_n_events.mean():.1f}")
-    rank100 = max(1, min(len(ann_occ_peak), n_years // 100 if n_years >= 100 else 1))
-    log(f"  100-yr OEP peak: {float(np.sort(ann_occ_peak)[::-1][rank100-1]):.1f} mm")
-    log(f"  Historical vs stochastic annual max correlation check recommended")
+        # Summary
+        log(f"\n  ── Stochastic Summary ──")
+        log(f"  Years: {n_years:,}")
+        log(f"  σ_perturb: {sigma:.3f}")
+        log(f"  Mean events/yr: {ann_n_events.mean():.1f}")
+        rank100 = max(1, min(len(ann_occ_peak), n_years // 100 if n_years >= 100 else 1))
+        log(f"  100-yr OEP peak: {float(np.sort(ann_occ_peak)[::-1][rank100-1]):.1f} mm")
+        log(f"  Historical vs stochastic annual max correlation check recommended")
+    finally:
+        if ann_max_mmap_path is not None:
+            try:
+                del ann_max
+            except NameError:
+                pass
+            if ann_max_mmap_path.exists():
+                ann_max_mmap_path.unlink()
+                log(f"  Removed temporary ann_max memmap")
 
     log(f"\n{'='*60}")
     log(f"  Complete")

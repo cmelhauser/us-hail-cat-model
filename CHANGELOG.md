@@ -13,6 +13,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **`scripts/diagnostics/hail_day_climatology.py`:** per-cell hail-days-per-year climatology
   at six literature MESH75 thresholds; tracked outputs under `data/analysis/hail_day_climatology/`.
+- **Stage 13 memory-safe full catalog:** disk-backed `np.memmap` for annual maxima, streamed
+  Parquet event summaries (`StochasticEventWriter`), chunked empirical RP computation; temp
+  memmap removed after successful run.
 
 ### Changed
 
@@ -21,6 +24,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (25.4 mm) unchanged for damage/vulnerability stages.
 - **Stage 05:** era-pooled MYRORSS (2005–2011) vs GridRad (2012–2019) quantile mapping when
   same-day overlap is insufficient (replaces identity fallback for gap-era calibration).
+
+### Production
+
+- **Full v2.2.1 hazard run complete (2026-06-30):** Stages 05–15 on 9,797 convective days;
+  8,798 events at 29 mm; 50,000-yr stochastic catalog (15.17M events); all output validation passed.
 
 ## [2.2.1] — 2026-06-27
 

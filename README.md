@@ -1,6 +1,6 @@
-# CONUS Hail Catastrophe Model — v2.2
+# CONUS Hail Catastrophe Model — v2.2.1
 
-[![Version](https://img.shields.io/badge/version-v2.2-blue)]()
+[![Version](https://img.shields.io/badge/version-v2.2.1-blue)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![CI](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml/badge.svg)](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml)
@@ -26,7 +26,15 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 
 ## Overview
 
-Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days** (label = date at window start). The 15-stage pipeline and 0.05° grid are unchanged from v2.1 aside from this temporal definition; v2.1 calendar-UTC production GeoTIFFs require full re-ingest. See `docs/methodology.md` §2.6.
+Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**. **v2.2.1** adds literature-aligned severe-hail thresholds and GridRad calibration (see `docs/methodology.md` §2.7).
+
+**Preferred thresholds (v2.2.1):**
+
+| Constant | Value | Use |
+|----------|------:|-----|
+| `EVENT_ACTIVE_THRESH_MM` | **29.0 mm** | Stage 08 event footprints; Stage 05 subtropical winter filter |
+| `DAMAGE_THRESH_MM` | 25.4 mm | Damage onset, vulnerability, occurrence products |
+| GridRad calibration | era-pooled QM | MYRORSS 2005–2011 vs GridRad 2012–2019 (median ratio ~1.10) |
 
 The model produces:
 
@@ -40,6 +48,20 @@ The model produces:
 
 **Scope.** Hail hazard only. The vulnerability module is a placeholder and is not claims-calibrated. No exposure integration or financial loss output is included in this release.
 
+### Production run (v2.2.1, completed 2026-06-30)
+
+| Metric | Value |
+|--------|------:|
+| Convective-day archive | 9,797 days (1998–2026) |
+| Corrected MESH75 (Stage 05) | 9,797 days; era-pooled GridRad QM |
+| Historical events (29 mm) | 8,798 (~303 yr⁻¹) |
+| SPC validation pairs | 173,766 |
+| Stochastic simulation | 50,000 yr; 15.17M synthetic events |
+| Stochastic 100-yr CONUS peak | 157.8 mm (6.21 in) |
+| Stochastic 50,000-yr CONUS peak | 300.0 mm (11.81 in) |
+
+Full pipeline validated with `run_pipeline.py --from 05 --skip-ml` and Stage 13 memmap-backed catalog generation. See `docs/RUN_NOTES.md` and `docs/pnas_article_ai_hail_model.md` for details.
+
 ---
 
 ## Architecture
@@ -47,10 +69,10 @@ The model produces:
 The model is organized into four logical phases:
 
 **Phase 1 — Ingestion and Calibration (Stages 01–05)**
-Raw MESH data from three radar sources are ingested, time-aligned, and cross-calibrated to a single consistent record. MYRORSS provides the 1998–2011 historical baseline; GridRad/GridRad-Severe fills **2012-01-01 through 2020-10-13** (Stage **04c**); operational MRMS covers **2020-10-14** onward. Stage **04c** reads sparse **`Reflectivity`** (dBZ), not the **`Nradecho`** echo mask. Stage 05 applies quantile-mapping bias correction between sources, optionally enhanced by a conditional ML model, and filters cells using ERA5 thermodynamic thresholds (0°C / −20°C isotherms).
+Raw MESH data from three radar sources are ingested, time-aligned, and cross-calibrated to a single consistent record. MYRORSS provides the 1998–2011 historical baseline; GridRad/GridRad-Severe fills **2012-01-01 through 2020-10-13** (Stage **04c**); operational MRMS covers **2020-10-14** onward. Stage **04c** reads sparse **`Reflectivity`** (dBZ), not the **`Nradecho`** echo mask. Stage 05 applies Witt→MESH75 recalibration, **era-pooled GridRad quantile mapping** (when same-day overlap is absent), and environmental filtering (5 mm noise floor; subtropical winter ≥ **29 mm** at lat &lt; 30°N).
 
 **Phase 2 — Event Catalog (Stages 06–08)**
-Stage 06 cross-validates the corrected MESH record against SPC storm reports (validation use only — SPC is never a hazard input). Stage 07 computes a long-term spatial climatology. Stage 08 groups contiguous hail cells into discrete events using spatial overlap, temporal continuity, centroid displacement (≤ 150 km/day), and intensity jump (≤ 3×) constraints. All events are stored as sparse arrays (`rows`, `cols`, `vals`) — no dense grids are constructed.
+Stage 06 cross-validates the corrected MESH record against SPC storm reports (validation only). Stage 07 computes long-term DOY climatology. Stage 08 groups contiguous hail cells into events at the **29 mm** skill threshold (`EVENT_ACTIVE_THRESH_MM`), with spatial overlap, temporal continuity, centroid displacement (≤ 150 km/day), and intensity jump (≤ 3×) constraints. Sparse `rows/cols/vals` storage only.
 
 **Phase 3 — Extreme Value Fitting (Stages 09–11)**
 Stage 09 fits a Generalized Pareto Distribution (GPD) to the tail of each grid cell's MESH distribution using L-moments, with K-means regional pooling (k = 6) and automated threshold diagnostics. Stage 10 applies spatial smoothing (150 km radius, 75 km exponential decay) to stabilize tail estimates. Stage 11 maps exceedance probabilities at eight MESH thresholds.

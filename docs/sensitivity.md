@@ -54,7 +54,8 @@ The goal is not to re-optimize every parameter on the first run. It is to verify
 
 | Field | Value |
 |-------|-------|
-| Default | 25.4 mm (Stage 08 damage threshold) |
+| Default | **29.0 mm** (`EVENT_ACTIVE_THRESH_MM`; Stage 08 event threshold) |
+| Damage onset | 25.4 mm (`DAMAGE_THRESH_MM`; vulnerability, occurrence) |
 | Diagnostic | `scripts/diagnostics/hail_day_climatology.py` |
 | Justification | Cintineo et al. (2012) and Murillo et al. (2021) benchmark per-cell hail days at skill thresholds (29–63 mm); conventional 25.4 mm over-diagnoses vs SPC report days, especially off-season. |
 | Sweep | {25.4, 29.0, 35.56, 41.91, 50.8, 63.25} mm |

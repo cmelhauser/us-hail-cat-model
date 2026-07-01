@@ -180,7 +180,7 @@ Historical hail event catalog.
 | `start_date` | first event date |
 | `end_date` | last event date |
 | `duration_days` | event duration |
-| `n_active_cells` | number of cells ≥ 25.4 mm |
+| `n_active_cells` | number of cells ≥ `EVENT_ACTIVE_THRESH_MM` (29.0 mm in v2.2.1) |
 | `footprint_area_km2` | approximate event footprint area |
 | `peak_hail_mm` | maximum event hail size |
 | `peak_hail_in` | maximum hail size in inches |

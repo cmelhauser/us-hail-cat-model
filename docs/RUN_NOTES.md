@@ -3,7 +3,7 @@
 ## Run Context
 
 - Date started: 2026-05-01 14:47 EDT
-- Active branch: **`v2.2.1`** (development on `origin` only). Model **2.2.0** on `main`.
+- Active branch: **`v2.2.1`** (development on `origin` only). Model **2.2.1** on `v2.2.1`; **2.2.0** on `main`.
 - Prior production mesh archived under `data/historical/mesh_0.05deg_archive_calendar_utc_00z/` (gitignored)
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active
@@ -20,22 +20,28 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-06-27**:
+Snapshot taken **2026-06-30** — **v2.2.1 production run complete**:
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 01 (MYRORSS) | ✅ Complete | 5,023 convective-day rasters through 2011-12-31. Manifest: 4,989 `ok`, 20 `missing_source`, 11 `ok_with_read_errors`, 3 `no_hail_pixels`. QA cap 300.0 mm. |
-| Stage 02 (MRMS) | ✅ Complete | Finished **2026-06-08 06:19 EDT** (86.4 h). 2,060 rasters **2020-10-14 → 2026-06-04**. Manifest: 2,059 `ok`, 1 `ok_with_read_errors`. Output validation passed. Peak MESH 299.9 mm. |
-| Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. Rerun only for a fresh pull. |
-| Stage 04a (ERA5) | ✅ Complete | `era5_monthly_isotherms_conus.nc` and `era5_surface_geopotential_conus.nc` on disk; validation passed 2026-05-13. |
-| Stage 04c (GridRad) | ✅ Primary ingest complete | **2,501** gap-era (2012–2020-10-13) convective-day TIFFs on disk (**2012-01-01 → 2020-10-10**). Manifest: 3,209 rows — 2,452 `ok`, 44 `ok_with_read_errors`, 712 `missing_source`, 1 `error`. **2012–2017** essentially complete. Optional **`--missing-only`** backfill may still be running (708 days queued 2026-06-27). |
-| Stages 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 smoke files only. Not production. |
+| Stage 01 (MYRORSS) | ✅ Complete | 5,023 convective-day rasters through 2011-12-31. |
+| Stage 02 (MRMS) | ✅ Complete | 2,060 rasters **2020-10-14 → 2026-06-04**. |
+| Stage 03 (SPC) | ✅ Complete | Validation only. |
+| Stage 04a (ERA5) | ✅ Complete | Isotherms on disk. |
+| Stage 04c (GridRad) | ✅ Complete | **2,714** gap-era TIFFs in corrected archive; manifest 3,209 rows. |
+| Stage 05 | ✅ Complete | **9,797** corrected days (0 skipped); era-pooled QM; **3.6 min** (2026-06-29). |
+| Stage 06 | ✅ Complete | **173,766** SPC pairs; validation passed. |
+| Stage 07 | ✅ Complete | 366 DOY climatology files. |
+| Stage 08 | ✅ Complete | **8,798** events at **29 mm** (~303 yr⁻¹); validation passed. |
+| Stages 09–12 | ✅ Complete | Analytical/smoothed RP maps through 50,000 yr. |
+| Stage 13 | ✅ Complete | **50,000** yr; **15.17M** synthetic events; **~5.4 h** (memmap fix 2026-06-30). |
+| Stages 14–15 | ✅ Complete | Placeholder vulnerability + figures; validation passed. |
 
-**Mesh archive totals:** **9,584** `mesh_*.tif` under `data/historical/mesh_0.05deg/` (5,023 MYRORSS + **2,501** GridRad + 2,060 MRMS).
+**v2.2.1 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled GridRad QM; see `docs/methodology.md` §2.7.
 
-**Disk available:** ~173 GiB (2026-06-27).
+**Mesh archive totals:** **9,797** `mesh_*.tif` under `data/historical/mesh_0.05deg/` (5,023 + 2,714 + 2,060).
 
-**Active process (if running):** `screen` session `hail_stage04c` — `--missing-only` backfill with `--workers 4`. Check with `screen -ls` and `tail -f logs/04c_fill_gridrad_gap.run.log`.
+**Logs:** `logs/pipeline_from05_v221_rerun.run.log`, `logs/pipeline_from13_rerun.run.log`
 
 ### Stage 04c commands
 
@@ -110,11 +116,11 @@ interrupted run.
 
 ## Recommended Full Run Shape
 
-Stages 01, 02, 03, 04a, and **04c primary ingest** are complete. After any **`--missing-only`** backfill finishes, continue:
+Stages 01–04c and the full **v2.2.1** hazard pipeline (**05–15**) are complete. Optional:
 
 ```bash
-.venv/bin/python run_pipeline.py --only 05 --skip-ml
-.venv/bin/python run_pipeline.py --from 06 --skip-ml
+.venv/bin/python run_pipeline.py --validate
+.venv/bin/python scripts/diagnostics/hail_day_climatology.py
 ```
 
 **`run_pipeline.py` GridRad:** stage **04c** is run with **`--with-04b-download --workers 4`**

@@ -391,16 +391,22 @@ For GridRad:
 if conditional calibration artifact exists and --skip-ml is false:
     apply conditional calibration
 else:
-    apply deterministic quantile mapping
+    apply era-pooled quantile mapping (MYRORSS 2005–2011 vs GridRad 2012–2019)
+    when same-day overlap is unavailable; median ratio ~1.10 above 10 mm
 ```
 
-For all sources:
+Deterministic environmental filters (v2.2.1):
 
 ```text
-if hail-filter artifact exists and --skip-ml is false:
-    apply probabilistic filter
-else:
-    apply deterministic environmental filters
+noise floor: 5 mm
+subtropical winter (Nov–Feb, lat < 30°N): require >= EVENT_ACTIVE_THRESH_MM (29.0 mm)
+```
+
+Optional ML path (when artifacts exist and `--skip-ml` is false):
+
+```text
+if hail-filter artifact exists:
+    apply probabilistic filter instead of deterministic winter threshold
 ```
 
 ### 9.2 Optional artifacts
@@ -505,6 +511,8 @@ event_peaks.npz
 
 ### 12.2 Event grouping constraints
 
+Active cells use **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.1. `DAMAGE_THRESH_MM` (25.4 mm) applies to vulnerability and occurrence stages only.
+
 ```text
 temporal gap <= 2 days
 buffered footprint overlap required
@@ -540,7 +548,7 @@ Dense event cubes are prohibited as production event storage. They are memory-in
 **Script:** `scripts/diagnostics/hail_day_climatology.py` (optional, not a pipeline stage)  
 **Output:** `data/analysis/hail_day_climatology/`
 
-Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al. (2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm.
+Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al. (2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm. **v2.2.1 adopted 29.0 mm** for Stage 08 based on this diagnostic (GP max **3.7** vs **5.5** days/yr at 25.4 mm).
 
 Review:
 
@@ -767,7 +775,20 @@ rows, cols, vals
 8. Update compact annual maxima.
 9. Write empirical return-period maps and PET tables.
 
-### 18.4 Validation
+### 18.4 Memory management (v2.2.1)
+
+Full 50,000-year catalogs require annual maxima over all CONUS cells (~562k active-mask cells × 50k years). A dense in-RAM `ann_max` array exceeds **100 GiB** and caused SIGKILL (exit -9) on long runs.
+
+Stage 13 therefore:
+
+1. Allocates `ann_max` as a **disk-backed `np.memmap`** when the array exceeds 512 MiB (~112 GiB for production).
+2. Streams synthetic event metadata through **`StochasticEventWriter`** (batched Parquet, 100k rows per flush) instead of accumulating millions of dicts in RAM.
+3. Computes empirical return periods in **column chunks** (512 columns) to bound peak memory.
+4. **Deletes the temporary memmap** in a `finally` block after RP GeoTIFFs are written.
+
+Resume after failure: `python run_pipeline.py --from 13 --skip-ml`. Ensure **~120 GiB free disk** during the run for the temp memmap.
+
+### 18.5 Validation
 
 - Smoke test with `--n-years 1000`.
 - Full catalog run completes without memory blowup.

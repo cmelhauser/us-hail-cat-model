@@ -1,6 +1,6 @@
 # Methodology
 
-**CONUS Hail Catastrophe Model v2.2**
+**CONUS Hail Catastrophe Model v2.2.1**
 
 ---
 
@@ -10,7 +10,7 @@ The CONUS Hail Catastrophe Model v2.2 is a radar-first probabilistic hail hazard
 
 The central methodological choice is to use radar-derived Maximum Expected Size of Hail (MESH) fields as the primary hazard observation, while reserving SPC hail reports for validation and calibration support. That choice reflects the well-documented non-meteorological bias in human hail reports, including population density, road density, observation practices, report-size rounding, and historical changes in severe-hail reporting thresholds (Allen and Tippett 2015; Blair et al. 2011, 2017). Radar products have their own uncertainties, but they provide spatially continuous observations over rural and urban domains and are therefore better suited to gridded hazard estimation.
 
-v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the same 15-stage architecture.
+v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. **v2.2.1** (§2.7) adopts **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for event footprints and era-pooled GridRad calibration after per-cell hail-day diagnostics. v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the same 15-stage architecture.
 
 ---
 
@@ -46,7 +46,9 @@ This glossary defines symbols and abbreviations used throughout the document. Va
 | Symbol | Definition |
 |--------|-----------|
 | `p_occ(i,j)` | Annual exceedance probability at cell (i,j): fraction of years with nonzero severe hail |
-| `active(i,j,d)` | Indicator: 1 if `MESH75_corrected(i,j,d) ≥ 25.4 mm`, else 0 |
+| `active(i,j,d)` | Indicator: 1 if `MESH75_corrected(i,j,d) ≥ EVENT_ACTIVE_THRESH_MM` (29.0 mm in v2.2.1), else 0 |
+| `DAMAGE_THRESH_MM` | 25.4 mm — residential damage onset; used for vulnerability and occurrence products |
+| `EVENT_ACTIVE_THRESH_MM` | 29.0 mm — Cintineo/Wendt severe-hail skill threshold; Stage 08 events and Stage 05 winter filter |
 | `climo_doy(i,j)` | Mean MESH75 for a given day-of-year at cell (i,j), averaged across all years |
 | `λ` | Mean annual event count (Poisson rate for stochastic simulation) |
 
@@ -187,6 +189,24 @@ Examples: `2016-07-21 08:00 UTC` belongs to label `2016-07-20`; `2016-07-21 12:0
 Stages 01, 02, 04b, and 04c list timesteps from the two UTC **calendar** archive dates that can overlap a convective window, then filter by parsed filename timestamps. GridRad downloads are staged under `by_convective_day/YYYYMMDD/` so adjacent convective days do not delete shared calendar folders. GeoTIFFs record the window in GDAL tag `CONVECTIVE_WINDOW_UTC`.
 
 Prior v2.1 production rasters used calendar UTC days (00:00–00:00). Those files are not comparable to v2.2 without a full re-ingest from Stage 01 / 02 / 04c. Literature and citations supporting this choice are in `docs/literature_review.md` §3.6.
+
+### 2.7 Preferred thresholds and calibration (v2.2.1)
+
+v2.2.1 separates **damage onset** from **severe-hail event identification** after hail-day climatology diagnostics (`scripts/diagnostics/hail_day_climatology.py`) showed that a single 25.4 mm threshold over-diagnoses CONUS-wide activity relative to Cintineo et al. (2012), Murillo et al. (2021), and Wendt & Jirak (2021).
+
+| Constant | Value | Role |
+|----------|------:|------|
+| `DAMAGE_THRESH_MM` | 25.4 mm (1.0 in) | Residential damage onset; vulnerability (Stage 14), occurrence tables (Stage 11), Stage 13 severe-cell counts |
+| `EVENT_ACTIVE_THRESH_MM` | 29.0 mm (~1.14 in) | Stage 08 event active cells; Stage 05 subtropical winter filter (Nov–Feb, lat &lt; 30°N) |
+| `GPD_THRESH_MM_DEFAULT` | 50.8 mm (2.0 in) | EVT tail threshold (Stage 09); automated MRL selection preferred where supported |
+| `MAX_CENTROID_KM_DAY` | 150 km/day | Stage 08 merge cap |
+| `MAX_INTENSITY_RATIO` | 3.0 | Stage 08 peak-intensity jump cap between consecutive active days |
+
+**GridRad cross-calibration (Stage 05):** MYRORSS and GridRad do not share a same-day overlap window on this archive. v2.2.1 builds an **era-pooled quantile map** from MYRORSS active pixels (2005–2011) and GridRad active pixels (2012–2019), replacing the prior identity fallback. Production calibration median ratio above 10 mm: **~1.10**.
+
+**Diagnostic benchmark (pre–v2.2.1 corrected archive, 9,797 convective days):** per-cell Great Plains max hail days/yr were **5.5 at 25.4 mm** vs **3.7 at 29 mm** (Cintineo reference ~11–12 days/yr at coarser 0.88° resolution). National any-cell hail days/yr were nearly flat across months at 25.4 mm (~344/yr) whereas SPC report-day climatology peaks in late spring (~216 report days/yr). v2.2.1 therefore adopts **29 mm** for event footprints while retaining **25.4 mm** for damage-oriented products.
+
+Re-run Stage 05 after v2.2.1 calibration changes requires deleting existing `mesh_0.05deg_corrected/` outputs (Stage 05 skips existing files by default).
 
 ---
 
@@ -394,9 +414,11 @@ The event peak is the maximum hail size at each active cell during the event. Du
 
 ### 8.4 Literature benchmarking (per-cell hail days)
 
-Stage 08's annual event count is a **CONUS-wide** metric: any day with at least one cell ≥ 25.4 mm contributes at least one event (92% are single-day events on the 2026 production run). That count (~306 events/yr) is not directly comparable to per-cell hail-day climatologies in Cintineo et al. (2012) or Murillo et al. (2021), which report **hail days per grid cell per year** at literature MESH thresholds.
+Stage 08's annual event count λ is a **CONUS-wide any-severe-MESH-day** metric at `EVENT_ACTIVE_THRESH_MM` (29.0 mm from v2.2.1). It is not directly comparable to per-cell hail-day maxima in Cintineo et al. (2012) or Murillo et al. (2021).
 
-The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` computes per-cell mean annual hail days at six thresholds (25.4–63.25 mm) on the corrected archive. On the 2026 production archive, Great Plains maxima range from ~5.5 days/yr at 25.4 mm to ~1.6 days/yr at the Murillo MESH75 skill threshold (41.9 mm), compared with Cintineo's ~11–12 days/yr at coarser resolution and 29 mm. See `data/analysis/hail_day_climatology/` and `docs/literature_review.md` §3.
+The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` computes per-cell mean annual hail days at six literature thresholds. On the 2026 archive (9,797 convective days), adopting **29 mm** for events (vs 25.4 mm) reduced Great Plains per-cell maxima from **~5.5 to ~3.7 hail days/yr** and aligns Stage 08 with the Cintineo/Wendt skill threshold. At 25.4 mm, **93.8%** of CONUS cells had at least one active day over the record; national any-cell counts showed weak seasonality vs SPC report-day peaks.
+
+See `data/analysis/hail_day_climatology/` and `docs/methodology.md` §2.7.
 
 ---
 

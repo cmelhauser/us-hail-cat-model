@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-06-27 (`v2.2.1`; model **2.2.1** on `main`; Stages 01/02/04c primary ingest complete — see `docs/RUN_NOTES.md`)**
+**Last updated: 2026-06-30 (`v2.2.1`; full production run complete — see `docs/RUN_NOTES.md`)**
 
 ---
 

@@ -80,22 +80,19 @@ Objective MESH climatology on a ~0.88° grid: with ≥ five pixels at 29 mm, the
 
 ### Per-cell hail-day climatology diagnostic (v2.2.1)
 
-Stage 08 groups **CONUS-wide** active days into sparse events at the 25.4 mm damage threshold. That metric is not directly comparable to per-cell hail-day maps in Cintineo et al. (2012) or Murillo et al. (2021). The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` therefore computes, for each 0.05° cell, mean annual **hail days per year** at six literature thresholds on the Stage 05 corrected archive, plus national any-cell totals and seasonal curves.
+Stage 08 groups **CONUS-wide** active days into sparse events at **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.1. The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` benchmarks per-cell hail days at six thresholds on the corrected archive.
 
-**Production run (2026-06, 9,797 convective days, 1998–2026):**
+**Diagnostic-driven v2.2.1 parameters (9,797 convective days, 1998–2026):**
 
-| Threshold | Great Plains max days/yr | GP mean days/yr | National any-cell days/yr (mean) |
-|-----------|-------------------------:|----------------:|---------------------------------:|
-| 25.4 mm conventional | 5.5 | 2.2 | 344 |
-| 29.0 mm Cintineo/MRMS skill | 3.7 | 1.4 | 341 |
-| 35.6 mm MESHWitt skill | 2.3 | 0.6 | 321 |
-| 41.9 mm MESH75 skill | 1.6 | 0.2 | 287 |
-| 50.8 mm significant severe | 0.6 | 0.1 | 229 |
-| 63.3 mm MESH95 skill | 0.2 | 0.04 | 126 |
+| Threshold | GP max days/yr | National any-cell days/yr |
+|-----------|---------------:|--------------------------:|
+| 25.4 mm (damage onset) | 5.5 | 344 |
+| **29.0 mm (event threshold)** | **3.7** | **341** |
+| 41.9 mm MESH75 skill | 1.6 | 287 |
 
-At 29 mm the Great Plains maximum (~3.7 days/yr at 0.05°) is below Cintineo's ~11–12 days/yr at coarser resolution but directionally consistent; the conventional 25.4 mm threshold inflates winter any-cell counts relative to SPC report-day seasonality. Stage 08's ~306 events/year aligns with national any-cell hail days, not with per-cell hail-alley maxima.
+At 29 mm the Great Plains maximum is below Cintineo's ~11–12 days/yr at coarser resolution but directionally consistent. The 25.4 mm threshold inflates winter any-cell counts relative to SPC report-day seasonality.
 
-**Model implication:** Interpret Stage 08 λ (Poisson rate) as a national any-severe-MESH-day count. For literature benchmarking and threshold sensitivity, use `data/analysis/hail_day_climatology/`.
+**Model implication:** Use **29 mm** for Stage 08 λ and event templates; retain **25.4 mm** for damage-oriented stages. See `docs/methodology.md` §2.7.
 
 ### GridRad reflectivity and SHI (implementation note)
 

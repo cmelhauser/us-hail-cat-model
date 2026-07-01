@@ -132,7 +132,7 @@ The Stage 08 output that stores each historical event as sparse arrays: `rows`, 
 
 **Q: Stage 08 reports ~300 events per year. Is that reasonable?**
 
-Stage 08 counts **CONUS-wide** days/clusters with at least one cell ≥ 25.4 mm (~306 events/yr on the 2026 production run). That is comparable to national any-cell MESH hail days (~344/yr) and is **not** the same as per-cell hail-alley frequencies in Cintineo et al. (2012) (~11–12 days/yr max at 29 mm on a coarser grid) or GridRad-Severe episode counts (~100/yr). Run `scripts/diagnostics/hail_day_climatology.py` for per-cell benchmarks at literature MESH75 thresholds; see `data/analysis/hail_day_climatology/` and `docs/methodology.md` §8.4.
+Stage 08 counts **CONUS-wide** days/clusters with at least one cell ≥ **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** in v2.2.1. The prior 25.4 mm threshold yielded ~306 events/yr and ~344 national any-cell MESH days/yr with weak seasonality vs SPC. At **29 mm**, per-cell Great Plains maxima are **~3.7 hail days/yr** (vs **~5.5** at 25.4 mm), closer to Cintineo et al. (2012) and Wendt & Jirak (2021). Run `scripts/diagnostics/hail_day_climatology.py` for full threshold sensitivity; see `docs/methodology.md` §2.7 and §8.4.
 
 ---
 

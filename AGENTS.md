@@ -1,10 +1,10 @@
-# AGENTS.md - CONUS Hail Catastrophe Model v2.2
+# AGENTS.md - CONUS Hail Catastrophe Model v2.2.1
 
 For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-06-27 (`v2.2.1`; model release `2.2.1` on `main`).
+Last updated: 2026-06-30 (`v2.2.1` production run complete — Stages 01–15 validated).
 
 ## What This Project Is
 
@@ -13,7 +13,7 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: 2.2.0 (convective day 12 UTC → 12 UTC; breaking change from v2.1 calendar UTC days)
+- Version: **2.2.1** (convective days 12 UTC → 12 UTC; literature-aligned thresholds)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
@@ -21,7 +21,7 @@ stochastic event catalog.
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
-Current operating branch: **`v2.2.1`** (development; push/PR to `origin` only). Model release **`2.2.0`** (12 UTC → 12 UTC convective days) is on `main`.
+Current operating branch: **`v2.2.1`** (development; push/PR to `origin` only). Model release **`2.2.1`** on `v2.2.1`; **`2.2.0`** remains on `main` until merged.
 The old `v2.1` branch has been merged and is no longer the active development branch.
 
 ## Non-Negotiable Rules
@@ -229,7 +229,9 @@ These come from `scripts/_config.py`.
 | `DX` | 0.05 degree | Cell size |
 | `LAT_MAX` | 50.005 | North edge of row 0 |
 | `LON_MIN` | -125.005 | West edge of col 0 |
-| `DAMAGE_THRESH_MM` | 25.4 | 1-inch damage threshold |
+| `DAMAGE_THRESH_MM` | 25.4 | 1-inch damage onset (vulnerability, occurrence) |
+| `EVENT_ACTIVE_THRESH_MM` | 29.0 | Cintineo/Wendt skill threshold (Stage 08 events, Stage 05 winter filter) |
+| `GPD_THRESH_MM_DEFAULT` | 50.8 | 2-inch EVT tail starting threshold |
 | `MAX_HAIL_MM` | 300.0 | Physical QA cap on hail diameter values |
 | `RNG_SEED` | 42 | Stochastic RNG seed |
 | `N_SIM_YEARS` | 50000 | Catalog length |
@@ -241,49 +243,43 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-06-27:
+As of 2026-06-30:
 
 | Area | Status |
 |---|---|
-| Active branch | `main` (model `2.2.1`; convective-day v2.2.0 methodology) |
-| All 15 stage scripts | Written and syntax-checked |
-| Tests | 37 pytest modules (198 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
-| Integration test | `tests/integration/test_smoke_synthetic.py` |
-| Constant-drift guard | `tests/test_no_duplicated_constants.py` |
-| First full pipeline run | Stage 01 ✅; Stage 02 ✅; Stage 03 ✅; Stage 04a ✅; **Stage 04c** ✅ primary ingest complete; optional `--missing-only` backfill may still be running |
-| Mesh archive | **9,584** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,501** GridRad + 2,060 MRMS) |
-| Stage 04c manifest | **3,209** gap-era rows in `manifest_stage04c_gridrad.csv` (2,496 `ok` / `ok_with_read_errors`; 712 `missing_source`; 1 `error`) |
-| Mesh peak diagnostic | `scripts/diagnostics/summarize_mesh_daily_peaks.py` + tracked `data/analysis/mesh_daily_peaks/` |
-| Hail-day climatology | `scripts/diagnostics/hail_day_climatology.py` + tracked `data/analysis/hail_day_climatology/` |
-| Project metadata | LICENSE, CHANGELOG, CITATION, CONTRIBUTING, COC, SECURITY |
-| Python project config | pyproject.toml, .pre-commit-config.yaml |
-| CI/CD | `.github/workflows/tests.yml` |
-| Stage 01 / 02 / 04c manifests | Implemented (`manifest_stage01_myrorss.csv`, `manifest_stage02_mrms.csv`, `manifest_stage04c_gridrad.csv`) |
-| Regression / golden tests | Pending first production outputs |
-| Bootstrap CIs on RP maps | Pending first production outputs |
+| Active branch | `v2.2.1` (dev); model **2.2.1** on `v2.2.1`; **2.2.0** on `main` until merge |
+| All 15 stage scripts | Written, tested, production-validated |
+| Tests | 37 pytest modules (199 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
+| **First full v2.2.1 production run** | **Complete** (2026-06-30) — Stages 01–15, `--skip-ml` |
+| Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,714** GridRad + 2,060 MRMS) |
+| Corrected archive | **9,797** days (era-pooled QM; 29 mm winter filter) |
+| Event catalog | **8,798** events at **29 mm** (~303 yr⁻¹) |
+| Stochastic catalog | **50,000** yr; **15.17M** synthetic events; validation passed |
+| Hail-day climatology | `data/analysis/hail_day_climatology/` (tracked diagnostic) |
+| Regression / golden tests | Pending frozen checksums |
+| Bootstrap CIs on RP maps | Pending |
+
+## Production Run Summary (v2.2.1, 2026-06-30)
+
+| Stage | Key result |
+|-------|------------|
+| 05 | 9,797 corrected days (0 skipped); era-pooled QM |
+| 06 | 173,766 SPC validation pairs |
+| 08 | 8,798 events; λ ≈ 303 yr⁻¹ at 29 mm |
+| 09–12 | Analytical RP maps through 50,000 yr |
+| 13 | 50k-yr stochastic catalog (~5.4 h); memmap-backed annual maxima |
+| 14–15 | Placeholder vulnerability + figures; validation passed |
 
 ## Current Run Watch
 
-**Stage 02 (MRMS)** finished **2026-06-08 06:19 EDT** after 86.4 hours. Output validation passed. Coverage: **2020-10-14 → 2026-06-04** (2,060 convective days; manifest: 2,059 `ok`, 1 `ok_with_read_errors`). Peak MESH: 299.9 mm.
+**No active pipeline process.** Full v2.2.1 production run finished **2026-06-30 ~18:42 EDT**.
 
-**Stage 04c (GridRad gap-fill)** primary ingest finished **2026-06-27**. Production runs (2026-06-08 → 2026-06-27) wrote **2,501** gap-era TIFFs (**2012-01-01 → 2020-10-10**). **2012–2017** are essentially complete; **712** manifest days are `missing_source` (no NCAR GridRad for that convective window — expected for many off-season days). A **`--missing-only`** backfill may still be running in `screen` session `hail_stage04c`:
+Optional follow-ups:
 
-```bash
-.venv/bin/python scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 4 --missing-only
-```
-
-Monitor `logs/04c_fill_gridrad_gap.run.log`. On disks under ~250 GiB free, use **`--workers 2`** instead of `4`. Disk available: ~173 GiB (2026-06-27).
-
-The remaining production sequence is:
-
-1. **Let Stage 04c `--missing-only` backfill finish** (or confirm no process is active and manifest is acceptable).
-2. Re-run Stages 05–15 with `--skip-ml` against the full dataset.
-3. Run Stage 13 1,000-year smoke, then the 50,000-year catalog.
-4. Re-render Stage 15 figures and run `python run_pipeline.py --validate`.
-5. Regenerate mesh-era QA if ingest changed: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
-6. Regenerate hail-day climatology after Stage 05/08: `scripts/diagnostics/hail_day_climatology.py`.
-6. Freeze regression/golden outputs and add bootstrap CIs to Stage 09.
-7. Upgrade `.venv` to Python 3.10+ after the active run.
+1. `python run_pipeline.py --validate`
+2. `python scripts/diagnostics/hail_day_climatology.py` on final corrected archive
+3. Freeze regression/golden outputs; bootstrap CIs on Stage 09
+4. Merge `v2.2.1` → `main` when ready
 
 ## Documentation Quick Reference
 

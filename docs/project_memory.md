@@ -1,14 +1,14 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-06-27 (`v2.2.0` — 12 UTC → 12 UTC convective days; Stages 01/02/04c primary ingest complete)**
+**Last updated: 2026-06-30 (`v2.2.1` — full production run complete; Stages 01–15 validated)**
 
 ---
 
 ## 1. Canonical Project Identity
 
 - **Name:** CONUS Hail Catastrophe Model
-- **Current version:** v2.2.0
+- **Current version:** v2.2.1 (dev branch); v2.2.0 on `main` until merge
 - **Model type:** hail hazard model
 - **Domain:** continental United States
 - **Primary hazard input:** radar-derived MESH / MESH75
@@ -20,23 +20,21 @@
 
 ---
 
-## 2. Current State (as of 2026-06-27)
+## 2. Current State (as of 2026-06-30)
 
-Branch `v2.2.1` is active development; model `v2.2.0` is on `main`. The historical
-`v2.1` branch has been merged.
+Branch `v2.2.1` is active development; model `v2.2.1` on `v2.2.1`; `v2.2.0` remains on `main` until merged.
 
-First full pipeline run started 2026-05-01. Production progress:
+**v2.2.1 production run complete (2026-06-30):** full pipeline Stages 01–15 validated with `--skip-ml`.
 
-- Stage 01: **complete** (5,023 convective-day MYRORSS rasters through 2011-12-31; manifest QA at 300.0 mm cap);
-- Stage 02: **complete** (2026-06-08; 2,060 MRMS rasters 2020-10-14 → 2026-06-04; validation passed);
-- Stage 03: **complete**;
-- Stage 04a: **complete** (ERA5 isotherms on disk; validation passed 2026-05-13);
-- Stage 04c: **primary ingest complete** (2026-06-27) — **2,501** gap-era TIFFs (**2012-01-01 → 2020-10-10**); manifest **3,209** rows (2,496 `ok` / `ok_with_read_errors`; 712 `missing_source`; 1 `error`); optional **`--missing-only`** backfill may still be running;
-- Stages 05–15: placeholder outputs from May-2011 smoke only — not production.
-- **Mesh archive:** **9,584** convective-day `mesh_*.tif` (5,023 + **2,501** + 2,060).
-- **Disk:** ~173 GiB free (2026-06-27).
-- **Mesh peak diagnostic:** `scripts/diagnostics/summarize_mesh_daily_peaks.py` + `data/analysis/mesh_daily_peaks/`.
-- **Hail-day climatology diagnostic:** `scripts/diagnostics/hail_day_climatology.py` + `data/analysis/hail_day_climatology/` (per-cell days/yr at literature MESH75 thresholds).
+| Metric | Value |
+|--------|------:|
+| Convective-day archive | 9,797 (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
+| Corrected MESH75 | 9,797 days; era-pooled QM; 29 mm winter filter |
+| Historical events | 8,798 at 29 mm (~303 yr⁻¹) |
+| Stochastic catalog | 50,000 yr; 15.17M synthetic events; σ = 0.225 |
+| Stage 13 wall time | ~5.4 h (memmap-backed annual maxima) |
+
+All stages 01–15: **complete** and output validation passed.
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -297,10 +295,8 @@ Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
-Active branch: main. Model 2.2.1 (12 UTC → 12 UTC convective days).
-Stage 01 complete (5,023 MYRORSS); Stage 02 complete (2,060 MRMS, 2026-06-08).
-Stage 04a complete; Stage 04c primary ingest complete (2,501 gap TIFFs, 2026-06-27).
-9,584 mesh TIFFs on disk. Stages 05–15 are the active blocker (placeholder smoke outputs only).
+Active branch: v2.2.1. Model 2.2.1. Full production run complete 2026-06-30 (Stages 01–15).
+9,797 mesh TIFFs; 8,798 events at 29 mm; 50k-yr stochastic catalog validated.
 Stage 01/02 manifests distinguish missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.
 Hail-day climatology: scripts/diagnostics/hail_day_climatology.py.

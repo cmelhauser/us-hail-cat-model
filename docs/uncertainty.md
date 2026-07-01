@@ -1,6 +1,6 @@
-# Uncertainty Budget — CONUS Hail Catastrophe Model v2.2
+# Uncertainty Budget — CONUS Hail Catastrophe Model v2.2.1
 
-**Version:** 2.2.0  
+**Version:** 2.2.1  
 **Status:** Framework document — quantitative bounds to be populated after first full run  
 **Related:** `docs/methodology.md`, `docs/technical_documentation.md §09`
 
