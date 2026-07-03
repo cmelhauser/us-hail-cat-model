@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from conftest import load_stage
 
 
@@ -31,3 +32,36 @@ def test_stage13_ann_max_uses_memmap_when_large(tmp_path, monkeypatch):
     ann_max[0, 0] = 42.0
     ann_max.flush()
     assert float(np.memmap(mmap_path, dtype=np.float32, mode="r", shape=(50, 200))[0, 0]) == 42.0
+
+
+def test_stage13_should_stream_events_thresholds():
+    s = load_stage("13_generate_stochastic_catalog.py")
+    assert s._should_stream_events(999, 10.0, None) is False
+    assert s._should_stream_events(1000, 1.0, s.OUT_DIR / "catalog.parquet") is True
+    assert s._should_stream_events(100, 600.0, s.OUT_DIR / "catalog.parquet") is True
+    assert s._should_stream_events(100, 10.0, s.OUT_DIR / "catalog.parquet") is False
+
+
+def test_stage13_stochastic_event_writer_batches(tmp_path):
+    s = load_stage("13_generate_stochastic_catalog.py")
+    path = tmp_path / "events.parquet"
+    writer = s.StochasticEventWriter(path, batch_size=2)
+    for i in range(5):
+        writer.append({"sim_year": 0, "event_idx": i, "peak_hail_mm": float(i)})
+    writer.close()
+    assert writer.total == 5
+    assert path.exists()
+    df = pd.read_parquet(path)
+    assert len(df) == 5
+
+
+def test_stage13_compute_empirical_rps_chunked():
+    s = load_stage("13_generate_stochastic_catalog.py")
+    n_years, n_active = 20, 8
+    ann_max = np.tile(np.arange(1, n_years + 1, dtype=np.float32)[:, None], (1, n_active))
+    active_rows = np.array([10, 10, 11, 11, 12, 12, 13, 13], dtype=np.int32)
+    active_cols = np.array([20, 21, 20, 21, 20, 21, 20, 21], dtype=np.int32)
+    rp_maps = s.compute_empirical_rps(ann_max, active_rows, active_cols, n_years, chunk_size=3)
+    assert 10 in rp_maps
+    assert rp_maps[10][10, 20] > 0
+

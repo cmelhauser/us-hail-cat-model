@@ -42,7 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "tests"))
 
-from conftest import load_stage
+from conftest import load_stage, dense_footprint_to_cells
 
 s08 = load_stage("08_build_event_catalog.py")
 s13 = load_stage("13_generate_stochastic_catalog.py")
@@ -117,19 +117,29 @@ def synthetic_days():
     return dates, footprints, peaks
 
 
+def _footprints_to_cells(footprints, peaks):
+    return [dense_footprint_to_cells(fp, pk) for fp, pk in zip(footprints, peaks)]
+
+
 @pytest.fixture(scope="module")
-def grouped_events(synthetic_days):
+def synthetic_daily_cells(synthetic_days):
+    """Sparse daily_cells dicts for Stage 08."""
+    _, footprints, peaks = synthetic_days
+    return _footprints_to_cells(footprints, peaks)
+
+
+@pytest.fixture(scope="module")
+def grouped_events(synthetic_days, synthetic_daily_cells):
     """Run stage 08 event grouping on synthetic days."""
-    dates, footprints, peaks = synthetic_days
-    groups = s08.group_events(dates, footprints, peaks)
-    return groups
+    dates, _, _ = synthetic_days
+    return s08.group_events(dates, synthetic_daily_cells)
 
 
 @pytest.fixture(scope="module")
-def event_catalog(synthetic_days, grouped_events):
+def event_catalog(synthetic_days, synthetic_daily_cells, grouped_events):
     """Build stage 08 event catalog and sparse events from synthetic data."""
-    dates, footprints, peaks = synthetic_days
-    df, sparse = s08.build_catalog(dates, footprints, peaks, grouped_events)
+    dates, _, _ = synthetic_days
+    df, sparse = s08.build_catalog(dates, synthetic_daily_cells, grouped_events)
     return df, sparse
 
 

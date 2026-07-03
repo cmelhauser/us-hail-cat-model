@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import date
+
+import pytest
 import numpy as np
 
 from scripts.diagnostics.hail_day_climatology import (
     DEFAULT_THRESHOLDS,
     ThresholdSpec,
+    selected_thresholds,
     summarize_per_cell,
 )
 
@@ -26,3 +30,34 @@ def test_summarize_per_cell_basic_stats():
     summary = summarize_per_cell(counts, 10, spec)
     assert summary["cells_with_any_hail_days"] == 9
     assert summary["max_days_per_year_any_cell"] == 3.0
+
+
+def test_selected_thresholds_filters_keys():
+    specs = selected_thresholds("skill_29mm,conv_25p4mm")
+    assert [s.key for s in specs] == ["conv_25p4mm", "skill_29mm"]
+
+
+def test_selected_thresholds_unknown_key_exits():
+    with pytest.raises(SystemExit):
+        selected_thresholds("not_a_real_threshold")
+
+
+def test_classify_source_by_era():
+    from scripts.diagnostics.hail_day_climatology import classify_source
+
+    assert classify_source(date(2005, 6, 1)) == "MYRORSS"
+    assert classify_source(date(2015, 6, 1)) == "GridRad"
+    assert classify_source(date(2022, 6, 1)) == "MRMS"
+
+
+def test_national_annual_dataframe_shape():
+    from scripts.diagnostics.hail_day_climatology import national_annual_dataframe
+
+    annual = {
+        2020: {"skill_29mm": 100, "conv_25p4mm": 120},
+        2021: {"skill_29mm": 90, "conv_25p4mm": 110},
+    }
+    df = national_annual_dataframe(annual)
+    assert len(df) == 2
+    assert "skill_29mm" in df.columns
+

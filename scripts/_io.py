@@ -290,11 +290,10 @@ def write_geotiff(
         "blockysize": 256,
         "nodata":     nodata,
     }
-    if tags:
-        profile["tags"] = {str(k): str(v) for k, v in tags.items()}
-
     with rasterio.open(out_path, "w", **profile) as dst:
         dst.write(data.astype("float32"), 1)
+        if tags:
+            dst.update_tags(**{str(k): str(v) for k, v in tags.items()})
 
 
 def sanitize_hail_values(

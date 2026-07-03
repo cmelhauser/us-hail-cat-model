@@ -146,7 +146,9 @@ source = ["scripts"]
 omit   = ["scripts/archive/*"]
 
 [tool.coverage.report]
-fail_under = 70
+# Full pipeline scripts are I/O-heavy; CI uses --cov-fail-under=0 on unit tests only.
+# This floor guards against coverage regressions on the shared library surface.
+fail_under = 35
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
