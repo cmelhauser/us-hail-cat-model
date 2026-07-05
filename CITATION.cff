@@ -12,8 +12,8 @@ abstract: >
   a 28-year record (1998–present), applies bias correction and environmental
   filtering, fits regional Generalised Pareto Distribution tails via L-moments,
   and generates a 50,000-year stochastic event catalog on a 0.05° CONUS grid.
-  Produces return-period hazard maps (10–50,000 years), occurrence probability
-  rasters, and placeholder vulnerability curves for five construction classes.
+  Produces return-period hazard maps (10–50,000 years) and occurrence probability
+  rasters. Hazard-only; exposure and vulnerability are future work (methodology §14).
 authors:
   - family-names: Melhauser
     given-names: Christopher

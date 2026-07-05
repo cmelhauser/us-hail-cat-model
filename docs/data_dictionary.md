@@ -280,6 +280,31 @@ Optional conditional calibration model.
 
 Optional probabilistic hail-realness model.
 
+### `data/analysis/calibration/range_debias.npz`
+
+Range-dependent multiplicative debias table from SPC–MESH pairs (via `radar_artifact_diagnostic.py`).
+
+Arrays:
+
+```text
+range_bin_edges_km
+range_bin_centers_km
+factor_myrorss
+factor_gridrad
+factor_mrms
+reference_range_km
+```
+
+Stage 05 applies automatically when present (`--no-range-debias` to disable). Factors normalized to **1.0 at 125 km**; clipped **[0.45, 1.15]**.
+
+### `data/analysis/calibration/nearest_radar_distance_km.npy`
+
+Optional cached distance-to-nearest CONUS WSR-88D grid (520×1180 km). Built by `_radar_geometry.ensure_range_km_grid()`.
+
+### `data/analysis/radar_artifacts/`
+
+Diagnostic outputs (gitignored): speckle summaries, range-binned annual maxima, GridRad−MYRORSS difference maps, `range_debias_factors.csv`, README.
+
 ### `calibration_diagnostics.csv`
 
 Recommended columns:
@@ -404,28 +429,9 @@ v2.1 preferred bounds:
 
 ---
 
-## 11. Vulnerability Outputs
+## 11. Vulnerability / Loss Outputs (Future Work)
 
-### `data/analysis/vulnerability/mdr_curves.csv`
-
-Columns:
-
-```text
-hail_mm, hail_in, 3tab_asphalt_aged, architectural_shingle, class4_ir, metal_standing_seam, masonry_bur
-```
-
-### `mdr_parameters.npz`
-
-Arrays:
-
-```text
-class_names
-mu_v
-sigma_v
-hail_sizes_mm
-```
-
-These are placeholders and not production loss curves.
+Not produced by this repository. Hazard-only scope; see `docs/methodology.md` §14 for planned exposure, MDR vulnerability, and financial loss modules.
 
 ---
 

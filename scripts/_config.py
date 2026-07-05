@@ -66,7 +66,6 @@ EVENTS_DIR: Path = HISTORICAL / "events"
 CDF_DIR: Path = ANALYSIS / "cdf"
 OCC_DIR: Path = ANALYSIS / "occurrence"
 TOPO_DIR: Path = ANALYSIS / "topography"
-VULN_DIR: Path = ANALYSIS / "vulnerability"
 MASK_DIR: Path = ANALYSIS / "conus_mask"
 
 # ── Physical constants and thresholds ────────────────────────────────────────
@@ -139,7 +138,7 @@ __all__ = [
     "REPO_ROOT", "DATA_ROOT", "LOG_ROOT",
     "HISTORICAL", "ANALYSIS", "STOCHASTIC", "DOCS_FIG",
     "MESH_CORR_DIR", "MESH_CLIMO_DIR", "ERA5_DIR", "SPC_DIR",
-    "EVENTS_DIR", "CDF_DIR", "OCC_DIR", "TOPO_DIR", "VULN_DIR", "MASK_DIR",
+    "EVENTS_DIR", "CDF_DIR", "OCC_DIR", "TOPO_DIR", "MASK_DIR",
     # Physical constants
     "DAMAGE_THRESH_MM", "EVENT_ACTIVE_THRESH_MM", "MAX_HAIL_IN", "MAX_HAIL_MM", "NODATA", "MM_PER_INCH",
     "MESH75_A", "MESH75_B",

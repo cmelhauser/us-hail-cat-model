@@ -95,7 +95,8 @@ The manuscript needs final values for:
 - threshold diagnostics and GPD tail stability;
 - analytical return-period maps;
 - stochastic catalog event counts and return-period agreement;
-- map QA confirming no longitude/latitude orientation or Mexico/Canada displacement artifacts.
+- map QA confirming no longitude/latitude orientation or Mexico/Canada displacement artifacts;
+- **radar artifact diagnostic** (`radar_artifact_diagnostic.py`) with before/after speckle metrics (GridRad 9.7%→6.1%, 2026-07-05).
 
 ### AI-process evidence
 

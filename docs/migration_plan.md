@@ -136,7 +136,7 @@ v2.0 established the modern 15-stage pipeline:
 11b public DEM preparation
 12 CONUS mask and topographic correction
 13 stochastic catalog
-14 vulnerability placeholder
+15 figures and validation report
 15 figures
 ```
 
@@ -154,7 +154,7 @@ v2.0 added:
 - analytical return-period maps;
 - event-based stochastic catalog;
 - analytical-vs-stochastic return-period comparison;
-- literature-based placeholder vulnerability curves.
+- hazard-only scope (vulnerability/loss are future work; see methodology §14).
 
 ### 4.5 v2.0 removed behavior
 

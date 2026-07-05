@@ -183,6 +183,7 @@ MM_PER_INCH = 25.4
 CALIB_DIR = REPO_ROOT / "data" / "analysis" / "calibration"
 RANGE_DEBIAS_NPZ = CALIB_DIR / "range_debias.npz"
 RANGE_KM_NPY = CALIB_DIR / "nearest_radar_distance_km.npy"
+NEAREST_SITE_NPY = CALIB_DIR / "nearest_nexrad_site_index.npy"
 
 
 def classify_mesh_source(day: date) -> str:
@@ -245,6 +246,53 @@ def nearest_radar_distance_km(
         dist = 6371.0 * 2 * np.arctan2(np.sqrt(a), np.sqrt(np.maximum(0.0, 1.0 - a)))
         dist_min[i0:i1] = dist.min(axis=1)
     return dist_min.reshape(NROWS, NCOLS).astype(np.float32)
+
+
+def nearest_nexrad_site_index(
+    lat_grid: np.ndarray | None = None,
+    lon_grid: np.ndarray | None = None,
+) -> np.ndarray:
+    """Per-cell index into ``nexrad_sites_conus()`` for the nearest WSR-88D."""
+    if lat_grid is None or lon_grid is None:
+        lat_grid, lon_grid = cell_center_latlon()
+    site_lats, site_lons, _ = nexrad_sites_conus()
+    flat_lat = lat_grid.ravel()
+    flat_lon = lon_grid.ravel()
+    n_cells = flat_lat.size
+    n_sites = site_lats.size
+    chunk = 50_000
+    idx_min = np.zeros(n_cells, dtype=np.int16)
+    dist_min = np.full(n_cells, np.inf, dtype=np.float64)
+    for i0 in range(0, n_cells, chunk):
+        i1 = min(i0 + chunk, n_cells)
+        clat = flat_lat[i0:i1][:, None]
+        clon = flat_lon[i0:i1][:, None]
+        slat = site_lats[None, :]
+        slon = site_lons[None, :]
+        dlat = np.radians(slat - clat)
+        dlon = np.radians(slon - clon)
+        a = (
+            np.sin(dlat / 2) ** 2
+            + np.cos(np.radians(clat)) * np.cos(np.radians(slat)) * np.sin(dlon / 2) ** 2
+        )
+        dist = 6371.0 * 2 * np.arctan2(np.sqrt(a), np.sqrt(np.maximum(0.0, 1.0 - a)))
+        arg = dist.argmin(axis=1)
+        dist_min[i0:i1] = dist[np.arange(i1 - i0), arg]
+        idx_min[i0:i1] = arg
+    return idx_min.reshape(NROWS, NCOLS)
+
+
+def ensure_nearest_site_index_grid(cache_path: Path | None = None) -> np.ndarray:
+    """Load or compute per-cell nearest-radar site index."""
+    path = Path(cache_path or NEAREST_SITE_NPY)
+    if path.exists():
+        arr = np.load(path)
+        if arr.shape == (NROWS, NCOLS):
+            return arr.astype(np.int16)
+    arr = nearest_nexrad_site_index()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(path, arr)
+    return arr
 
 
 def ensure_range_km_grid(cache_path: Path | None = None) -> np.ndarray:
@@ -399,3 +447,125 @@ def apply_range_debias(
     fac_2d = np.interp(range_km_grid.ravel(), centers, factors).reshape(NROWS, NCOLS)
     out = data.astype(np.float32) * fac_2d.astype(np.float32)
     return out
+
+
+SPECKLE_THRESH = 2.5
+SPECKLE_ACTIVE_MM = 5.0
+
+
+def remove_speckle_spikes(
+    data: np.ndarray,
+    *,
+    speckle_thresh: float = SPECKLE_THRESH,
+    active_mm: float = SPECKLE_ACTIVE_MM,
+) -> tuple[np.ndarray, int]:
+    """
+    Zero isolated spikes: active cells > ``speckle_thresh`` × local 3×3 median.
+
+    Matches the diagnostic definition in ``radar_artifact_diagnostic.py``.
+    """
+    from scipy.ndimage import median_filter
+
+    out = data.astype(np.float32, copy=True)
+    active = out >= active_mm
+    if not np.any(active):
+        return out, 0
+    med = median_filter(out, size=3, mode="nearest")
+    speckle = active & (out > speckle_thresh * np.maximum(med, 1.0))
+    n = int(speckle.sum())
+    if n:
+        out[speckle] = 0.0
+    return out, n
+
+
+# Ring/spoke artifacts: cells along a range annulus share elevated values (3×3 test misses them).
+AZIMUTH_ANNULUS_FACTOR = 2.5
+AZIMUTH_MIN_ANNULUS_CELLS = 8
+FILAMENT_BG_SIZE = 21  # ~1° at 0.05° grid — wider than typical ring width
+FILAMENT_MARGIN_MM = 20.0
+FILAMENT_QUIET_BG_MM = 15.0
+
+
+def remove_azimuthal_ring_artifacts(
+    data: np.ndarray,
+    site_idx_grid: np.ndarray,
+    range_km_grid: np.ndarray,
+    *,
+    edges: np.ndarray | None = None,
+    active_mm: float = SPECKLE_ACTIVE_MM,
+    annulus_factor: float = AZIMUTH_ANNULUS_FACTOR,
+    min_annulus_cells: int = AZIMUTH_MIN_ANNULUS_CELLS,
+) -> tuple[np.ndarray, int]:
+    """
+    Zero azimuthal outliers on a radar range annulus (spokes, hot pixels on rings).
+
+    For each (nearest site, range bin), active cells above ``annulus_factor`` × the
+    annulus median MESH are removed. Real storm cores usually span many range bins;
+    thin radial spokes on one annulus are suppressed.
+    """
+    edges = np.asarray(edges if edges is not None else DEFAULT_RANGE_BIN_EDGES_KM, dtype=np.float32)
+    out = data.astype(np.float32, copy=True)
+    active = out >= active_mm
+    if not np.any(active):
+        return out, 0
+    bin_idx = _bin_index(range_km_grid, edges)
+    site_idx = site_idx_grid.astype(np.int16, copy=False)
+    remove = np.zeros(data.shape, dtype=bool)
+    n_bins = len(edges) - 1
+    n_sites = int(site_idx.max()) + 1
+    for si in range(n_sites):
+        site_mask = site_idx == si
+        if not site_mask.any():
+            continue
+        for bi in range(n_bins):
+            mask = active & site_mask & (bin_idx == bi)
+            n = int(mask.sum())
+            if n < min_annulus_cells:
+                continue
+            med = float(np.median(out[mask]))
+            thresh = annulus_factor * max(med, 1.0)
+            remove |= mask & (out > thresh)
+    n_removed = int(remove.sum())
+    if n_removed:
+        out[remove] = 0.0
+    return out, n_removed
+
+
+def remove_background_filament_artifacts(
+    data: np.ndarray,
+    *,
+    active_mm: float = SPECKLE_ACTIVE_MM,
+    bg_size: int = FILAMENT_BG_SIZE,
+    margin_mm: float = FILAMENT_MARGIN_MM,
+    quiet_bg_mm: float = FILAMENT_QUIET_BG_MM,
+) -> tuple[np.ndarray, int]:
+    """
+    Zero thin high filaments in an otherwise quiet background (partial range rings).
+
+    Uses a wide median background; removes active cells far above background when
+    the local background is below ``quiet_bg_mm``.
+    """
+    from scipy.ndimage import median_filter
+
+    out = data.astype(np.float32, copy=True)
+    active = out >= active_mm
+    if not np.any(active):
+        return out, 0
+    bg = median_filter(out, size=bg_size, mode="nearest")
+    artifact = active & (bg < quiet_bg_mm) & (out > bg + margin_mm)
+    n = int(artifact.sum())
+    if n:
+        out[artifact] = 0.0
+    return out, n
+
+
+def remove_gridrad_artifacts(
+    data: np.ndarray,
+    range_km_grid: np.ndarray,
+    site_idx_grid: np.ndarray,
+) -> tuple[np.ndarray, dict[str, int]]:
+    """Full GridRad artifact pass: isolated speckle, azimuthal spokes, quiet-background filaments."""
+    out, n_iso = remove_speckle_spikes(data)
+    out, n_az = remove_azimuthal_ring_artifacts(out, site_idx_grid, range_km_grid)
+    out, n_fil = remove_background_filament_artifacts(out)
+    return out, {"isolated": n_iso, "azimuthal": n_az, "filament": n_fil}

@@ -28,7 +28,7 @@ If this is a methodology change, please use the **Methodology question** templat
 - [ ] EVT fitting / smoothing (Stages 09–11)
 - [ ] Masking / topography (Stage 12)
 - [ ] Stochastic simulation (Stage 13)
-- [ ] Vulnerability / outputs (Stages 14–15)
+- [ ] Figures / outputs (Stage 15)
 - [ ] Pipeline runner / tooling
 - [ ] Testing
 - [ ] Documentation

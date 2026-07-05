@@ -14,6 +14,10 @@ from scripts._radar_geometry import (
     load_range_debias,
     nearest_radar_distance_km,
     nexrad_sites_conus,
+    remove_azimuthal_ring_artifacts,
+    remove_background_filament_artifacts,
+    remove_gridrad_artifacts,
+    remove_speckle_spikes,
     save_range_debias,
 )
 
@@ -66,3 +70,51 @@ def test_fit_and_apply_range_debias_roundtrip(tmp_path: Path):
     out = apply_range_debias(data, range_grid, "GridRad", loaded)
     assert out.shape == data.shape
     assert np.all(out >= 0)
+
+
+def test_remove_speckle_spikes_zeros_isolated_pixel():
+    data = np.zeros((5, 5), dtype=np.float32)
+    data[2, 2] = 50.0
+    out, n = remove_speckle_spikes(data)
+    assert n == 1
+    assert out[2, 2] == 0.0
+
+
+def test_remove_speckle_spikes_keeps_uniform_patch():
+    data = np.full((5, 5), 40.0, dtype=np.float32)
+    out, n = remove_speckle_spikes(data)
+    assert n == 0
+    assert np.all(out == 40.0)
+
+
+def test_remove_azimuthal_ring_artifacts_spoke():
+    site_idx = np.zeros((10, 10), dtype=np.int16)
+    range_km = np.full((10, 10), 50.0, dtype=np.float32)
+    data = np.full((10, 10), 10.0, dtype=np.float32)
+    data[5, 5] = 50.0
+    out, n = remove_azimuthal_ring_artifacts(
+        data, site_idx, range_km, min_annulus_cells=3,
+    )
+    assert n == 1
+    assert out[5, 5] == 0.0
+    assert np.all(out[data != 50.0] == 10.0)
+
+
+def test_remove_background_filament_artifacts_line():
+    data = np.zeros((25, 25), dtype=np.float32)
+    data[12, :] = 50.0
+    out, n = remove_background_filament_artifacts(data)
+    assert n > 0
+    assert out[12, 12] == 0.0
+
+
+def test_remove_gridrad_artifacts_chain():
+    site_idx = np.zeros((10, 10), dtype=np.int16)
+    range_km = np.full((10, 10), 50.0, dtype=np.float32)
+    data = np.zeros((10, 10), dtype=np.float32)
+    data[2, 2] = 50.0
+    data[5, 5] = 50.0
+    data[5, 4:7] = 10.0
+    out, counts = remove_gridrad_artifacts(data, range_km, site_idx)
+    assert counts["isolated"] >= 1
+    assert out[2, 2] == 0.0

@@ -58,7 +58,7 @@ Major v2.0 additions:
 - event-catalog construction;
 - regional EVT fitting with lognormal body and GPD tail;
 - analytical and stochastic return-period outputs;
-- placeholder vulnerability curves for integration testing.
+- hazard-only scope (vulnerability/loss removed 2026-07; future work in methodology §14).
 
 The most important methodological decision is that radar-derived hail fields
 become the primary gridded hazard evidence, while human reports become

@@ -19,7 +19,6 @@ Figure Categories
   docs/figures/analysis/
     - Analytical vs stochastic RP comparison
     - Validation diagnostics (from stage 06)
-    - Vulnerability curves (from stage 14)
     - Regional GPD parameter maps
 
 Input

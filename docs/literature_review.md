@@ -123,6 +123,23 @@ Radar archives store timesteps on **UTC calendar paths** (e.g. S3 prefixes by `Y
 
 **Model implication:** Stages **01**, **02**, **04b**, and **04c** filter timesteps into 12 UTC → 12 UTC windows, write `CONVECTIVE_WINDOW_UTC` on GeoTIFFs, and stage GridRad under `by_convective_day/YYYYMMDD/`. v2.1 calendar-UTC production rasters are **not comparable** without full re-ingest. Downstream stages (05–15) consume the convective-day label from `mesh_YYYYMMDD.tif` filenames; Stage **07** DOY climatology still groups by day-of-year across years (not a change to convective-day definition).
 
+### 3.7 Radar artifact quality control (v2.2.1+)
+
+Published hail climatologies remove radar rings, speckle, and range-dependent errors **before** long-term aggregation—not on return-period maps alone.
+
+| Reference | QC practice | Relevance to this model |
+|-----------|-------------|-------------------------|
+| Bowman and Homeyer (2017); GridRad software | Native `GRIDRAD_FILTER` and `GRIDRAD_REMOVE_CLUTTER` on 3-D reflectivity before analysis | **Upstream ideal** — Stage **04c** computes MESH from GridRad dBZ but does not yet apply full native clutter removal on reflectivity before SHI |
+| Murillo et al. (2021) | Low-confidence echo removal; **manual exclusion** of failed radar scans (range-linear reflectivity ramps); subjective review of annual-max MESH | Explains ring/spoke geometry; ~0.5% of GridRad volumes excluded at source |
+| Cintineo et al. (2012) | Daily MESH maxima **hand-examined**; anomalous propagation and radial fragments **cropped manually** before climatology | Stage **05** automates daily-grid QC on the unified 0.05° archive (substitute for manual crop) |
+| Wendt and Jirak (2021) | Gaussian smooth (σ ≈ 3 cells) masks **isolated** MESH pixels; NLDN lightning within 40 km; cap MESH > 127 mm | Isolated speckle pass in Stage **05** follows the smooth-and-mask logic; lightning mask not implemented |
+| WSR-88D ROC clutter algorithm | Median filter in **range and azimuth** after clutter identification | Azimuthal annulus filter in Stage **05** is a Cartesian analogue for spoke/hot-pixel removal on range annuli |
+| Ortega et al. (MYRORSS) | Intensive MESH-based QC and reprocessing of 1998–2011 archive | MYRORSS inputs are pre-QC’d; residual artifacts still visible in era-comparison diagnostics |
+
+**Processing order (literature-aligned):** harmonize sources (quantile mapping, Witt→MESH75) → range debias → **daily-grid artifact removal** → environmental filter → validation and climatology (Stages 06–15). Applying filters after the event catalog or on RP maps would bake artifacts into annual maxima and stochastic footprints.
+
+**Model implication:** Stage **05** applies a three-pass GridRad artifact filter (`remove_gridrad_artifacts`: isolated speckle, azimuthal annulus, quiet-background filament) plus optional SPC-collocated range debias. Residual **GridRad − MYRORSS** climatological offsets may remain where era sampling differs, not only from speckle. Future work: reflectivity QC and bad-volume rejection in Stage **04c** (Murillo-style upstream QC).
+
 ---
 
 ## 4. MESH Correction and Filtering
@@ -251,7 +268,7 @@ This hail microphysics work documents melting and shedding processes relevant to
 
 Brown and coauthors evaluated hail damage using property insurance claims.
 
-**Model implication:** Roof type, material, age, and construction class matter. Stage 14 is placeholder until claims-calibrated.
+**Model implication:** Roof type, material, age, and construction class matter. A future loss module should use claims-calibrated MDR curves (see `docs/methodology.md` §14).
 
 ### IBHS impact-testing literature
 
@@ -263,7 +280,7 @@ IBHS testing supports different vulnerability by roof material and impact resist
 
 Hail-size hazard alone is insufficient for insured loss estimation. Claims-calibrated vulnerability must account for construction, roof material, age, impact resistance, repair-cost inflation, deductible structure, and reporting thresholds.
 
-**Model implication:** Stage 14 curves are integration-test priors, not production damage functions.
+**Model implication:** Hazard-only v2.2.1; vulnerability and loss are future work, not production damage functions in this repository.
 
 ---
 
@@ -354,6 +371,8 @@ Blair, S.F., et al., 2011: A radar-based assessment of the detectability of gian
 Blair, S.F., et al., 2017: High-resolution hail observations: implications for NWS warning operations. *Weather and Forecasting*, 32, 1101–1119.
 
 Boiko, D.A., R. MacKnight, B. Kline, and G. Gomes, 2023: Autonomous chemical research with large language models. *Nature*, 624, 570–578.
+
+Bowman, K.P., and C.R. Homeyer, 2017: GridRad: Three-dimensional gridded NEXRAD WSR-88D radar data and derived hail metrics. See http://gridrad.org and references in Murillo et al. (2021).
 
 Brown, T.M., et al., 2015: Evaluating hail damage using property insurance claims data. *Weather, Climate, and Society*, 7(3), 197–210.
 

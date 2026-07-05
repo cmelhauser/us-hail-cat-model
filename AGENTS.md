@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-06-30 (`v2.2.1` production run complete — Stages 01–15 validated).
+Last updated: 2026-07-05 (Stage 05 range debias + speckle filter; downstream rerun from Stage 06).
 
 ## What This Project Is
 
@@ -17,7 +17,7 @@ stochastic event catalog.
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
-- Pipeline: 15 stages, all written and tested
+- Pipeline: 14 stages (01–13 hazard + 15 figures), all written and tested
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
@@ -73,6 +73,7 @@ us-hail-cat-model/
 |   |-- _config.py              <- grid constants, paths, EVT defaults
 |   |-- _logging.py             <- shared logger factory
 |   |-- _io.py                  <- write_geotiff, haversine_km, latlon_to_grid
+|   |-- _radar_geometry.py      <- NEXRAD sites, range debias, speckle filter
 |   |-- 01_download_myrorss.py
 |   |-- 02_download_mrms_mesh.py
 |   |-- 03_download_spc.py
@@ -89,12 +90,11 @@ us-hail-cat-model/
 |   |-- 11b_prepare_topography.py
 |   |-- 12_apply_conus_mask.py
 |   |-- 13_generate_stochastic_catalog.py
-|   |-- 14_build_vulnerability.py
 |   |-- 15_render_figures.py
 |   `-- diagnostics/
 |       |-- summarize_mesh_daily_peaks.py  <- mesh archive peak CSV/ECDF (optional)
-|       `-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
-|       `-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
+|       |-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
+|       `-- radar_artifact_diagnostic.py   <- speckle/range debias QA (optional)
 |-- tests/                      <- unit and synthetic integration tests
 |-- docs/                       <- full documentation
 |-- data/                       <- gitignored generated data
@@ -125,7 +125,7 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 # Useful flags
 --from N           # run stages N through 15
 --only N           # run exactly stage N
---skip 14,15       # exclude stages
+--skip 15          # exclude figure rendering
 --dry-run          # validate config and I/O paths without executing
 --validate         # re-run output validation for all stages
 --skip-ml          # force deterministic fallback in Stage 05
@@ -229,7 +229,7 @@ These come from `scripts/_config.py`.
 | `DX` | 0.05 degree | Cell size |
 | `LAT_MAX` | 50.005 | North edge of row 0 |
 | `LON_MIN` | -125.005 | West edge of col 0 |
-| `DAMAGE_THRESH_MM` | 25.4 | 1-inch damage onset (vulnerability, occurrence) |
+| `DAMAGE_THRESH_MM` | 25.4 | 1-inch damage onset (occurrence, Stage 13 severe-cell counts) |
 | `EVENT_ACTIVE_THRESH_MM` | 29.0 | Cintineo/Wendt skill threshold (Stage 08 events, Stage 05 winter filter) |
 | `GPD_THRESH_MM_DEFAULT` | 50.8 | 2-inch EVT tail starting threshold |
 | `MAX_HAIL_MM` | 300.0 | Physical QA cap on hail diameter values |
@@ -248,11 +248,11 @@ As of 2026-06-30:
 | Area | Status |
 |---|---|
 | Active branch | `v2.2.1` (dev); model **2.2.1** on `v2.2.1`; **2.2.0** on `main` until merge |
-| All 15 stage scripts | Written, tested, production-validated |
+| All stage scripts (01–13, 15) | Written, tested, production-validated |
 | Tests | 37 pytest modules (199 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
 | **First full v2.2.1 production run** | **Complete** (2026-06-30) — Stages 01–15, `--skip-ml` |
 | Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,714** GridRad + 2,060 MRMS) |
-| Corrected archive | **9,797** days (era-pooled QM; 29 mm winter filter) |
+| Corrected archive | **9,797** days (era-pooled QM; range debias; GridRad speckle filter; 29 mm winter filter) |
 | Event catalog | **8,798** events at **29 mm** (~303 yr⁻¹) |
 | Stochastic catalog | **50,000** yr; **15.17M** synthetic events; validation passed |
 | Hail-day climatology | `data/analysis/hail_day_climatology/` (regenerate locally or load from external store) |
@@ -268,18 +268,25 @@ As of 2026-06-30:
 | 08 | 8,798 events; λ ≈ 303 yr⁻¹ at 29 mm |
 | 09–12 | Analytical RP maps through 50,000 yr |
 | 13 | 50k-yr stochastic catalog (~5.4 h); memmap-backed annual maxima |
-| 14–15 | Placeholder vulnerability + figures; validation passed |
+| 15 | Figures + validation report |
 
 ## Current Run Watch
 
-**No active pipeline process.** Full v2.2.1 production run finished **2026-06-30 ~18:42 EDT**.
+**Stage 06–15 rerun in progress (2026-07-05)** after Stage 05 rebuild with range debias
+and GridRad speckle filter. Monitor `logs/pipeline_from06_post_debias.run.log`.
 
-Optional follow-ups:
+Stage 05 debias rerun (2026-07-05): **9,797** days in **5.0 min**; range debias ON;
+speckle filter ON; mean pixels filtered **17.2%** (was **5.8%**). Diagnostic post-rerun:
+GridRad speckle **9.7% → 6.1%**; MRMS far-range annual max improved at 275+ km.
+
+Prior production run finished **2026-06-30 ~18:42 EDT** (pre-debias stochastic catalog).
+
+Optional follow-ups after rerun completes:
 
 1. `python run_pipeline.py --validate`
-2. `python scripts/diagnostics/hail_day_climatology.py` on final corrected archive
+2. Compare `docs/figures/stochastic/` RP maps before/after debias rerun
 3. Freeze regression/golden outputs; bootstrap CIs on Stage 09
-4. Merge `v2.2.1` → `main` when ready
+4. Merge debias code/docs to `main` when ready
 
 ## Documentation Quick Reference
 

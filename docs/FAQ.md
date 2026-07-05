@@ -76,8 +76,7 @@ See `docs/technical_documentation.md` for per-stage implementation notes. In bri
 | 11b | Download NOAA/NCEI ETOPO 2022 DEM and resample to the model grid |
 | 12 | Apply CONUS mask and topographic correction |
 | 13 | Generate 50,000-year stochastic event catalog |
-| 14 | Apply vulnerability curves (placeholder) |
-| 15 | Render diagnostic figures |
+| 15 | Render diagnostic figures and validation report |
 
 **Q: How do I run the pipeline?**
 
@@ -85,7 +84,7 @@ From the repo root:
 ```bash
 python run_pipeline.py --only 01       # single stage
 python run_pipeline.py --from 06       # stages 06 through 15
-python run_pipeline.py --skip 14,15    # skip stages
+python run_pipeline.py --skip 15         # skip figure rendering
 python run_pipeline.py --dry-run       # validate without executing
 python run_pipeline.py --validate      # re-validate all outputs
 ```
@@ -185,9 +184,9 @@ Low confidence. The observational record is ~25 years. Anything above ~500-year 
 
 No. v2.1 assumes stationarity: the fitted tail and simulated catalog represent historical average conditions. There is scientific evidence that hail environments are changing (Allen, Tippett, Sobel 2015). Non-stationarity could be addressed in a future version using time-varying EVT parameters or scenario-based perturbations.
 
-**Q: Why are vulnerability curves labeled "placeholder"?**
+**Q: Does this model produce insured loss estimates?**
 
-Stage 14 implements a generic mean-damage-ratio (MDR) curve for five construction classes, derived from published literature rather than claims data. These curves have not been validated against insurance claims. They exist to allow end-to-end pipeline testing and scenario loss approximation. They should not be used for underwriting or rate-setting without calibration.
+No. The repository is **hazard-only**: gridded hail occurrence, intensity, return periods, and a stochastic event catalog. Vulnerability curves, exposure, and financial loss modeling are **future work** (`docs/methodology.md` §14; PNAS manuscript).
 
 **Q: What is the biggest source of uncertainty?**
 
@@ -208,6 +207,18 @@ This is almost certainly a sparse-safety violation. Check that no intermediate s
 **Q: Stage 05 says it cannot find the ML model file.**
 
 Run with `--skip-ml`. The ML artifacts (`gridrad_cqm_model.pkl`, `hail_filter_model.pkl`) are optional. Use `--retrain-models` if you want to fit them from existing Stage 05 intermediate outputs.
+
+**Q: Stochastic return-period maps show radar rings or spokes. What do I do?**
+
+This is a known GridRad-era artifact (speckle and range-dependent bias). Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stages 05–06, then rebuild the corrected archive with range debias and speckle filtering:
+
+```bash
+rm -rf data/historical/mesh_0.05deg_corrected/
+.venv/bin/python scripts/05_apply_mesh_bias_correction.py --skip-ml
+.venv/bin/python run_pipeline.py --from 06 --skip-ml
+```
+
+Stage 05 logs `Range debias: ON` and `Speckle filter: ON (GridRad era only)` when active. See `docs/methodology.md` §5.5.
 
 **Q: Stage 01 produces all-zero GeoTIFFs for some days.**
 
