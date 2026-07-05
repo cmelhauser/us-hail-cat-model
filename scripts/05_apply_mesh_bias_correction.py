@@ -25,7 +25,9 @@ Internal Phases (run automatically in order)
     - MYRORSS/MRMS → Witt→MESH75 recalibration
     - GridRad → quantile-mapping cross-calibration
     Then apply environmental filter to all sources.
-    Output to: data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif
+  Optional range-dependent debias (when ``data/analysis/calibration/range_debias.npz``
+  exists from ``scripts/diagnostics/radar_artifact_diagnostic.py``).
+  Output to: data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif
 
 MESH75 Recalibration (Witt-algorithm sources)
 ----------------------------------------------
@@ -113,8 +115,28 @@ _qq_myrorss   = None
 _qq_type      = None
 _cqm_model    = None
 _filter_model = None
+_range_debias = None
+_range_km_grid = None
 
 log = get_logger("05_apply_mesh_bias_correction", LOG_ROOT).info
+
+
+def init_range_debias(*, enable: bool = True) -> bool:
+    """Load optional range-debias table and distance grid."""
+    global _range_debias, _range_km_grid
+    _range_debias = None
+    _range_km_grid = None
+    if not enable:
+        return False
+    try:
+        from _radar_geometry import ensure_range_km_grid, load_range_debias
+    except ImportError:  # pragma: no cover
+        from scripts._radar_geometry import ensure_range_km_grid, load_range_debias
+    _range_debias = load_range_debias()
+    if _range_debias is None:
+        return False
+    _range_km_grid = ensure_range_km_grid()
+    return True
 
 def load_gridrad_days() -> set:
     global _gridrad_days
@@ -410,7 +432,7 @@ def apply_environmental_filter(data, day_of_year, lat_grid):
         out[(lat_grid < 30.0) & (out < MIN_MESH75_SEVERE)] = 0.0
     return out
 
-def process_file(in_path, out_path, lat_grid, skip_ml: bool = False):
+def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debias: bool = True):
     import rasterio
 
     if out_path.exists():
@@ -429,6 +451,16 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False):
     else:
         corrected = apply_mesh75_correction(data)
         source = "MYRORSS/MRMS"
+
+    if range_debias and _range_debias is not None and _range_km_grid is not None:
+        try:
+            from _radar_geometry import apply_range_debias as _apply_range_debias
+            from _radar_geometry import classify_mesh_source_from_yyyymmdd
+        except ImportError:  # pragma: no cover
+            from scripts._radar_geometry import apply_range_debias as _apply_range_debias
+            from scripts._radar_geometry import classify_mesh_source_from_yyyymmdd
+        src_era = classify_mesh_source_from_yyyymmdd(datestr)
+        corrected = _apply_range_debias(corrected, _range_km_grid, src_era, _range_debias)
 
     filtered = apply_probabilistic_filter(corrected, doy, lat_grid, skip_ml=skip_ml)
     filtered, n_repaired = sanitize_hail_values(filtered, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
@@ -505,6 +537,8 @@ def main():
                         help="Use deterministic calibration/filtering fallbacks even if optional artifacts exist")
     parser.add_argument("--retrain-models", action="store_true",
                         help="Accepted for pipeline compatibility; training is external to this script")
+    parser.add_argument("--no-range-debias", action="store_true",
+                        help="Disable range-dependent debias even if range_debias.npz exists")
     args = parser.parse_args()
 
     if args.validate:
@@ -531,6 +565,10 @@ def main():
 
     load_qq_map()
     log(f"  Cross-calibration type: {_qq_type}")
+    if init_range_debias(enable=not args.no_range_debias):
+        log("  Range debias: ON (range_debias.npz)")
+    else:
+        log("  Range debias: OFF (run radar_artifact_diagnostic.py to build range_debias.npz)")
 
     log("\n[Phase B] Applying corrections to all rasters")
     lat_grid = build_lat_grid()
@@ -550,7 +588,11 @@ def main():
     for in_path in in_files:
         rel = in_path.relative_to(IN_DIR)
         out_path = OUT_DIR / rel
-        result = process_file(in_path, out_path, lat_grid, skip_ml=args.skip_ml)
+        result = process_file(
+            in_path, out_path, lat_grid,
+            skip_ml=args.skip_ml,
+            range_debias=not args.no_range_debias,
+        )
 
         if result.get("skipped"):
             skipped += 1

@@ -1,0 +1,401 @@
+"""
+_radar_geometry.py — NEXRAD site geometry and range-dependent MESH debias helpers.
+
+NEXRAD site coordinates follow NOAA HOMR / Py-ART ``nexrad_common`` (CONUS WSR-88D,
+``K*`` ICAO IDs). Used by ``scripts/diagnostics/radar_artifact_diagnostic.py`` and
+Stage 05 range debias.
+"""
+
+from __future__ import annotations
+
+import csv
+from datetime import date
+from pathlib import Path
+
+import numpy as np
+
+try:
+    from _config import DX, LAT_MAX, LON_MIN, NCOLS, NROWS, REPO_ROOT
+    from _io import haversine_km
+except ImportError:  # pragma: no cover
+    from scripts._config import DX, LAT_MAX, LON_MIN, NCOLS, NROWS, REPO_ROOT
+    from scripts._io import haversine_km
+
+MRMS_START = date(2020, 10, 14)
+GRIDRAD_START = date(2012, 1, 1)
+GRIDRAD_END = date(2020, 10, 13)
+
+# CONUS WSR-88D (K*) from Py-ART / NOAA HOMR (subset of international / TDWR sites removed).
+_NEXRAD_CONUS: dict[str, tuple[float, float]] = {
+    "KABR": (45.45583, -98.41306),
+    "KABX": (35.14972, -106.82333),
+    "KAKQ": (36.98389, -77.0075),
+    "KAMA": (35.23333, -101.70889),
+    "KAMX": (25.61056, -80.41306),
+    "KAPX": (44.90722, -84.71972),
+    "KARX": (43.82278, -91.19111),
+    "KATX": (48.19472, -122.49444),
+    "KBBX": (39.49611, -121.63167),
+    "KBGM": (42.19972, -75.985),
+    "KBHX": (40.49833, -124.29194),
+    "KBIS": (46.77083, -100.76028),
+    "KBLX": (45.85389, -108.60611),
+    "KBMX": (33.17194, -86.76972),
+    "KBOX": (41.95583, -71.1375),
+    "KBRO": (25.91556, -97.41861),
+    "KBUF": (42.94861, -78.73694),
+    "KBYX": (24.59694, -81.70333),
+    "KCAE": (33.94861, -81.11861),
+    "KCBW": (46.03917, -67.80694),
+    "KCBX": (43.49083, -116.23444),
+    "KCCX": (40.92306, -78.00389),
+    "KCLE": (41.41306, -81.86),
+    "KCLX": (32.65556, -81.04222),
+    "KCRI": (35.2383, -97.4602),
+    "KCRP": (27.78389, -97.51083),
+    "KCXX": (44.51111, -73.16639),
+    "KCYS": (41.15194, -104.80611),
+    "KDAX": (38.50111, -121.67667),
+    "KDDC": (37.76083, -99.96833),
+    "KDFX": (29.2725, -100.28028),
+    "KDGX": (32.28, -89.98444),
+    "KDIX": (39.94694, -74.41111),
+    "KDLH": (46.83694, -92.20972),
+    "KDMX": (41.73111, -93.72278),
+    "KDOX": (38.82556, -75.44),
+    "KDTX": (42.69972, -83.47167),
+    "KDVN": (41.61167, -90.58083),
+    "KDYX": (32.53833, -99.25417),
+    "KEAX": (38.81028, -94.26417),
+    "KEMX": (31.89361, -110.63028),
+    "KENX": (42.58639, -74.06444),
+    "KEOX": (31.46028, -85.45944),
+    "KEPZ": (31.87306, -106.6975),
+    "KESX": (35.70111, -114.89139),
+    "KEVX": (30.56417, -85.92139),
+    "KEWX": (29.70361, -98.02806),
+    "KEYX": (35.09778, -117.56),
+    "KFCX": (37.02417, -80.27417),
+    "KFDR": (34.36222, -98.97611),
+    "KFDX": (34.63528, -103.62944),
+    "KFFC": (33.36333, -84.56583),
+    "KFSD": (43.58778, -96.72889),
+    "KFSX": (34.57444, -111.19833),
+    "KFTG": (39.78667, -104.54528),
+    "KFWS": (32.57278, -97.30278),
+    "KGGW": (48.20639, -106.62417),
+    "KGJX": (39.06222, -108.21306),
+    "KGLD": (39.36694, -101.7),
+    "KGRB": (44.49833, -88.11111),
+    "KGRK": (30.72167, -97.38278),
+    "KGRR": (42.89389, -85.54472),
+    "KGSP": (34.88306, -82.22028),
+    "KGWX": (33.89667, -88.32889),
+    "KGYX": (43.89139, -70.25694),
+    "KHDC": (30.519, -90.407),
+    "KHDX": (33.07639, -106.12222),
+    "KHGX": (29.47194, -95.07889),
+    "KHNX": (36.31417, -119.63111),
+    "KHPX": (36.73667, -87.285),
+    "KHTX": (34.93056, -86.08361),
+    "KICT": (37.65444, -97.4425),
+    "KICX": (37.59083, -112.86222),
+    "KILN": (39.42028, -83.82167),
+    "KILX": (40.15056, -89.33667),
+    "KIND": (39.7075, -86.28028),
+    "KINX": (36.175, -95.56444),
+    "KIWA": (33.28917, -111.66917),
+    "KIWX": (41.40861, -85.7),
+    "KJAX": (30.48444, -81.70194),
+    "KJGX": (32.675, -83.35111),
+    "KJKL": (37.59083, -83.31306),
+    "KLBB": (33.65417, -101.81361),
+    "KLCH": (30.125, -93.21583),
+    "KLGX": (47.1158, -124.1069),
+    "KLIX": (30.33667, -89.82528),
+    "KLNX": (41.95778, -100.57583),
+    "KLOT": (41.60444, -88.08472),
+    "KLRX": (40.73972, -116.80278),
+    "KLSX": (38.69889, -90.68278),
+    "KLTX": (33.98917, -78.42917),
+    "KLVX": (37.97528, -85.94389),
+    "KLWX": (38.97628, -77.48751),
+    "KLZK": (34.83639, -92.26194),
+    "KMAF": (31.94333, -102.18889),
+    "KMAX": (42.08111, -122.71611),
+    "KMBX": (48.3925, -100.86444),
+    "KMHX": (34.77583, -76.87639),
+    "KMKX": (42.96778, -88.55056),
+    "KMLB": (28.11306, -80.65444),
+    "KMOB": (30.67944, -88.23972),
+    "KMPX": (44.84889, -93.56528),
+    "KMQT": (46.53111, -87.54833),
+    "KMRX": (36.16833, -83.40194),
+    "KMSX": (47.04111, -113.98611),
+    "KMTX": (41.26278, -112.44694),
+    "KMUX": (37.15528, -121.8975),
+    "KMVX": (47.52806, -97.325),
+    "KMXX": (32.53667, -85.78972),
+    "KNKX": (32.91889, -117.04194),
+    "KNQA": (35.34472, -89.87333),
+    "KOAX": (41.32028, -96.36639),
+    "KOHX": (36.24722, -86.5625),
+    "KOKX": (40.86556, -72.86444),
+    "KOTX": (47.68056, -117.62583),
+    "KPAH": (37.06833, -88.77194),
+    "KPBZ": (40.53167, -80.21833),
+    "KPDT": (45.69056, -118.85278),
+    "KPOE": (31.15528, -92.97583),
+    "KPUX": (38.45944, -104.18139),
+    "KRAX": (35.66528, -78.49),
+    "KRGX": (39.75417, -119.46111),
+    "KRIW": (43.06611, -108.47667),
+    "KRLX": (38.31194, -81.72389),
+    "KRTX": (45.715, -122.96417),
+    "KSFX": (43.10583, -112.68528),
+    "KSGF": (37.23528, -93.40028),
+    "KSHV": (32.45056, -93.84111),
+    "KSJT": (31.37111, -100.49222),
+    "KSOX": (33.81778, -117.635),
+    "KSRX": (35.29056, -94.36167),
+    "KTBW": (27.70528, -82.40194),
+    "KTFX": (47.45972, -111.38444),
+    "KTLH": (30.3975, -84.32889),
+    "KTLX": (35.33306, -97.2775),
+    "KTWX": (38.99694, -96.2325),
+    "KTYX": (43.75583, -75.68),
+    "KUDX": (44.125, -102.82944),
+    "KUEX": (40.32083, -98.44167),
+    "KVAX": (30.89, -83.00194),
+    "KVBX": (34.83806, -120.39583),
+    "KVNX": (36.74083, -98.1275),
+    "KVTX": (34.41167, -119.17861),
+    "KVWX": (38.26, -87.7247),
+    "KYUX": (32.49528, -114.65583),
+}
+
+DEFAULT_RANGE_BIN_EDGES_KM = np.array(
+    [0, 25, 50, 75, 100, 125, 150, 175, 200, 250, 300, 400], dtype=np.float32
+)
+REFERENCE_RANGE_KM = 125.0
+MM_PER_INCH = 25.4
+
+CALIB_DIR = REPO_ROOT / "data" / "analysis" / "calibration"
+RANGE_DEBIAS_NPZ = CALIB_DIR / "range_debias.npz"
+RANGE_KM_NPY = CALIB_DIR / "nearest_radar_distance_km.npy"
+
+
+def classify_mesh_source(day: date) -> str:
+    if day >= MRMS_START:
+        return "MRMS"
+    if GRIDRAD_START <= day <= GRIDRAD_END:
+        return "GridRad"
+    return "MYRORSS"
+
+
+def classify_mesh_source_from_yyyymmdd(datestr: str) -> str:
+    d = date(int(datestr[:4]), int(datestr[4:6]), int(datestr[6:8]))
+    return classify_mesh_source(d)
+
+
+def nexrad_sites_conus() -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Return (lats, lons, site_ids) for CONUS WSR-88D."""
+    ids = sorted(_NEXRAD_CONUS)
+    lats = np.array([_NEXRAD_CONUS[i][0] for i in ids], dtype=np.float64)
+    lons = np.array([_NEXRAD_CONUS[i][1] for i in ids], dtype=np.float64)
+    return lats, lons, ids
+
+
+def cell_center_latlon() -> tuple[np.ndarray, np.ndarray]:
+    """Cell-center latitude/longitude grids (NROWS, NCOLS)."""
+    lats = LAT_MAX - (np.arange(NROWS, dtype=np.float64) + 0.5) * DX
+    lons = LON_MIN + (np.arange(NCOLS, dtype=np.float64) + 0.5) * DX
+    lat_grid = np.broadcast_to(lats[:, None], (NROWS, NCOLS))
+    lon_grid = np.broadcast_to(lons[None, :], (NROWS, NCOLS))
+    return lat_grid, lon_grid
+
+
+def nearest_radar_distance_km(
+    lat_grid: np.ndarray | None = None,
+    lon_grid: np.ndarray | None = None,
+) -> np.ndarray:
+    """Per-cell great-circle distance (km) to the nearest CONUS NEXRAD site."""
+    if lat_grid is None or lon_grid is None:
+        lat_grid, lon_grid = cell_center_latlon()
+    site_lats, site_lons, _ = nexrad_sites_conus()
+    flat_lat = lat_grid.ravel()
+    flat_lon = lon_grid.ravel()
+    n_cells = flat_lat.size
+    n_sites = site_lats.size
+    # Chunked haversine to limit peak memory (cells × sites).
+    chunk = 50_000
+    dist_min = np.full(n_cells, np.inf, dtype=np.float64)
+    for i0 in range(0, n_cells, chunk):
+        i1 = min(i0 + chunk, n_cells)
+        clat = flat_lat[i0:i1][:, None]
+        clon = flat_lon[i0:i1][:, None]
+        slat = site_lats[None, :]
+        slon = site_lons[None, :]
+        dlat = np.radians(slat - clat)
+        dlon = np.radians(slon - clon)
+        a = (
+            np.sin(dlat / 2) ** 2
+            + np.cos(np.radians(clat)) * np.cos(np.radians(slat)) * np.sin(dlon / 2) ** 2
+        )
+        dist = 6371.0 * 2 * np.arctan2(np.sqrt(a), np.sqrt(np.maximum(0.0, 1.0 - a)))
+        dist_min[i0:i1] = dist.min(axis=1)
+    return dist_min.reshape(NROWS, NCOLS).astype(np.float32)
+
+
+def ensure_range_km_grid(cache_path: Path | None = None) -> np.ndarray:
+    """Load or compute the per-cell nearest-radar distance grid."""
+    path = Path(cache_path or RANGE_KM_NPY)
+    if path.exists():
+        arr = np.load(path)
+        if arr.shape == (NROWS, NCOLS):
+            return arr.astype(np.float32)
+    arr = nearest_radar_distance_km()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(path, arr)
+    return arr
+
+
+def write_nexrad_sites_csv(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _, _, ids = nexrad_sites_conus()
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["site_id", "lat", "lon"])
+        for sid in ids:
+            lat, lon = _NEXRAD_CONUS[sid]
+            w.writerow([sid, lat, lon])
+
+
+def _bin_index(range_km: np.ndarray, edges: np.ndarray) -> np.ndarray:
+    return np.clip(np.digitize(range_km, edges, right=False) - 1, 0, len(edges) - 2)
+
+
+def range_bin_centers(edges: np.ndarray) -> np.ndarray:
+    return ((edges[:-1] + edges[1:]) / 2.0).astype(np.float32)
+
+
+def fit_range_debias_factors(
+    pairs: list[dict],
+    *,
+    min_report_in: float = 1.0,
+    min_mesh_mm: float = 5.0,
+    edges: np.ndarray | None = None,
+    reference_range_km: float = REFERENCE_RANGE_KM,
+    clip: tuple[float, float] = (0.45, 1.15),
+) -> dict:
+    """
+    Fit multiplicative debias factors from SPC–MESH pairs.
+
+    Factor multiplies MESH so that median(report/MESH) → 1 at each range bin.
+    Normalized to 1.0 at ``reference_range_km``.
+    """
+    edges = np.asarray(edges if edges is not None else DEFAULT_RANGE_BIN_EDGES_KM, dtype=np.float32)
+    centers = range_bin_centers(edges)
+    sources = ("MYRORSS", "GridRad", "MRMS")
+    raw: dict[str, list[tuple[float, float]]] = {s: [] for s in sources}
+
+    site_lats, site_lons, _ = nexrad_sites_conus()
+    for p in pairs:
+        if p.get("spc_size_in", 0) < min_report_in:
+            continue
+        mesh = float(p.get("mesh75_mm", 0))
+        if mesh < min_mesh_mm:
+            continue
+        lat, lon = float(p["lat"]), float(p["lon"])
+        src = classify_mesh_source_from_yyyymmdd(str(p["date"]))
+        # Nearest-site distance at report location.
+        dlat = np.radians(site_lats - lat)
+        dlon = np.radians(site_lons - lon)
+        a = (
+            np.sin(dlat / 2) ** 2
+            + np.cos(np.radians(lat)) * np.cos(np.radians(site_lats)) * np.sin(dlon / 2) ** 2
+        )
+        dist = 6371.0 * 2 * np.arctan2(np.sqrt(a), np.sqrt(np.maximum(0.0, 1.0 - a)))
+        r_km = float(dist.min())
+        ratio = (float(p["spc_size_in"]) * MM_PER_INCH) / mesh
+        raw[src].append((r_km, ratio))
+
+    factors: dict[str, np.ndarray] = {}
+    for src in sources:
+        fac = np.ones(len(centers), dtype=np.float32)
+        if raw[src]:
+            rs = np.array([t[0] for t in raw[src]], dtype=np.float32)
+            ratios = np.array([t[1] for t in raw[src]], dtype=np.float32)
+            for bi in range(len(centers)):
+                lo, hi = edges[bi], edges[bi + 1]
+                mask = (rs >= lo) & (rs < hi)
+                if mask.sum() >= 30:
+                    fac[bi] = float(np.median(ratios[mask]))
+        # Fill empty bins by linear interpolation along centers.
+        valid = np.isfinite(fac) & (fac > 0)
+        if valid.sum() >= 2:
+            fac = np.interp(centers, centers[valid], fac[valid]).astype(np.float32)
+        ref_idx = int(np.argmin(np.abs(centers - reference_range_km)))
+        ref = fac[ref_idx] if fac[ref_idx] > 0 else 1.0
+        fac = fac / ref
+        fac = np.clip(fac, clip[0], clip[1]).astype(np.float32)
+        factors[src] = fac
+
+    return {
+        "range_bin_edges_km": edges,
+        "range_bin_centers_km": centers,
+        "factors": factors,
+        "n_pairs": {s: len(raw[s]) for s in sources},
+    }
+
+
+def save_range_debias(fit: dict, path: Path | None = None) -> Path:
+    path = Path(path or RANGE_DEBIAS_NPZ)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        path,
+        range_bin_edges_km=fit["range_bin_edges_km"],
+        range_bin_centers_km=fit["range_bin_centers_km"],
+        factor_myrorss=fit["factors"]["MYRORSS"],
+        factor_gridrad=fit["factors"]["GridRad"],
+        factor_mrms=fit["factors"]["MRMS"],
+        reference_range_km=np.float32(REFERENCE_RANGE_KM),
+    )
+    return path
+
+
+def load_range_debias(path: Path | None = None) -> dict | None:
+    path = Path(path or RANGE_DEBIAS_NPZ)
+    if not path.exists():
+        return None
+    z = np.load(path)
+    return {
+        "range_bin_edges_km": z["range_bin_edges_km"],
+        "range_bin_centers_km": z["range_bin_centers_km"],
+        "factors": {
+            "MYRORSS": z["factor_myrorss"],
+            "GridRad": z["factor_gridrad"],
+            "MRMS": z["factor_mrms"],
+        },
+        "reference_range_km": float(z["reference_range_km"]),
+    }
+
+
+def apply_range_debias(
+    data: np.ndarray,
+    range_km_grid: np.ndarray,
+    source: str,
+    debias: dict,
+) -> np.ndarray:
+    """Multiply MESH by range-dependent factors (per source era)."""
+    src = source if source in debias["factors"] else "GridRad"
+    if src == "MYRORSS/MRMS":
+        src = "MRMS" if "MRMS" in debias["factors"] else "MYRORSS"
+    factors = debias["factors"].get(src)
+    if factors is None:
+        return data
+    edges = debias["range_bin_edges_km"]
+    centers = debias["range_bin_centers_km"]
+    fac_2d = np.interp(range_km_grid.ravel(), centers, factors).reshape(NROWS, NCOLS)
+    out = data.astype(np.float32) * fac_2d.astype(np.float32)
+    return out

@@ -250,9 +250,19 @@ Re-run after ingest stages complete (or while Stage 04c is in progress) to compa
 
 Writes `data/analysis/hail_day_climatology/` (per-cell GeoTIFFs, threshold benchmark CSV, seasonal plots). Run after Stage 05 completes to compare against Cintineo et al. (2012) and Murillo et al. (2021) hail-day climatologies at literature MESH75 thresholds (25.4–63.25 mm). **v2.2.1** adopted **29.0 mm** for Stage 08 event footprints based on this diagnostic.
 
+### Radar artifact diagnostic and range debias
+
+After Stage 05 and Stage 06 validation pairs exist:
+
+```bash
+.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
+```
+
+Writes `data/analysis/radar_artifacts/` (range maps, speckle scores, source-era comparisons) and fits `data/analysis/calibration/range_debias.npz` from SPC collocated pairs. Stage 05 applies range debias automatically when that file exists (`--no-range-debias` to disable). **Re-run Stage 05** after generating `range_debias.npz` (delete `mesh_0.05deg_corrected/` first).
+
 ## 6. Stage 05 Modes
 
-**v2.2.1 rerun:** Stage 05 skips days whose corrected GeoTIFF already exists. To apply era-pooled GridRad calibration and the 29 mm winter filter, delete the corrected archive first:
+**v2.2.1 rerun:** Stage 05 skips days whose corrected GeoTIFF already exists. To apply era-pooled GridRad calibration, the 29 mm winter filter, or updated `range_debias.npz`, delete the corrected archive first:
 
 ```bash
 rm -rf data/historical/mesh_0.05deg_corrected/
