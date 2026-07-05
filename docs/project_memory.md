@@ -1,19 +1,19 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-05 (`v2.2.1` — Stage 05 range debias + speckle filter; downstream rerun from Stage 06)**
+**Last updated: 2026-07-05 (`v2.2.2` — Stage 05 range debias + speckle filter; downstream rerun from Stage 06)**
 
 ---
 
 ## 1. Canonical Project Identity
 
 - **Name:** CONUS Hail Catastrophe Model
-- **Current version:** v2.2.1 (dev branch); v2.2.0 on `main` until merge
+- **Current version:** v2.2.2 (dev branch); v2.2.1 on `main` until merge
 - **Model type:** hail hazard model
 - **Domain:** continental United States
 - **Primary hazard input:** radar-derived MESH / MESH75
 - **Grid:** 0.05°, 520 rows × 1180 columns
-- **Core architecture:** 14-stage hazard pipeline (01–13, 15; no vulnerability stage)
+- **Core architecture:** 14-stage hazard pipeline (01–14; no vulnerability stage)
 - **Core stochastic design:** sparse event resampling
 - **Primary output:** gridded hail hazard return-period maps and stochastic event diagnostics
 - **Not included:** production exposure, financial loss, or claims-calibrated vulnerability
@@ -22,9 +22,9 @@
 
 ## 2. Current State (as of 2026-07-05)
 
-Branch `main` includes radar debias code (merged PR #14). **Stage 05 debias rerun complete**; **Stages 06–15 rerun in progress** (`logs/pipeline_from06_post_debias.run.log`).
+Branch `main` includes radar debias code (merged PR #14). **Stage 05 debias rerun complete**; **Stages 06–14 rerun in progress** (`logs/pipeline_from06_post_debias.run.log`).
 
-**Prior v2.2.1 production run (2026-06-30):** full pipeline Stages 01–15 validated with `--skip-ml` (pre-debias stochastic catalog superseded after rerun).
+**Prior v2.2.1 production run (2026-06-30):** full pipeline Stages 01–14 validated with `--skip-ml` (pre-debias stochastic catalog superseded after rerun).
 
 | Metric | Value |
 |--------|------:|
@@ -81,7 +81,7 @@ Any future methodology change must update tests and documentation in the same co
 
 ### Stage 05
 
-Handles source calibration, **range-dependent debias** (`range_debias.npz`), **GridRad speckle filtering**, and environmental filtering. Must run with or without optional ML artifacts (`--skip-ml`). Re-run Stages 06–15 after debias methodology changes.
+Handles source calibration, **range-dependent debias** (`range_debias.npz`), **GridRad speckle filtering**, and environmental filtering. Must run with or without optional ML artifacts (`--skip-ml`). Re-run Stages 06–14 after debias methodology changes.
 
 ### Stage 08
 
@@ -227,7 +227,7 @@ the same finite/non-negative/300.0 mm value invariant.
 
 ### 2026-05-03 — Pre-pipeline fixes and PNAS article update ✅
 
-- `scripts/08_build_event_catalog.py`: `MAX_CENTROID_KM_DAY` corrected 100.0 → 150.0 (canonical per methodology.md §8.2 and _config.py)
+- `scripts/08_build_event_catalog.py`: `MAX_CENTROID_KM_DAY` corrected 100.0 → 140.0 (canonical per methodology.md §8.2 and _config.py)
 - `tests/test_no_duplicated_constants.py`: MAX_CENTROID xfail converted to passing assertion
 - `docs/pnas_article_ai_hail_model.md`: comprehensive update — author line (Christopher Melhauser, Ph.D., Independent Researcher, Google Scholar URL), repository URL, AI model names (`claude-sonnet-4-6`, `claude-opus-4-6`, `gpt-5.5-medium`), v2.1 stage descriptions (event merge logic, EVT threshold diagnostics, topographic correction, sparse safety), missing references (Cintineo 2012, Brown 2015), pipeline stage table rewritten, benchmark discussion paragraph added
 - `docs/methodology.md §0`: notation glossary written (grid, hazard, occurrence, EVT, stochastic, topographic, vulnerability, abbreviations)
@@ -235,7 +235,7 @@ the same finite/non-negative/300.0 mm value invariant.
 
 ### 2026-05-02 — Full Repo Scan ✅
 
-Complete grep scan and refactor of all 15 stage scripts confirming:
+Complete grep scan and refactor of all 14 stage scripts confirming:
 - 15/15 scripts import shared configuration from `_config.py`
 - 15/15 scripts use `_logging.get_logger()` instead of print-based `log()` helpers
 - Shared `_io.py` helpers are wired where needed (`write_geotiff`, `haversine_km`, `latlon_to_grid`)
@@ -260,11 +260,11 @@ Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instruction
 In order:
 
 1. **Confirm Stage 04c `--missing-only` backfill is finished** (or accept manifest `missing_source` days).
-2. **Re-run Stages 05–15 with `--skip-ml`** against the full dataset; this includes Stage 11b DEM preparation before Stage 12.
+2. **Re-run Stages 05–14 with `--skip-ml`** against the full dataset; this includes Stage 11b DEM preparation before Stage 12.
 3. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
 4. **Regenerate mesh-era diagnostic** if ingest changes (`scripts/diagnostics/summarize_mesh_daily_peaks.py`).
 5. **Regenerate hail-day climatology** after Stage 05 (`scripts/diagnostics/hail_day_climatology.py`).
-5. **Review Stage 15 figures** once production outputs exist.
+5. **Review Stage 14 figures** once production outputs exist.
 6. **Regression tests** — freeze golden outputs after first production run.
 7. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist.
 8. **Rebuild `.venv` to Python 3.10+** — current run venv is Python 3.9.6 (EOL Oct 2025).
@@ -289,11 +289,11 @@ In order:
 ```text
 Project: CONUS Hail Cat Model v2.2.
 Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
-15-stage Python pipeline. Run via run_pipeline.py.
+14-stage Python pipeline. Run via run_pipeline.py.
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
-Active branch: v2.2.1. Model 2.2.1. Full production run complete 2026-06-30 (Stages 01–15).
+Active branch: v2.2.2. Model 2.2.2. Full production run complete 2026-06-30 (Stages 01–14).
 9,797 mesh TIFFs; 8,798 events at 29 mm; 50k-yr stochastic catalog validated.
 Stage 01/02 manifests distinguish missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.

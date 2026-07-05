@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-06-30 (`v2.2.1`; full production run complete — see `docs/RUN_NOTES.md`)**
+**Last updated: 2026-07-05 (`v2.2.2`; Stage 05 artifact filter rerun — see `docs/RUN_NOTES.md`)**
 
 ---
 
@@ -15,7 +15,7 @@ This document gives future AI agents and developers explicit instructions for wo
 
 When changing the project:
 
-1. Preserve the 14-stage hazard pipeline (01–13, 15) unless the user explicitly requests a future major-version redesign.
+1. Preserve the 14-stage hazard pipeline (01–14) unless the user explicitly requests a future major-version redesign.
 2. Preserve file paths and output schemas unless a migration is documented.
 3. Keep raster operations vectorized whenever possible.
 4. Use sparse event arrays for event storage and stochastic simulation.
@@ -64,7 +64,7 @@ Must support:
 - optional probabilistic filtering;
 - deterministic fallback with `--skip-ml`.
 
-After debias methodology changes: delete `mesh_0.05deg_corrected/`, re-run Stage 05, then Stages 06–15.
+After debias methodology changes: delete `mesh_0.05deg_corrected/`, re-run Stage 05, then Stages 06–14.
 
 ### Stage 08 — Event catalog
 
@@ -117,7 +117,7 @@ Must not reconstruct all event templates into dense grids.
 
 **σ_perturb calibration:** The actual `calibrate_sigma()` method computes monthly CV (coefficient of variation) for events in months March–September, takes the median of those monthly CVs, and clips to [0.10, 0.40]. This is more conservative than a global inter-annual variance estimator. `docs/methodology.md §13` and `docs/uncertainty.md §5.1` now reflect this.
 
-### Stage 15 — Figures
+### Stage 14 — Figures
 
 Must render diagnostics that expose model risk, including analytical vs stochastic comparison.
 
@@ -201,7 +201,7 @@ When asked to review the project:
 
 Current repository state:
 
-- Active branch: **`main`** (model **2.2.1** on `origin`).
+- Active branch: **`v2.2.2`** (model **2.2.2** on `origin`; **2.2.1** on `main` until merge).
 - GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing.
 - Stage helper refactor complete: `_config.py`, `_logging.py`, and `_io.py` are wired into stage scripts where required.
 - **Stage 01 complete** (5,023 convective-day MYRORSS rasters through 2011-12-31).
@@ -233,8 +233,8 @@ Current repository state:
 ### Confirmed outstanding items
 
 **Code refactors:**
-- ✅ `_config.py` import refactor complete: all 15 stage scripts import shared constants/paths.
-- ✅ `_logging.py` migration complete: all 15 stage scripts use `get_logger()`.
+- ✅ `_config.py` import refactor complete: all 14 stage scripts import shared constants/paths.
+- ✅ `_logging.py` migration complete: all 14 stage scripts use `get_logger()`.
 - ✅ `scripts/_io.py` written and wired for shared `write_geotiff`, `haversine_km`, and `latlon_to_grid` helpers.
 - ✅ `MAX_CENTROID_KM_DAY`, `DAMAGE_THRESH_MM`, `MAX_HAIL_MM`, and `RP_YEARS` now come from `_config.py` in the stages that need them.
 
@@ -262,13 +262,13 @@ Current repository state:
 - Bootstrap CIs on Stage 09 RP estimates
 
 **Immediate run priorities (2026-07-05):**
-- Monitor Stages 06–15 rerun after Stage 05 debias rebuild (`logs/pipeline_from06_post_debias.run.log`).
+- Monitor Stages 06–14 rerun after Stage 05 debias rebuild (`logs/pipeline_from06_post_debias.run.log`).
 - Compare stochastic RP maps before/after debias rerun.
 - Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stage 05/06 to verify speckle reduction.
 
 **Prior priorities (2026-06-27):**
 - Confirm Stage 04c `--missing-only` backfill is finished (or accept manifest `missing_source` days).
-- Re-run Stages 05–15 with `--skip-ml` against the full dataset.
+- Re-run Stages 05–14 with `--skip-ml` against the full dataset.
 - Run Stage 13 smoke (`--n-years 1000`) before the full 50,000-year catalog.
 - Regenerate mesh-era diagnostic if ingest changes: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 - Regenerate hail-day climatology after Stage 05: `scripts/diagnostics/hail_day_climatology.py`.
@@ -287,7 +287,7 @@ dataset licences from the CDS download pages, then retry Stage 04a.
 ```text
 CONUS Hail Cat Model v2.2 is a radar-first hail hazard model on a 0.05° CONUS grid.
 It uses MYRORSS, GridRad, MRMS, ERA5, and SPC validation.
-15-stage Python pipeline. Run via run_pipeline.py.
+14-stage Python pipeline. Run via run_pipeline.py.
 SPC reports are validation only — never a hazard input.
 Stage 08 builds a sparse event catalog (event_peaks.npz: rows/cols/vals per event).
 Stage 13 must remain sparse-safe — no dense event cubes.
@@ -297,6 +297,6 @@ scripts/_config.py = single source of truth for constants and is imported by all
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 OPEN DOC WATCH: methodology.md §13 and uncertainty.md §5.1 document monthly CV Mar–Sep for σ_perturb; keep them aligned with code if Stage 13 changes.
 First full run started 2026-05-01 via Codex.
-Active branch: main. Model 2.2.1 (12 UTC → 12 UTC convective days).
-Stage 01 + 02 + 04c primary ingest complete (9,584 mesh TIFFs). Stages 05–15 are the active blocker.
+Active branch: v2.2.2. Model 2.2.2 (12 UTC → 12 UTC convective days).
+Stage 01 + 02 + 04c primary ingest complete (9,584 mesh TIFFs). Stages 05–14 are the active blocker.
 ```

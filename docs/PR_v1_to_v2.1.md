@@ -53,7 +53,7 @@ Major v2.0 additions:
 - ERA5 0 C and -20 C isotherm support;
 - MESH75 calibration;
 - fixed 0.05 degree CONUS grid;
-- 15-stage pipeline from ingestion through figures;
+- 14-stage pipeline from ingestion through figures;
 - SPC reports retained for validation rather than hazard truth;
 - event-catalog construction;
 - regional EVT fitting with lognormal body and GPD tail;

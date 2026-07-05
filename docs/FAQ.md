@@ -76,15 +76,15 @@ See `docs/technical_documentation.md` for per-stage implementation notes. In bri
 | 11b | Download NOAA/NCEI ETOPO 2022 DEM and resample to the model grid |
 | 12 | Apply CONUS mask and topographic correction |
 | 13 | Generate 50,000-year stochastic event catalog |
-| 15 | Render diagnostic figures and validation report |
+| 14 | Render diagnostic figures and validation report |
 
 **Q: How do I run the pipeline?**
 
 From the repo root:
 ```bash
 python run_pipeline.py --only 01       # single stage
-python run_pipeline.py --from 06       # stages 06 through 15
-python run_pipeline.py --skip 15         # skip figure rendering
+python run_pipeline.py --from 06       # stages 06 through 14
+python run_pipeline.py --skip 14         # skip figure rendering
 python run_pipeline.py --dry-run       # validate without executing
 python run_pipeline.py --validate      # re-validate all outputs
 ```
@@ -111,7 +111,7 @@ No. With **`--with-04b-download`**, Stage **04c** uses a **severe-first** policy
 
 **Q: Why do many gap-era days still show `missing_source` in the manifest?**
 
-Three NCAR products cover the gap era with different calendars: **GridRad-Severe** (~100 severe events per year), **GridRad V3.1 hourly** (through 2017, all months), and **GridRad V4.2 warm-season hourly** (Apr–Aug only, 2008–2021). Off-season days and non-severe warm-season days may legitimately have no GridRad on NCAR. After the **d841001** fallback (v2.2.1+), re-run **`--missing-only`** backfill to pick up additional Apr–Aug 2018–2020 days that previously logged `no_data`.
+Three NCAR products cover the gap era with different calendars: **GridRad-Severe** (~100 severe events per year), **GridRad V3.1 hourly** (through 2017, all months), and **GridRad V4.2 warm-season hourly** (Apr–Aug only, 2008–2021). Off-season days and non-severe warm-season days may legitimately have no GridRad on NCAR. After the **d841001** fallback (v2.2.2+), re-run **`--missing-only`** backfill to pick up additional Apr–Aug 2018–2020 days that previously logged `no_data`.
 
 **Q: Why did many GridRad gap-fill days show zero hail (`active_cells=0`) even when NetCDFs downloaded successfully?**
 
@@ -131,7 +131,7 @@ The Stage 08 output that stores each historical event as sparse arrays: `rows`, 
 
 **Q: Stage 08 reports ~300 events per year. Is that reasonable?**
 
-Stage 08 counts **CONUS-wide** days/clusters with at least one cell ≥ **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** in v2.2.1. The prior 25.4 mm threshold yielded ~306 events/yr and ~344 national any-cell MESH days/yr with weak seasonality vs SPC. At **29 mm**, per-cell Great Plains maxima are **~3.7 hail days/yr** (vs **~5.5** at 25.4 mm), closer to Cintineo et al. (2012) and Wendt & Jirak (2021). Run `scripts/diagnostics/hail_day_climatology.py` for full threshold sensitivity; see `docs/methodology.md` §2.7 and §8.4.
+Stage 08 counts **CONUS-wide** days/clusters with at least one cell ≥ **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** in v2.2.2. The prior 25.4 mm threshold yielded ~306 events/yr and ~344 national any-cell MESH days/yr with weak seasonality vs SPC. At **29 mm**, per-cell Great Plains maxima are **~3.7 hail days/yr** (vs **~5.5** at 25.4 mm), closer to Cintineo et al. (2012) and Wendt & Jirak (2021). Run `scripts/diagnostics/hail_day_climatology.py` for full threshold sensitivity; see `docs/methodology.md` §2.7 and §8.4.
 
 ---
 

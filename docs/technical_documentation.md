@@ -395,7 +395,7 @@ else:
     when same-day overlap is unavailable; median ratio ~1.10 above 10 mm
 ```
 
-Deterministic environmental filters (v2.2.1):
+Deterministic environmental filters (v2.2.2):
 
 ```text
 noise floor: 5 mm
@@ -517,7 +517,7 @@ event_peaks.npz
 
 ### 12.2 Event grouping constraints
 
-Active cells use **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.1. `DAMAGE_THRESH_MM` (25.4 mm) applies to occurrence products and Stage 13 severe-cell counts.
+Active cells use **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.2. `DAMAGE_THRESH_MM` (25.4 mm) applies to occurrence products and Stage 13 severe-cell counts.
 
 ```text
 temporal gap <= 2 days
@@ -554,7 +554,7 @@ Dense event cubes are prohibited as production event storage. They are memory-in
 **Script:** `scripts/diagnostics/hail_day_climatology.py` (optional, not a pipeline stage)  
 **Output:** `data/analysis/hail_day_climatology/`
 
-Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al. (2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm. **v2.2.1 adopted 29.0 mm** for Stage 08 based on this diagnostic (GP max **3.7** vs **5.5** days/yr at 25.4 mm).
+Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al. (2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm. **v2.2.2 adopted 29.0 mm** for Stage 08 based on this diagnostic (GP max **3.7** vs **5.5** days/yr at 25.4 mm).
 
 Review:
 
@@ -570,7 +570,7 @@ Review:
 
 Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Stage 05 applies `range_debias.npz` automatically on the next rerun.
 
-**2026-07-05 production rerun:** GridRad speckle **9.7% → 6.1%**; Stage 05 mean pixels filtered **5.8% → 17.2%**. Residual GridRad−MYRORSS climatological offset remains; re-run Stages **06–15** after debias changes.
+**2026-07-05 production rerun:** GridRad speckle **9.7% → 6.1%**; Stage 05 mean pixels filtered **5.8% → 17.2%**. Residual GridRad−MYRORSS climatological offset remains; re-run Stages **06–14** after debias changes.
 
 ---
 
@@ -791,7 +791,7 @@ rows, cols, vals
 8. Update compact annual maxima.
 9. Write empirical return-period maps and PET tables.
 
-### 18.4 Memory management (v2.2.1)
+### 18.4 Memory management (v2.2.2)
 
 Full 50,000-year catalogs require annual maxima over all CONUS cells (~562k active-mask cells × 50k years). A dense in-RAM `ann_max` array exceeds **100 GiB** and caused SIGKILL (exit -9) on long runs.
 
@@ -811,13 +811,13 @@ Resume after failure: `python run_pipeline.py --from 13 --skip-ml`. Ensure **~12
 - Return-period maps exist.
 - PET tables exist.
 - Sparse logic remains memory bounded.
-- Analytical and stochastic maps are compared in Stage 15.
+- Analytical and stochastic maps are compared in Stage 14.
 
 ---
 
-## 19. Stage 15 - Figures
+## 19. Stage 14 - Figures
 
-**Script:** `scripts/15_render_figures.py`
+**Script:** `scripts/14_render_figures.py`
 
 ### 19.1 Output directories
 

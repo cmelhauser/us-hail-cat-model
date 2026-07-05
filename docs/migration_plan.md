@@ -18,7 +18,7 @@ The short version is:
 - **v1.0** was a report-driven prototype. It used SPC hail reports as the
   primary hazard evidence and included population-trend adjustment.
 - **v2.0** was the scientific redesign. It replaced report-based hazard
-  estimation with radar-derived hail fields and introduced the modern 15-stage
+  estimation with radar-derived hail fields and introduced the modern 14-stage
   hazard pipeline.
 - **v2.1** is the hardening release. It preserves the v2.0 scientific
   architecture while adding source provenance, deterministic fallbacks,
@@ -118,7 +118,7 @@ SPC reports are downloaded separately for validation.
 
 ### 4.3 v2.0 model architecture
 
-v2.0 established the modern 15-stage pipeline:
+v2.0 established the modern 14-stage pipeline:
 
 ```text
 01 MYRORSS ingestion
@@ -136,8 +136,8 @@ v2.0 established the modern 15-stage pipeline:
 11b public DEM preparation
 12 CONUS mask and topographic correction
 13 stochastic catalog
-15 figures and validation report
-15 figures
+14 figures and validation report
+14 figures
 ```
 
 ### 4.4 v2.0 scientific additions
@@ -175,7 +175,7 @@ defensible, testable, and safe to run.
 ### 5.1 What stays the same
 
 - Radar-first hazard philosophy.
-- 15-stage pipeline.
+- 14-stage pipeline.
 - Fixed 0.05 degree CONUS grid.
 - MESH75 as the post-calibration hail-size metric.
 - Lognormal body plus GPD tail framework.
@@ -303,7 +303,7 @@ should focus on:
 - whether generated data and figures were removed from git;
 - whether source provenance is sufficiently documented;
 - whether `--skip-ml` provides a reproducible baseline path;
-- whether the 15-stage pipeline is understandable from docs alone;
+- whether the 14-stage pipeline is understandable from docs alone;
 - whether CI and tests provide enough protection for future changes.
 
 This PR should not be read as a request to bless final hazard results. Full-run

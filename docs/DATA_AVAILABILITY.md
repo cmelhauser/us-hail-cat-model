@@ -1,6 +1,6 @@
 # Data and Code Availability
 
-**Model version:** 2.2.1  
+**Model version:** 2.2.2  
 **Maintainer:** Christopher Melhauser  
 **ORCID:** [0009-0000-4234-5419](https://orcid.org/0009-0000-4234-5419)  
 **Last updated:** 2026-07-05
@@ -17,7 +17,7 @@ figures are stored externally or regenerated locally.
 |----------|--------|----------------|
 | Source code (GitHub) | Active | [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model) |
 | Manuscript commit SHA | TBD | Record the exact `git rev-parse HEAD` used for the PNAS submission |
-| Code archive (Zenodo, via GitHub Release) | **Pending** | TBD — one archived snapshot per GitHub Release tag **`v2.X.X`** (e.g. `v2.2.1`); minted automatically when Zenodo–GitHub integration is enabled |
+| Code archive (Zenodo, via GitHub Release) | **Pending** | TBD — one archived snapshot per GitHub Release tag **`v2.X.X`** (e.g. `v2.2.2`); minted automatically when Zenodo–GitHub integration is enabled |
 | Generated outputs (Zenodo, manual upload) | **Pending** | TBD — full `data/` + `docs/figures/` tarball for the matching **`v2.X.X`** release (see §3) |
 
 After the first Zenodo deposit, replace `TBD` entries above and in `CITATION.cff`,
@@ -61,7 +61,7 @@ Gitignored `data/` and `docs/figures/` are **not** included in that snapshot.
 
 1. Merge or tag the release commit.
 2. On GitHub: **Releases → Draft a new release**.
-   - Tag: `v2.X.X` (e.g. `v2.2.1`, `v2.3.0`)
+   - Tag: `v2.X.X` (e.g. `v2.2.2`, `v2.3.0`)
    - Title: `CONUS Hail Catastrophe Model v2.X.X`
    - Description: point to `CHANGELOG.md` and this file.
 3. Publish the release. Zenodo archives the repository snapshot within minutes.
@@ -115,7 +115,7 @@ Run after the production pipeline for the target `v2.X.X` release:
 .venv/bin/python scripts/diagnostics/render_pnas_article_figures.py
 
 # Supplementary maps
-.venv/bin/python scripts/15_render_figures.py
+.venv/bin/python scripts/14_render_figures.py
 ```
 
 ### Build the upload tarball

@@ -241,7 +241,7 @@ The following are tracked but not blockers for v2.1:
 
 **Removed (2026-07).** Hazard-only repository; vulnerability/loss is future work (`docs/methodology.md` §14).
 
-### Stage 15
+### Stage 14
 
 - Confirm figures render.
 - Confirm analytical/stochastic comparison exists.

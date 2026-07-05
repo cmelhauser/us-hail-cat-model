@@ -1,6 +1,6 @@
-# Uncertainty Budget — CONUS Hail Catastrophe Model v2.2.1
+# Uncertainty Budget — CONUS Hail Catastrophe Model v2.2.2
 
-**Version:** 2.2.1  
+**Version:** 2.2.2  
 **Status:** Framework document — quantitative bounds to be populated after first full run  
 **Related:** `docs/methodology.md`, `docs/technical_documentation.md §09`
 
@@ -39,7 +39,7 @@ roughly ±5–10% in SHI and ±1–3 mm in MESH75 at moderate hail sizes.
 **Current treatment:** Accepted as irreducible. No per-radar calibration
 correction is applied beyond the MYRORSS compositing procedure.
 
-### 1.2 NEXRAD range geometry and speckle (v2.2.1+)
+### 1.2 NEXRAD range geometry and speckle (v2.2.2+)
 
 GridRad-era products can exhibit **range-dependent bias** and **isolated speckle
 spikes** aligned with WSR-88D site geometry. These propagate into sparse event
@@ -57,7 +57,7 @@ footprints and stochastic return-period maps if uncorrected.
 **Current treatment:** Stage 05 applies SPC-collocated **range debias**
 (`range_debias.npz`) and a **GridRad speckle filter** (3×3 median test).
 Residual broad GridRad−MYRORSS climatological offsets remain in era-comparison
-diagnostics. Re-run Stages 06–15 after debias changes.
+diagnostics. Re-run Stages 06–14 after debias changes.
 
 ### 1.2 MESH75 formula residuals
 
@@ -178,7 +178,7 @@ GPD estimation even with regional ξ pooling.
 | Record length | Exceedances | Approximate 90% CI width on RP100 |
 |---|---|---|
 | 25 years | 5 | ±300% |
-| 25 years | 15 | ±80% |
+| 25 years | 14 | ±80% |
 | 25 years | 25 | ±40% |
 
 (Approximate, based on Coles 2001 Table 4.2 for GPD shape ξ ≈ 0.)
@@ -212,7 +212,7 @@ for b in range(B):
 ### 3.2 Stationarity assumption
 
 The model assumes the hail climate is stationary over the 1998–present record.
-Mann-Kendall trend analysis (Stage 15 diagnostic) will test this assumption once
+Mann-Kendall trend analysis (Stage 14 diagnostic) will test this assumption once
 outputs are available. Non-stationarity in the record would invalidate
 return-period estimates: a positive trend would cause the model to underestimate
 future hazard.
@@ -357,7 +357,7 @@ parameter (±1, 3, 5, 7 cells) is planned but not yet performed.
 The 50,000-year catalog is large enough for empirical RP estimates to be stable
 at 50,000-year return periods. At shorter return periods (RP < 100), empirical
 and analytical estimates should agree within a few percent. Divergence between
-the two RP products flags potential GPD misspecification (see Stage 15 diagnostic).
+the two RP products flags potential GPD misspecification (see Stage 14 diagnostic).
 
 **Current treatment:** Both RP products are computed; divergence flag is
 mandatory review before interpretation.

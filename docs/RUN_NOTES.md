@@ -3,7 +3,7 @@
 ## Run Context
 
 - Date started: 2026-05-01 14:47 EDT
-- Active branch: **`v2.2.1`** (development on `origin` only). Model **2.2.1** on `v2.2.1`; **2.2.0** on `main`.
+- Active branch: **`v2.2.2`** (development on `origin` only). Model **2.2.2** on **`v2.2.2`**; **2.2.1** on `main`.
 - Prior production mesh archived under `data/historical/mesh_0.05deg_archive_calendar_utc_00z/` (gitignored)
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active
@@ -20,12 +20,12 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-07-05** — **Stage 05 debias rerun complete**; **Stages 06–15 rerun in progress**:
+Snapshot taken **2026-07-05** — **Stage 05 debias rerun complete**; **Stages 06–14 rerun in progress**:
 
 | Stage | Status | Notes |
 |-------|--------|-------|
 | Stage 05 | ✅ Rebuilt | **9,797** days in **5.0 min**; range debias ON; GridRad speckle filter ON; mean pixels filtered **17.2%** (was 5.8%). |
-| Stages 06–15 | ⏳ Running | `run_pipeline.py --from 06 --skip-ml`; log: `logs/pipeline_from06_post_debias.run.log` |
+| Stages 06–14 | ⏳ Running | `run_pipeline.py --from 06 --skip-ml`; log: `logs/pipeline_from06_post_debias.run.log` |
 | Prior production (2026-06-30) | ✅ Superseded for stochastic | Pre-debias event catalog and 50k-yr catalog; replace after rerun completes. |
 
 **Radar artifact diagnostic (2026-07-05):** GridRad speckle **9.7% → 6.1%**; see `data/analysis/radar_artifacts/`.
@@ -45,9 +45,9 @@ Previous snapshot **2026-06-30** — **v2.2.1 production run complete**:
 | Stage 08 | ✅ Complete | **8,798** events at **29 mm** (~303 yr⁻¹); validation passed. |
 | Stages 09–12 | ✅ Complete | Analytical/smoothed RP maps through 50,000 yr. |
 | Stage 13 | ✅ Complete | **50,000** yr; **15.17M** synthetic events; **~5.4 h** (memmap fix 2026-06-30). |
-| Stage 15 | ✅ Complete | Figures and validation report (`15_render_figures.py`) |
+| Stage 14 | ✅ Complete | Figures and validation report (`14_render_figures.py`) |
 
-**v2.2.1 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled GridRad QM; see `docs/methodology.md` §2.7.
+**v2.2.2 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled GridRad QM; see `docs/methodology.md` §2.7.
 
 **Mesh archive totals:** **9,797** `mesh_*.tif` under `data/historical/mesh_0.05deg/` (5,023 + 2,714 + 2,060).
 
@@ -126,7 +126,7 @@ interrupted run.
 
 ## Recommended Full Run Shape
 
-Stages 01–04c and the full **v2.2.1** hazard pipeline (**05–15**) are complete. Optional:
+Stages 01–04c and the full **v2.2.2** hazard pipeline (**05–14**) are complete. Optional:
 
 ```bash
 .venv/bin/python run_pipeline.py --validate
@@ -165,7 +165,7 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 - Stage 11b prepares `data/analysis/topography/elevation_0.05deg.tif` from NOAA/NCEI ETOPO 2022.
 - Stage 12 uses uniform topographic correction if `data/analysis/topography/elevation_0.05deg.tif` is absent.
 - Generated rasters, logs, and rendered figures are intentionally ignored by git.
-- Stage 13 stochastic maps are CONUS-masked during output and Stage 15 also masks at render time.
+- Stage 13 stochastic maps are CONUS-masked during output and Stage 14 also masks at render time.
 
 ## Stage 01 Restart Note
 
@@ -180,7 +180,7 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 ## Next Actions
 
 1. **Confirm Stage 04c backfill is done** (or accept manifest `missing_source` days as NCAR gaps).
-2. **Re-run Stages 05–15** with `--skip-ml`.
+2. **Re-run Stages 05–14** with `--skip-ml`.
 3. **Stage 13 smoke** then full 50,000-year catalog.
 4. **Validate** and regenerate mesh-era diagnostic summaries.
 
@@ -188,7 +188,7 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 .venv/bin/python run_pipeline.py --from 05 --skip-ml
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000
-.venv/bin/python run_pipeline.py --only 15
+.venv/bin/python run_pipeline.py --only 14
 .venv/bin/python run_pipeline.py --validate
 .venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py
 ```

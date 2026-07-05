@@ -1,4 +1,4 @@
-# AGENTS.md - CONUS Hail Catastrophe Model v2.2.1
+# AGENTS.md - CONUS Hail Catastrophe Model v2.2.2
 
 For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
@@ -13,15 +13,15 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: **2.2.1** (convective days 12 UTC → 12 UTC; literature-aligned thresholds)
+- Version: **2.2.2** (convective days 12 UTC → 12 UTC; literature-aligned thresholds)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
-- Pipeline: 14 stages (01–13 hazard + 15 figures), all written and tested
+- Pipeline: 14 stages (01–13 hazard + 14 figures), all written and tested
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
-Current operating branch: **`v2.2.1`** (development; push/PR to `origin` only). Model release **`2.2.1`** on `v2.2.1`; **`2.2.0`** remains on `main` until merged.
+Current operating branch: **`v2.2.2`** (development; push/PR to `origin` only). Model release **`2.2.2`** on **`v2.2.2`**; **`2.2.1`** on `main` until merged.
 The old `v2.1` branch has been merged and is no longer the active development branch.
 
 ## Non-Negotiable Rules
@@ -50,7 +50,7 @@ No active constant-drift issues are known. `MAX_CENTROID_KM_DAY` was resolved on
 2026-05-03, and the `_config.py`, `_logging.py`, and `_io.py` refactors are now
 wired into all stage scripts where needed.
 
-Stages 05-15 were previously run against a May-2011 smoke slice before Stage 01
+Stages 05-14 were previously run against a May-2011 smoke slice before Stage 01
 finished. Those outputs are placeholders, not production outputs.
 
 ## Repository Layout
@@ -90,7 +90,7 @@ us-hail-cat-model/
 |   |-- 11b_prepare_topography.py
 |   |-- 12_apply_conus_mask.py
 |   |-- 13_generate_stochastic_catalog.py
-|   |-- 15_render_figures.py
+|   |-- 14_render_figures.py
 |   `-- diagnostics/
 |       |-- summarize_mesh_daily_peaks.py  <- mesh archive peak CSV/ECDF (optional)
 |       |-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
@@ -123,9 +123,9 @@ python run_pipeline.py --validate
 python scripts/13_generate_stochastic_catalog.py --n-years 1000
 
 # Useful flags
---from N           # run stages N through 15
+--from N           # run stages N through 14
 --only N           # run exactly stage N
---skip 15          # exclude figure rendering
+--skip 14          # exclude figure rendering
 --dry-run          # validate config and I/O paths without executing
 --validate         # re-run output validation for all stages
 --skip-ml          # force deterministic fallback in Stage 05
@@ -247,10 +247,10 @@ As of 2026-06-30:
 
 | Area | Status |
 |---|---|
-| Active branch | `v2.2.1` (dev); model **2.2.1** on `v2.2.1`; **2.2.0** on `main` until merge |
-| All stage scripts (01–13, 15) | Written, tested, production-validated |
+| Active branch | **`v2.2.2`** (dev); model **2.2.1** on `main` until merge |
+| All stage scripts (01–14) | Written, tested, production-validated |
 | Tests | 37 pytest modules (199 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
-| **First full v2.2.1 production run** | **Complete** (2026-06-30) — Stages 01–15, `--skip-ml` |
+| **First full v2.2.1 production run** | **Complete** (2026-06-30) — Stages 01–14, `--skip-ml` |
 | Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,714** GridRad + 2,060 MRMS) |
 | Corrected archive | **9,797** days (era-pooled QM; range debias; GridRad speckle filter; 29 mm winter filter) |
 | Event catalog | **8,798** events at **29 mm** (~303 yr⁻¹) |
@@ -268,11 +268,11 @@ As of 2026-06-30:
 | 08 | 8,798 events; λ ≈ 303 yr⁻¹ at 29 mm |
 | 09–12 | Analytical RP maps through 50,000 yr |
 | 13 | 50k-yr stochastic catalog (~5.4 h); memmap-backed annual maxima |
-| 15 | Figures + validation report |
+| 14 | Figures + validation report |
 
 ## Current Run Watch
 
-**Stage 06–15 rerun in progress (2026-07-05)** after Stage 05 rebuild with range debias
+**Stage 06–14 rerun in progress (2026-07-05)** after Stage 05 rebuild with range debias
 and GridRad speckle filter. Monitor `logs/pipeline_from06_post_debias.run.log`.
 
 Stage 05 debias rerun (2026-07-05): **9,797** days in **5.0 min**; range debias ON;

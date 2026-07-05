@@ -1,6 +1,6 @@
 # Methodology
 
-**CONUS Hail Catastrophe Model v2.2.1**
+**CONUS Hail Catastrophe Model v2.2.2**
 
 ---
 
@@ -10,7 +10,7 @@ The CONUS Hail Catastrophe Model v2.2 is a radar-first probabilistic hail hazard
 
 The central methodological choice is to use radar-derived Maximum Expected Size of Hail (MESH) fields as the primary hazard observation, while reserving SPC hail reports for validation and calibration support. That choice reflects the well-documented non-meteorological bias in human hail reports, including population density, road density, observation practices, report-size rounding, and historical changes in severe-hail reporting thresholds (Allen and Tippett 2015; Blair et al. 2011, 2017). Radar products have their own uncertainties, but they provide spatially continuous observations over rural and urban domains and are therefore better suited to gridded hazard estimation.
 
-v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. **v2.2.1** (§2.7) adopts **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for event footprints and era-pooled GridRad calibration after per-cell hail-day diagnostics; **§5.5** adds range-dependent debias and GridRad speckle filtering after radar-artifact QA (2026-07). v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the same 14-stage hazard architecture (Stage 14 vulnerability removed; loss is future work).
+v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. **v2.2.2** (§2.7) adopts **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for event footprints and era-pooled GridRad calibration after per-cell hail-day diagnostics; **§5.5** adds range-dependent debias and GridRad speckle filtering after radar-artifact QA (2026-07). v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the 14 executable pipeline stages (01–13, 14 figures; loss is future work in §14).
 
 ---
 
@@ -46,7 +46,7 @@ This glossary defines symbols and abbreviations used throughout the document. Va
 | Symbol | Definition |
 |--------|-----------|
 | `p_occ(i,j)` | Annual exceedance probability at cell (i,j): fraction of years with nonzero severe hail |
-| `active(i,j,d)` | Indicator: 1 if `MESH75_corrected(i,j,d) ≥ EVENT_ACTIVE_THRESH_MM` (29.0 mm in v2.2.1), else 0 |
+| `active(i,j,d)` | Indicator: 1 if `MESH75_corrected(i,j,d) ≥ EVENT_ACTIVE_THRESH_MM` (29.0 mm in v2.2.2), else 0 |
 | `DAMAGE_THRESH_MM` | 25.4 mm — residential damage onset; used for occurrence products and severe-cell counts |
 | `EVENT_ACTIVE_THRESH_MM` | 29.0 mm — Cintineo/Wendt severe-hail skill threshold; Stage 08 events and Stage 05 winter filter |
 | `climo_doy(i,j)` | Mean MESH75 for a given day-of-year at cell (i,j), averaged across all years |
@@ -190,7 +190,7 @@ Stages 01, 02, 04b, and 04c list timesteps from the two UTC **calendar** archive
 
 Prior v2.1 production rasters used calendar UTC days (00:00–00:00). Those files are not comparable to v2.2 without a full re-ingest from Stage 01 / 02 / 04c. Literature and citations supporting this choice are in `docs/literature_review.md` §3.6.
 
-### 2.7 Preferred thresholds and calibration (v2.2.1)
+### 2.7 Preferred thresholds and calibration (v2.2.1+)
 
 v2.2.1 separates **damage onset** from **severe-hail event identification** after hail-day climatology diagnostics (`scripts/diagnostics/hail_day_climatology.py`) showed that a single 25.4 mm threshold over-diagnoses CONUS-wide activity relative to Cintineo et al. (2012), Murillo et al. (2021), and Wendt & Jirak (2021).
 
@@ -206,7 +206,7 @@ v2.2.1 separates **damage onset** from **severe-hail event identification** afte
 
 **Diagnostic benchmark (pre–v2.2.1 corrected archive, 9,797 convective days):** per-cell Great Plains max hail days/yr were **5.5 at 25.4 mm** vs **3.7 at 29 mm** (Cintineo reference ~11–12 days/yr at coarser 0.88° resolution). National any-cell hail days/yr were nearly flat across months at 25.4 mm (~344/yr) whereas SPC report-day climatology peaks in late spring (~216 report days/yr). v2.2.1 therefore adopts **29 mm** for event footprints while retaining **25.4 mm** for damage-oriented products.
 
-Re-run Stage 05 after v2.2.1 calibration changes requires deleting existing `mesh_0.05deg_corrected/` outputs (Stage 05 skips existing files by default).
+Re-run Stage 05 after v2.2.1+ calibration or artifact-filter changes requires deleting existing `mesh_0.05deg_corrected/` outputs (Stage 05 skips existing files by default).
 
 ---
 
@@ -328,9 +328,9 @@ data/analysis/calibration/hail_filter_model.pkl
 
 If absent, Stage 05 applies deterministic safety floors. The deterministic path is not a second-class mode; it is the reproducible baseline. Hard filters are deliberately simple and should be reviewed as part of the uncertainty budget.
 
-### 5.5 Radar artifact diagnostic, range debias, and GridRad artifact filter (v2.2.1+)
+### 5.5 Radar artifact diagnostic, range debias, and GridRad artifact filter (v2.2.2+)
 
-GridRad-era MESH can exhibit **NEXRAD range-dependent bias**, **isolated speckle spikes**, and **correlated range-ring/spoke geometry** that propagate into sparse event footprints and stochastic return-period maps. Published hail climatologies address these at **native volume**, **hourly**, and **daily-grid** stages before long-term aggregation (see `literature_review.md` §3.7). v2.2.1 applies automated daily-grid QC in Stage 05 after cross-source calibration.
+GridRad-era MESH can exhibit **NEXRAD range-dependent bias**, **isolated speckle spikes**, and **correlated range-ring/spoke geometry** that propagate into sparse event footprints and stochastic return-period maps. Published hail climatologies address these at **native volume**, **hourly**, and **daily-grid** stages before long-term aggregation (see `literature_review.md` §3.7). v2.2.2 applies automated daily-grid QC in Stage 05 after cross-source calibration.
 
 **Layers (in order within Stage 05):**
 
@@ -353,7 +353,7 @@ GridRad-era MESH can exhibit **NEXRAD range-dependent bias**, **isolated speckle
 | Stage 05 mean pixels filtered | 5.8% | **17.2%** |
 | Residual ring geometry in GridRad−MYRORSS diff map | visible | **still visible** (speckle alone insufficient) |
 
-Re-run **Stage 05** (delete `mesh_0.05deg_corrected/` first), then `radar_artifact_diagnostic.py`, then **Stages 06–15** after any methodology change.
+Re-run **Stage 05** (delete `mesh_0.05deg_corrected/` first), then `radar_artifact_diagnostic.py`, then **Stages 06–14** after any methodology change.
 
 Diagnostic outputs: `data/analysis/radar_artifacts/` (maps, CSVs); fit table: `range_debias_factors.csv`.
 
@@ -443,7 +443,7 @@ The event peak is the maximum hail size at each active cell during the event. Du
 
 ### 8.4 Literature benchmarking (per-cell hail days)
 
-Stage 08's annual event count λ is a **CONUS-wide any-severe-MESH-day** metric at `EVENT_ACTIVE_THRESH_MM` (29.0 mm from v2.2.1). It is not directly comparable to per-cell hail-day maxima in Cintineo et al. (2012) or Murillo et al. (2021).
+Stage 08's annual event count λ is a **CONUS-wide any-severe-MESH-day** metric at `EVENT_ACTIVE_THRESH_MM` (29.0 mm from v2.2.2). It is not directly comparable to per-cell hail-day maxima in Cintineo et al. (2012) or Murillo et al. (2021).
 
 The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` computes per-cell mean annual hail days at six literature thresholds. On the 2026 archive (9,797 convective days), adopting **29 mm** for events (vs 25.4 mm) reduced Great Plains per-cell maxima from **~5.5 to ~3.7 hail days/yr** and aligns Stage 08 with the Cintineo/Wendt skill threshold. At 25.4 mm, **93.8%** of CONUS cells had at least one active day over the record; national any-cell counts showed weak seasonality vs SPC report-day peaks.
 
@@ -515,7 +515,7 @@ Stage 10 rebuilds smoothed return-period maps by pooling neighboring annual maxi
 
 This is not a full spatial extremes model. It smooths marginal return levels but does not explicitly estimate an extremal dependence function, max-stable process, or tail-dependence copula. Therefore, smoothed maps should be interpreted as improved marginal hazard surfaces, not as a complete model of joint spatial extremes.
 
-The analytical-vs-stochastic comparison in Stage 15 partly addresses this limitation. If stochastic event maps differ substantially from smoothed analytical maps, either the marginal tails, event resampling, or spatial smoothing assumptions require review.
+The analytical-vs-stochastic comparison in Stage 14 partly addresses this limitation. If stochastic event maps differ substantially from smoothed analytical maps, either the marginal tails, event resampling, or spatial smoothing assumptions require review.
 
 ---
 
@@ -638,7 +638,7 @@ Prior development explored literature-based lognormal MDR priors for five constr
 
 ## 15. Figures and Diagnostics
 
-Stage 15 renders:
+Stage 14 renders:
 
 - analytical return-period maps;
 - stochastic return-period maps;

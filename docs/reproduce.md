@@ -101,8 +101,7 @@ python run_pipeline.py --only 11
 python run_pipeline.py --only 11b
 python run_pipeline.py --only 12
 python run_pipeline.py --only 13
-python run_pipeline.py --only 15
-python run_pipeline.py --only 15
+python run_pipeline.py --only 14
 ```
 
 **`run_pipeline.py` and GridRad:** on a default full run (and on resumes that start
@@ -142,7 +141,7 @@ python run_pipeline.py --from 07
 Skip stages:
 
 ```bash
-python run_pipeline.py --skip 15
+python run_pipeline.py --skip 14
 ```
 
 ---
@@ -248,7 +247,7 @@ Re-run after ingest stages complete (or while Stage 04c is in progress) to compa
 .venv/bin/python scripts/diagnostics/hail_day_climatology.py
 ```
 
-Writes `data/analysis/hail_day_climatology/` (per-cell GeoTIFFs, threshold benchmark CSV, seasonal plots). Run after Stage 05 completes to compare against Cintineo et al. (2012) and Murillo et al. (2021) hail-day climatologies at literature MESH75 thresholds (25.4–63.25 mm). **v2.2.1** adopted **29.0 mm** for Stage 08 event footprints based on this diagnostic.
+Writes `data/analysis/hail_day_climatology/` (per-cell GeoTIFFs, threshold benchmark CSV, seasonal plots). Run after Stage 05 completes to compare against Cintineo et al. (2012) and Murillo et al. (2021) hail-day climatologies at literature MESH75 thresholds (25.4–63.25 mm). **v2.2.2** adopted **29.0 mm** for Stage 08 event footprints based on this diagnostic.
 
 ### Radar artifact diagnostic and range debias
 
@@ -262,11 +261,11 @@ Writes `data/analysis/radar_artifacts/` (range maps, speckle scores, source-era 
 
 **2026-07-05 findings (9,797 days):** GridRad speckle **9.7% → 6.1%** after debias rerun; Stage 05 mean pixels filtered **5.8% → 17.2%**; residual GridRad−MYRORSS climatological offset remains in era-comparison maps.
 
-**Re-run Stage 05** after generating or updating `range_debias.npz` (delete `mesh_0.05deg_corrected/` first), then **re-run Stages 06–15** so the event catalog and stochastic RP maps pick up the cleaned archive.
+**Re-run Stage 05** after generating or updating `range_debias.npz` (delete `mesh_0.05deg_corrected/` first), then **re-run Stages 06–14** so the event catalog and stochastic RP maps pick up the cleaned archive.
 
 ## 6. Stage 05 Modes
 
-**v2.2.1 rerun:** Stage 05 skips days whose corrected GeoTIFF already exists. To apply era-pooled GridRad calibration, the 29 mm winter filter, or updated `range_debias.npz`, delete the corrected archive first:
+**v2.2.2 rerun:** Stage 05 skips days whose corrected GeoTIFF already exists. To apply era-pooled GridRad calibration, the 29 mm winter filter, or updated `range_debias.npz`, delete the corrected archive first:
 
 ```bash
 rm -rf data/historical/mesh_0.05deg_corrected/
@@ -418,7 +417,7 @@ Example:
 | 05–06 | raster I/O and validation |
 | 07–12 | raster processing, DEM preparation, and CDF fitting |
 | 13 | stochastic years |
-| 15 | figure rendering |
+| 14 | figure rendering |
 
 ---
 
@@ -433,7 +432,7 @@ Example:
 7. Run stages 07–12. Stage 11b downloads NOAA/NCEI ETOPO 2022 surface elevation and writes `data/analysis/topography/elevation_0.05deg.tif` before Stage 12.
 8. Run Stage 13 with 1,000 years.
 9. Run Stage 13 with 50,000 years.
-10. Run Stage 15 (figures).
+10. Run Stage 14 (figures).
 11. Archive logs and manifest.
 
 ---
@@ -445,6 +444,6 @@ long-term access, archive externally following
 [`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md):
 
 - **ORCID:** [0009-0000-4234-5419](https://orcid.org/0009-0000-4234-5419) (Christopher Melhauser)
-- **Code DOI:** publish GitHub Release `v2.2.1` with Zenodo–GitHub integration enabled
+- **Code DOI:** publish GitHub Release `v2.2.2` with Zenodo–GitHub integration enabled
 - **Figures + diagnostics DOI:** upload the generated-outputs tarball described in `DATA_AVAILABILITY.md`
 - **Local machine transfer:** copy `data/` and `docs/figures/` via external drive (see `DATA_AVAILABILITY.md` §3)

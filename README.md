@@ -1,6 +1,6 @@
-# CONUS Hail Catastrophe Model — v2.2.1
+# CONUS Hail Catastrophe Model — v2.2.2
 
-[![Version](https://img.shields.io/badge/version-v2.2.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v2.2.2-blue)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![CI](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml/badge.svg)](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml)
@@ -26,9 +26,9 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 
 ## Overview
 
-Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**. **v2.2.1** adds literature-aligned severe-hail thresholds and GridRad calibration (see `docs/methodology.md` §2.7).
+Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**. **v2.2.1** introduced literature-aligned severe-hail thresholds and era-pooled GridRad calibration (see `docs/methodology.md` §2.7); **v2.2.2** adds range debias, GridRad artifact filtering (§5.5), and hazard-only pipeline staging (14 stages).
 
-**Preferred thresholds (v2.2.1):**
+**Preferred thresholds (v2.2.2):**
 
 | Constant | Value | Use |
 |----------|------:|-----|
@@ -79,8 +79,8 @@ Stage 06 cross-validates the corrected MESH record against SPC storm reports (va
 **Phase 3 — Extreme Value Fitting (Stages 09–11)**
 Stage 09 fits a Generalized Pareto Distribution (GPD) to the tail of each grid cell's MESH distribution using L-moments, with K-means regional pooling (k = 6) and automated threshold diagnostics. Stage 10 applies spatial smoothing (150 km radius, 75 km exponential decay) to stabilize tail estimates. Stage 11 maps exceedance probabilities at eight MESH thresholds.
 
-**Phase 4 — Hazard Output (Stages 12–15)**
-Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correction factor (bounded 1.0–1.25). Stage 13 generates a 50,000-year stochastic catalog by resampling the historical event library with calibrated intensity perturbation and ±3-cell spatial translation — all operations remain sparse throughout. Stage 15 renders diagnostic figures and compares analytical (CDF-derived) against empirical (stochastic) return-period maps; divergence between the two flags GPD misspecification.
+**Phase 4 — Hazard Output (Stages 12–14)**
+Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correction factor (bounded 1.0–1.25). Stage 13 generates a 50,000-year stochastic catalog by resampling the historical event library with calibrated intensity perturbation and ±3-cell spatial translation — all operations remain sparse throughout. Stage 14 renders diagnostic figures and compares analytical (CDF-derived) against empirical (stochastic) return-period maps; divergence between the two flags GPD misspecification.
 
 ---
 
@@ -104,7 +104,7 @@ Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correc
 | 11b | `11b_prepare_topography.py` | NOAA ETOPO 2022 DEM download and 0.05° resampling |
 | 12 | `12_apply_conus_mask.py` | CONUS mask and topographic correction |
 | 13 | `13_generate_stochastic_catalog.py` | 50,000-year stochastic catalog |
-| 15 | `15_render_figures.py` | Return-period maps and diagnostics |
+| 14 | `14_render_figures.py` | Return-period maps and diagnostics |
 
 The pipeline is orchestrated by `run_pipeline.py`:
 
@@ -184,7 +184,7 @@ python run_pipeline.py --dry-run
 
 ```
 01 → 02 → 03 → 04a → 04c → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
-→ Stage 13 smoke (--n-years 1000) → Stage 13 full → 14 → 15
+→ Stage 13 smoke (--n-years 1000) → Stage 13 full → 14 → 14
 ```
 
 Run the full pipeline in one command:
@@ -198,7 +198,7 @@ Or run individual stages, ranges, or subsets:
 ```bash
 python run_pipeline.py --only 9          # re-fit EVT
 python run_pipeline.py --from 13         # resume from stochastic
-python run_pipeline.py --skip 15           # skip figure rendering
+python run_pipeline.py --skip 14           # skip figure rendering
 ```
 
 **Stage 05 without ML artifacts:**
@@ -251,8 +251,8 @@ The following limitations should be documented before any underwriting, regulato
 - **Long return periods are extrapolative.** RP > ~500 years exceed the observed record and rely on GPD tail assumptions.
 - **Spatial dependence is simplified.** The stochastic catalog does not model inter-event spatial correlation beyond the historical footprint.
 - **Climate non-stationarity is not modeled.** The model assumes a stationary hail climate over the radar record.
-- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. v2.2.1 adds range-dependent debias and GridRad speckle filtering (Stage 05), but a broad GridRad–MYRORSS climatological offset can remain in era-comparison diagnostics.
-- **Radar-site artifacts.** GridRad-era data can exhibit NEXRAD range rings and speckle in stochastic return-period maps if uncorrected; rerun Stage 05 with debias/speckle filter and Stages 06–15 after calibration changes.
+- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. v2.2.2 adds range-dependent debias and GridRad speckle filtering (Stage 05), but a broad GridRad–MYRORSS climatological offset can remain in era-comparison diagnostics.
+- **Radar-site artifacts.** GridRad-era data can exhibit NEXRAD range rings and speckle in stochastic return-period maps if uncorrected; rerun Stage 05 with debias/speckle filter and Stages 06–14 after calibration changes.
 - **SPC validation is incomplete.** Report density is spatially and temporally uneven; rural areas are systematically underrepresented.
 - **Vulnerability and loss modeling are out of scope.** This repository delivers hazard only; MDR curves, exposure, and financial loss are future work (see `docs/methodology.md` §14).
 

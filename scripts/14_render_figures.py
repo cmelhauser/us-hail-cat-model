@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-15_render_figures.py — Render All Figures + Validation Report
+14_render_figures.py — Render All Figures + Validation Report
 ==============================================================
 Generates all diagnostic and output figures for the hail cat model.
 
@@ -38,9 +38,9 @@ Output
 
 Usage
 -----
-  python scripts/15_render_figures.py
-  python scripts/15_render_figures.py --maps-only
-  python scripts/15_render_figures.py --validate
+  python scripts/14_render_figures.py
+  python scripts/14_render_figures.py --maps-only
+  python scripts/14_render_figures.py --validate
 """
 
 import argparse
@@ -69,11 +69,11 @@ FIG_STOCH = REPO_ROOT / "docs" / "figures" / "stochastic"
 FIG_ANAL  = REPO_ROOT / "docs" / "figures" / "analysis"
 
 LOG_DIR   = LOG_ROOT
-LOG_FILE  = LOG_DIR / "15_render_figures.log"
+LOG_FILE  = LOG_DIR / "14_render_figures.log"
 
 RP_YEARS = list(RP_YEARS)  # mutable copy for legacy call sites
 
-log = get_logger("15_render_figures", LOG_ROOT).info
+log = get_logger("14_render_figures", LOG_ROOT).info
 
 def setup_matplotlib():
     """Configure matplotlib for headless rendering with cartopy."""
@@ -329,7 +329,7 @@ def main():
         sys.exit(0 if validate_outputs() else 1)
 
     log(f"\n{'='*60}")
-    log(f"  Figure Renderer — Stage 15")
+    log(f"  Figure Renderer — Stage 14")
     log(f"{'='*60}")
 
     t0 = time.time()

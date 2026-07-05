@@ -62,7 +62,7 @@ def _load(filename: str):
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Grid geometry: NROWS = 520
 #
-# Scripts 04b, 05, 06, 07, 08, 09, 10, 11, 12, 13, 15 define NROWS = 520.
+# Scripts 04b, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14 define NROWS = 520.
 # Scripts 01, 02 define OUT_NROWS (derived from native grid, same value).
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ SCRIPTS_WITH_NROWS = [
     "11b_prepare_topography.py",
     "12_apply_conus_mask.py",
     "13_generate_stochastic_catalog.py",
-    "15_render_figures.py",
+    "14_render_figures.py",
 ]
 
 SCRIPTS_WITH_OUT_NROWS = [
@@ -126,7 +126,7 @@ def test_out_ncols_matches_config(script):
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. RP_YEARS must match _config wherever defined inline
 #
-# Scripts 09, 10, 13, 15 expose RP_YEARS for legacy call sites. These should
+# Scripts 09, 10, 13, 14 expose RP_YEARS for legacy call sites. These should
 # agree with _config.RP_YEARS.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -134,7 +134,7 @@ SCRIPTS_WITH_RP_YEARS = [
     "09_fit_cdf_regional.py",
     "10_build_smooth_cdf.py",
     "13_generate_stochastic_catalog.py",
-    "15_render_figures.py",
+    "14_render_figures.py",
 ]
 
 

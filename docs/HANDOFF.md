@@ -8,7 +8,7 @@
 ## Repository
 
 - **Local:** `/Users/melhauserc/GitHub/us-hail-cat-model`
-- **Branch:** **`v2.2.1`** — active development (`origin` only). **`main`** has model **v2.2.0** until v2.2.1 merges.
+- **Branch:** **`v2.2.2`** — active development (`origin` only). **`main`** has model **2.2.1** until v2.2.2 merges.
 - **Working tree:** should be kept clean except for intentional documentation or
   code edits in the current session
 - **Historical note:** `v2.1` has been merged and is no longer the active
@@ -33,7 +33,7 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 | Ingestion & Calibration | 01–05 | MYRORSS / GridRad / MRMS ingestion, ERA5 isotherms, bias correction, ML filtering |
 | Event Catalog | 06–08 | SPC validation, climatology, sparse event grouping |
 | EVT Fitting | 09–11 | Regional GPD (L-moments), spatial smoothing, exceedance probabilities |
-| Hazard Output | 12–15 | CONUS mask, topographic correction, 50k-yr stochastic catalog, figures |
+| Hazard Output | 12–14 | CONUS mask, topographic correction, 50k-yr stochastic catalog, figures |
 
 ---
 
@@ -47,7 +47,7 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 04b_download_gridrad.py         04c_fill_gridrad_gap.py
 12_apply_conus_mask.py
 05_apply_mesh_bias_correction.py 13_generate_stochastic_catalog.py
-06_validate_mesh_vs_spc.py      15_render_figures.py
+06_validate_mesh_vs_spc.py      14_render_figures.py
 07_build_hail_climo.py
 
 scripts/diagnostics/summarize_mesh_daily_peaks.py  ← optional mesh-era peak CSV/ECDF
@@ -121,19 +121,19 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 - All other docs (technical_documentation, data_dictionary, reproduce, ai_instructions, project_memory, literature_review, executive_summary, explainer, migration_plan, sensitivity, benchmarks, FAQ)
 
 **Code helpers (on disk and wired into stage scripts):**
-- `scripts/_config.py` — single source of truth; **15/15 stage scripts import from it**
-- `scripts/_logging.py` — `get_logger()` factory; **15/15 stage scripts import from it**
+- `scripts/_config.py` — single source of truth; **14/14 stage scripts import from it**
+- `scripts/_logging.py` — `get_logger()` factory; **14/14 stage scripts import from it**
 - `scripts/_io.py` — `write_geotiff`, `haversine_km`, `latlon_to_grid`; imported by stage scripts where needed
 
-**Tests:** 28 pytest files cover all 15 stages (test_01 through test_15, test_run_pipeline, test_stage\*); integration smoke test and no-dup-constants test written. GitHub Actions is green on Python 3.10, 3.11, and 3.12 at commit `c0b35b8`.
+**Tests:** 28 pytest files cover all 14 stages (test_01 through test_14, test_run_pipeline, test_stage\*); integration smoke test and no-dup-constants test written. GitHub Actions is green on Python 3.10, 3.11, and 3.12 at commit `c0b35b8`.
 
 **README.md** — professional rewrite: Python badge corrected to 3.10+, Mermaid removed, pipeline table with exact filenames
 
 ### What's NOT done ❌
 
 **Critical code refactors:**
-- ✅ `_config.py` import refactor complete across all 15 stage scripts.
-- ✅ `_logging.py` migration complete across all 15 stage scripts.
+- ✅ `_config.py` import refactor complete across all 14 stage scripts.
+- ✅ `_logging.py` migration complete across all 14 stage scripts.
 - ✅ `scripts/_io.py` shared helpers are wired where needed.
 
 **Missing code:**
@@ -151,14 +151,14 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ## Pipeline Run Status (as of 2026-06-30)
 
-**v2.2.1 production run complete.** Stages 01–15 validated (`--skip-ml`).
+**v2.2.1 production run complete.** Stages 01–14 validated (`--skip-ml`).
 
 | Stage | Result |
 |-------|--------|
 | 05 | 9,797 corrected days; era-pooled QM; 0 skipped |
 | 08 | 8,798 events at 29 mm (~303 yr⁻¹) |
 | 13 | 50,000 yr; 15.17M synthetic events; memmap-backed (~5.4 h) |
-| 15 | Figures + validation report |
+| 14 | Figures + validation report |
 
 **Re-run Stage 05** only if deleting `mesh_0.05deg_corrected/` and changing calibration methodology.
 
@@ -169,7 +169,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 ---
 
 ## Pipeline Run Status (historical — 2026-06-27)
-All Stages 05–15 output is **placeholder, not production** — built on 31 events from May 2011 only.
+All Stages 05–14 output is **placeholder, not production** — built on 31 events from May 2011 only.
 Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 | Stage | Status | Notes |
@@ -179,7 +179,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 | Stage 03 (SPC) | ✅ Complete | SPC CSV files downloaded. |
 | Stage 04a (ERA5) | ✅ Complete | Isotherms and surface geopotential on disk; validation passed 2026-05-13. |
 | Stage 04b/04c (GridRad) | ✅ Primary ingest complete | **2,501** gap TIFFs; manifest 3,209 rows. Optional `--missing-only` backfill may be running. |
-| Stage 05–15 | ⚠️ Placeholder | Ran against 31 May-2011 files only. All outputs invalid for production use. |
+| Stage 05–14 | ⚠️ Placeholder | Ran against 31 May-2011 files only. All outputs invalid for production use. |
 
 **Mesh archive:** **9,584** `mesh_*.tif` (5,023 MYRORSS + **2,501** GridRad + 2,060 MRMS).
 
@@ -191,8 +191,8 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 # After Stage 13 smoke passes (default n_years=1000), do the full 50k run:
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000
-.venv/bin/python run_pipeline.py --only 15
-.venv/bin/python run_pipeline.py --only 15
+.venv/bin/python run_pipeline.py --only 14
+.venv/bin/python run_pipeline.py --only 14
 .venv/bin/python run_pipeline.py --validate
 .venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py
 .venv/bin/python scripts/diagnostics/hail_day_climatology.py
@@ -202,10 +202,10 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 ## Immediate Next Priorities (in order)
 
-1. **`python run_pipeline.py --validate`** on the completed v2.2.1 outputs.
+1. **`python run_pipeline.py --validate`** on the completed v2.2.2 outputs.
 2. Regenerate **`hail_day_climatology.py`** on the final corrected archive if needed.
 3. Freeze regression/golden outputs; bootstrap CIs on Stage 09.
-4. Merge **`v2.2.1` → `main`** when ready.
+4. Merge **`v2.2.2` → `main`** when ready.
 
 **Completed in session 2026-05-02:**
 - ✅ `docs/sensitivity.md` — hyperparameter sweep plan
@@ -218,7 +218,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 **Completed in session 2026-05-03:**
 - ✅ `docs/pnas_article_ai_hail_model.md` — comprehensive review and update: v2.1 stage descriptions, missing references (Cintineo 2012, Brown 2015), AI model names corrected, author line filled (Christopher Melhauser, Ph.D., Independent Researcher), Google Scholar URL, repository URL, pipeline stage table rewritten
-- ✅ `scripts/08_build_event_catalog.py` — `MAX_CENTROID_KM_DAY` corrected from 100.0 → 150.0 (canonical value per `methodology.md §8.2` and `_config.py`)
+- ✅ `scripts/08_build_event_catalog.py` — `MAX_CENTROID_KM_DAY` corrected from 100.0 → 140.0 (canonical value per `methodology.md §8.2` and `_config.py`)
 - ✅ `tests/test_no_duplicated_constants.py` — MAX_CENTROID xfail converted to passing assertion
 - ✅ All stale MAX_CENTROID discrepancy references cleared across AGENTS.md, HANDOFF.md, project_memory.md, ai_instructions.md
 - ✅ `docs/methodology.md §0` — notation glossary added
@@ -268,5 +268,5 @@ python run_pipeline.py --dry-run
 Recommended first-run stage order:
 ```
 01 → 02 → 03 → 04a → 04c → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
-→ 13 (--n-years 1000 smoke first) → 13 (full 50k) → 15
+→ 13 (--n-years 1000 smoke first) → 13 (full 50k) → 14
 ```

@@ -107,7 +107,7 @@ This is the most important internal benchmark. Analytical and stochastic RP maps
 
 Divergence above the flag threshold at RP ≤ 500 yr is a P0 model-risk item requiring manual review before reporting.
 
-**Stage 15 renders this comparison.** The benchmark is met when Stage 15 produces a flagged-cell count below 5% of CONUS land cells for RP ≤ 500 yr.
+**Stage 14 renders this comparison.** The benchmark is met when Stage 14 produces a flagged-cell count below 5% of CONUS land cells for RP ≤ 500 yr.
 
 ---
 
@@ -163,7 +163,7 @@ Same as 4.1 for the **2020-10-13** (last GridRad gap day) vs **2020-10-14** (fir
 | Source-transition KS test | After Stage 06 runs | `validation_mesh_vs_spc.csv` exists |
 | Regional sanity checks (RP) | After Stage 12 runs | `rp_*yr_hail_final.tif` exist |
 | Analytical vs stochastic RP divergence | After Stage 13 full run | Both RP map sets exist |
-| Stage 15 divergence flag count | After Stage 15 runs | `rp_divergence_summary.csv` exists |
+| Stage 14 divergence flag count | After Stage 14 runs | `rp_divergence_summary.csv` exists |
 
 ---
 

@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 # ── Model version ─────────────────────────────────────────────────────────────
-MODEL_VERSION: str = "2.2.1"
+MODEL_VERSION: str = "2.2.2"
 
 # Daily hail rasters use a 12 UTC → 12 UTC convective day (see scripts/_io.py).
 CONVECTIVE_DAY_START_HOUR_UTC: int = 12

@@ -78,11 +78,11 @@ Objective MESH climatology on a ~0.88° grid: with ≥ five pixels at 29 mm, the
 
 **Model implication:** Compare per-cell hail-day rates at **≥ 29 mm** (or Murillo MESH75 skill thresholds), not 25.4 mm alone. Implemented in `scripts/diagnostics/hail_day_climatology.py`.
 
-### Per-cell hail-day climatology diagnostic (v2.2.1)
+### Per-cell hail-day climatology diagnostic (v2.2.2)
 
-Stage 08 groups **CONUS-wide** active days into sparse events at **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.1. The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` benchmarks per-cell hail days at six thresholds on the corrected archive.
+Stage 08 groups **CONUS-wide** active days into sparse events at **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.2. The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` benchmarks per-cell hail days at six thresholds on the corrected archive.
 
-**Diagnostic-driven v2.2.1 parameters (9,797 convective days, 1998–2026):**
+**Diagnostic-driven v2.2.2 parameters (9,797 convective days, 1998–2026):**
 
 | Threshold | GP max days/yr | National any-cell days/yr |
 |-----------|---------------:|--------------------------:|
@@ -121,9 +121,9 @@ Radar archives store timesteps on **UTC calendar paths** (e.g. S3 prefixes by `Y
 | Allen and Tippett (2015) | SPC hail **report dates** reflect reporting practice; radar-first hazard should use an explicit, reproducible temporal rule rather than implicit UTC midnight. |
 | Witt et al. (1998) | MESH is an instantaneous/severe-hail index integrated over short radar volumes; block-max aggregation to daily grids is a documented design choice in `methodology.md` §2.6. |
 
-**Model implication:** Stages **01**, **02**, **04b**, and **04c** filter timesteps into 12 UTC → 12 UTC windows, write `CONVECTIVE_WINDOW_UTC` on GeoTIFFs, and stage GridRad under `by_convective_day/YYYYMMDD/`. v2.1 calendar-UTC production rasters are **not comparable** without full re-ingest. Downstream stages (05–15) consume the convective-day label from `mesh_YYYYMMDD.tif` filenames; Stage **07** DOY climatology still groups by day-of-year across years (not a change to convective-day definition).
+**Model implication:** Stages **01**, **02**, **04b**, and **04c** filter timesteps into 12 UTC → 12 UTC windows, write `CONVECTIVE_WINDOW_UTC` on GeoTIFFs, and stage GridRad under `by_convective_day/YYYYMMDD/`. v2.1 calendar-UTC production rasters are **not comparable** without full re-ingest. Downstream stages (05–14) consume the convective-day label from `mesh_YYYYMMDD.tif` filenames; Stage **07** DOY climatology still groups by day-of-year across years (not a change to convective-day definition).
 
-### 3.7 Radar artifact quality control (v2.2.1+)
+### 3.7 Radar artifact quality control (v2.2.2+)
 
 Published hail climatologies remove radar rings, speckle, and range-dependent errors **before** long-term aggregation—not on return-period maps alone.
 
@@ -136,7 +136,7 @@ Published hail climatologies remove radar rings, speckle, and range-dependent er
 | WSR-88D ROC clutter algorithm | Median filter in **range and azimuth** after clutter identification | Azimuthal annulus filter in Stage **05** is a Cartesian analogue for spoke/hot-pixel removal on range annuli |
 | Ortega et al. (MYRORSS) | Intensive MESH-based QC and reprocessing of 1998–2011 archive | MYRORSS inputs are pre-QC’d; residual artifacts still visible in era-comparison diagnostics |
 
-**Processing order (literature-aligned):** harmonize sources (quantile mapping, Witt→MESH75) → range debias → **daily-grid artifact removal** → environmental filter → validation and climatology (Stages 06–15). Applying filters after the event catalog or on RP maps would bake artifacts into annual maxima and stochastic footprints.
+**Processing order (literature-aligned):** harmonize sources (quantile mapping, Witt→MESH75) → range debias → **daily-grid artifact removal** → environmental filter → validation and climatology (Stages 06–14). Applying filters after the event catalog or on RP maps would bake artifacts into annual maxima and stochastic footprints.
 
 **Model implication:** Stage **05** applies a three-pass GridRad artifact filter (`remove_gridrad_artifacts`: isolated speckle, azimuthal annulus, quiet-background filament) plus optional SPC-collocated range debias. Residual **GridRad − MYRORSS** climatological offsets may remain where era sampling differs, not only from speckle. Future work: reflectivity QC and bad-volume rejection in Stage **04c** (Murillo-style upstream QC).
 
@@ -280,7 +280,7 @@ IBHS testing supports different vulnerability by roof material and impact resist
 
 Hail-size hazard alone is insufficient for insured loss estimation. Claims-calibrated vulnerability must account for construction, roof material, age, impact resistance, repair-cost inflation, deductible structure, and reporting thresholds.
 
-**Model implication:** Hazard-only v2.2.1; vulnerability and loss are future work, not production damage functions in this repository.
+**Model implication:** Hazard-only v2.2.2; vulnerability and loss are future work, not production damage functions in this repository.
 
 ---
 

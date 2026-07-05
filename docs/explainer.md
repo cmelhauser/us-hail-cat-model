@@ -1,6 +1,6 @@
 # What This Model Does — Plain-Language Explainer
 
-**CONUS Hail Catastrophe Model v2.2.1**
+**CONUS Hail Catastrophe Model v2.2.2**
 
 ---
 
@@ -87,9 +87,9 @@ v2.1 improves:
 
 ---
 
-## 4.1 What v2.2.1 Adds (2026)
+## 4.1 Threshold and calibration (v2.2.1+, current v2.2.2)
 
-After analyzing per-cell hail-day frequencies across six literature thresholds, v2.2.1:
+After analyzing per-cell hail-day frequencies across six literature thresholds, the model (since v2.2.1):
 
 - uses **29 mm** (not 1 inch) to define severe hail **events**;
 - keeps **1 inch (25.4 mm)** for damage-oriented products;

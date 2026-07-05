@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.2] — 2026-07-05
+
+### Changed
+
+- **Stage 14 figures** — renamed `scripts/15_render_figures.py` → `scripts/14_render_figures.py`;
+  pipeline stage ID **15 → 14** (vulnerability stage removed in prior release; figures now occupy
+  stage 14). Updated `run_pipeline.py`, tests, and documentation references.
+
 ### Removed
 
 - **Stage 14 vulnerability** — deleted `scripts/14_build_vulnerability.py`, related tests, and
@@ -38,7 +46,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Data policy:** `data/analysis/mesh_daily_peaks/` and `data/analysis/hail_day_climatology/` are gitignored like other generated outputs; store diagnostic bundles externally and regenerate with the diagnostic scripts.
 - **`CITATION.cff`:** ORCID `0009-0000-4234-5419` for Christopher Melhauser.
-- **Model v2.2.1:** `EVENT_ACTIVE_THRESH_MM = 29.0` (Cintineo 2012; Wendt & Jirak 2021) for
+- **Model v2.2.1 (retained in v2.2.2):** `EVENT_ACTIVE_THRESH_MM = 29.0` (Cintineo 2012; Wendt & Jirak 2021) for
   Stage 08 event footprints and Stage 05 subtropical-winter environmental filter; `DAMAGE_THRESH_MM`
   (25.4 mm) unchanged for occurrence products and severe-cell counts.
 - **Stage 05:** era-pooled MYRORSS (2005–2011) vs GridRad (2012–2019) quantile mapping when
@@ -49,10 +57,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Production
 
-- **Full v2.2.1 hazard run complete (2026-06-30):** Stages 05–15 on 9,797 convective days;
+- **Full v2.2.1 hazard run complete (2026-06-30):** Stages 05–14 on 9,797 convective days;
   8,798 events at 29 mm; 50,000-yr stochastic catalog (15.17M events); all output validation passed.
 - **Stage 05 debias rerun (2026-07-05):** corrected archive rebuilt with range debias and
-  speckle filter; downstream Stages 06–15 rerun in progress for updated event/stochastic outputs.
+  speckle filter; downstream Stages 06–14 rerun in progress for updated event/stochastic outputs.
 
 ## [2.2.1] — 2026-06-27
 
@@ -100,7 +108,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.2.0] — 2026-05-28
 
-**Breaking methodology change.** Daily MESH rasters now use **12 UTC → 12 UTC convective days** (label = date at window start). v2.1 calendar-UTC (00Z–00Z) production GeoTIFFs are not comparable; re-run Stages **01**, **02**, and **04c** (and downstream **05–15**) on a clean `mesh_0.05deg/` tree.
+**Breaking methodology change.** Daily MESH rasters now use **12 UTC → 12 UTC convective days** (label = date at window start). v2.1 calendar-UTC (00Z–00Z) production GeoTIFFs are not comparable; re-run Stages **01**, **02**, and **04c** (and downstream **05–14**) on a clean `mesh_0.05deg/` tree.
 
 ### Changed
 
@@ -166,7 +174,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.1.0] — 2026-05-01
 
-**Hardening release.** Same 15-stage pipeline and 0.05° grid as v2.0. No
+**Hardening release.** Same 14-stage pipeline and 0.05° grid as v2.0. No
 methodology redesign; all changes improve defensibility, testability, and
 run-readiness.
 
@@ -193,7 +201,7 @@ run-readiness.
 - **Stage 01**: MYRORSS source-coverage manifest
   (`manifest_stage01_myrorss.csv`) distinguishing missing source days from
   available-source no-hail days.
-- Expanded pytest suite with stage-level unit tests for all 15 stages.
+- Expanded pytest suite with stage-level unit tests for all 14 stages.
 - `docs/ai_instructions.md` — operating instructions for AI-assisted development.
 - `docs/project_memory.md` — canonical project state snapshot.
 - `docs/migration_plan.md` — v1→v2→v2.1→v3 evolution roadmap.
@@ -248,7 +256,7 @@ run-readiness.
 - Stage 10 spatially-pooled CDF smoothing (150 km radius, 75 km decay).
 - Stage 11 occurrence probability rasters at 8 thresholds.
 - Stage 12 CONUS masking + topographic correction.
-- Stage 15 figure rendering with analytical vs stochastic comparison.
+- Stage 14 figure rendering with analytical vs stochastic comparison.
 
 ### Removed
 

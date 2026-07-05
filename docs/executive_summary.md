@@ -1,7 +1,7 @@
 # Hail Catastrophe Model — Executive Summary
 
-**Version:** 2.2.1 (model); **`2.2.0`** on `main` until v2.2.1 merge  
-**Status:** Full v2.2.1 production run complete (2026-06-30); Stages 01–15 validated  
+**Version:** 2.2.2 (model); **`2.2.1`** on `main` until v2.2.2 merge  
+**Status:** Full v2.2.1 production run complete (2026-06-30); Stages 01–14 validated  
 **Primary use:** CONUS hail hazard modeling, stochastic event simulation, validation, and model-risk diagnostics
 
 ---
@@ -20,7 +20,7 @@ SPC reports remain important, but they are used only for validation and calibrat
 
 v2.1 is not a new model generation. It is a hardening release of the v2.0 radar-based architecture.
 
-v2.0 changed the project’s foundation by moving from report-based hail hazard to radar-based hail hazard. v2.1 improves the quality, defensibility, and operational safety of that architecture. It keeps the 15-stage pipeline but improves key areas where methodology or implementation risk could affect results.
+v2.0 changed the project’s foundation by moving from report-based hail hazard to radar-based hail hazard. v2.1 improves the quality, defensibility, and operational safety of that architecture. It keeps the 14-stage pipeline but improves key areas where methodology or implementation risk could affect results.
 
 The main goal of v2.1 is not to add complexity for its own sake. The goal is to make the model easier to review, safer to run, more transparent, and more defensible.
 
@@ -43,7 +43,7 @@ The main goal of v2.1 is not to add complexity for its own sake. The goal is to 
 
 ### Bias correction
 
-Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.1+** adds SPC-collocated **range debias** and a **GridRad speckle filter** to reduce NEXRAD ring artifacts in stochastic return-period maps (see `docs/methodology.md` §5.5).
+Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.2+** adds SPC-collocated **range debias** and a **GridRad speckle filter** to reduce NEXRAD ring artifacts in stochastic return-period maps (see `docs/methodology.md` §5.5).
 
 ### Environmental filtering
 
@@ -51,7 +51,7 @@ v2.1 supports optional probabilistic hail-realness filtering. Hard thresholds re
 
 ### Event grouping
 
-Stage 08 uses the **29 mm** severe-hail skill threshold for active cells (v2.2.1), with synoptic grouping logic, centroid-displacement and intensity-jump checks, and sparse storage.
+Stage 08 uses the **29 mm** severe-hail skill threshold for active cells (v2.2.2), with synoptic grouping logic, centroid-displacement and intensity-jump checks, and sparse storage.
 
 ### Extreme-value modeling
 
@@ -134,7 +134,7 @@ For underwriting or regulatory use, the model should be accompanied by:
 - Stage 06 validation results;
 - Stage 09 threshold diagnostics;
 - Stage 13 stochastic maps;
-- Stage 15 analytical-vs-stochastic comparisons;
+- Stage 14 analytical-vs-stochastic comparisons;
 - clear caveats regarding vulnerability and exposure.
 
 ---
