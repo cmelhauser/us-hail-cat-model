@@ -45,7 +45,7 @@ Do not:
 9. Change output file names without updating the data dictionary.
 10. Assume missing SPC reports mean radar false alarms.
 11. Infer MYRORSS source availability from GeoTIFF file size or all-zero raster values.
-12. Commit generated data, logs, rendered figures, local bootstrap files, or model artifacts. **Exception:** `data/analysis/mesh_daily_peaks/` and `data/analysis/hail_day_climatology/` diagnostic summaries are versioned intentionally.
+12. Commit generated data, logs, rendered figures, local bootstrap files, or model artifacts (including diagnostic summaries under `data/analysis/`).
 13. Push to **`upstream`** or open PRs against any repo other than **`cmelhauser/us-hail-cat-model`** on **`origin`**. Use `git push -u origin HEAD` and `gh pr create --repo cmelhauser/us-hail-cat-model --base main` only. See `docs/GIT_REMOTES.md`.
 
 ---
@@ -206,7 +206,7 @@ Current repository state:
 - **Stage 03 complete**; **Stage 04a complete** (ERA5 isotherms on disk).
 - **Stage 04c primary ingest complete** (2026-06-27) — **2,501** gap-era TIFFs; manifest **3,209** rows. Hourly fallback now includes **d841001** (V4.2 Apr–Aug). Re-run **`--missing-only`** backfill to ingest additional warm-season days.
 - **Mesh archive:** **9,584** TIFFs (5,023 + **2,501** + 2,060). ~173 GiB disk free.
-- Tracked diagnostic summaries: `data/analysis/mesh_daily_peaks/`, `data/analysis/hail_day_climatology/`.
+- Diagnostic summaries (gitignored; regenerate or load externally): `data/analysis/mesh_daily_peaks/`, `data/analysis/hail_day_climatology/`.
 
 ### Files created 2026-05-01 (while pipeline was running)
 

@@ -17,6 +17,7 @@ abstract: >
 authors:
   - family-names: Melhauser
     given-names: Christopher
+    orcid: "https://orcid.org/0009-0000-4234-5419"
     email: christopher.melhauser@gmail.com
 license: MIT
 repository-code: "https://github.com/cmelhauser/us-hail-cat-model"

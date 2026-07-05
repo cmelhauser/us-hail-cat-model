@@ -225,7 +225,7 @@ python run_pipeline.py --validate
 | Output | Location | Description |
 |--------|----------|-------------|
 | Raw daily MESH rasters | `data/historical/mesh_0.05deg/` | Stage 01/02/04c convective-day (12Z→12Z) GeoTIFFs before correction |
-| Mesh daily peak summaries | `data/analysis/mesh_daily_peaks/` | Optional era QA (CSV, percentiles, ECDF); tracked in git |
+| Mesh daily peak summaries | `data/analysis/mesh_daily_peaks/` | Optional era QA (CSV, percentiles, ECDF); gitignored |
 | Stage 01 source manifest | `data/historical/mesh_0.05deg/manifest_stage01_myrorss.csv` | Per-day MYRORSS source counts, QA-repaired daily maxima, and `missing_source` / `no_hail_pixels` / `ok` status |
 | Stage 04c gap-fill manifest | `data/historical/mesh_0.05deg/manifest_stage04c_gridrad.csv` | Per-day GridRad gap-fill status for 2012-01-01 – 2020-10-13 |
 | Corrected MESH rasters | `data/historical/mesh_0.05deg_corrected/` | Daily MESH75 grids |
@@ -239,7 +239,7 @@ python run_pipeline.py --validate
 | Exceedance tables | `data/stochastic/` | PET tables by threshold |
 | Figures | `docs/figures/` | Diagnostic and output maps |
 
-Generated pipeline outputs are excluded from version control via `.gitignore`, except the small tracked diagnostic bundle under `data/analysis/mesh_daily_peaks/`.
+Generated pipeline outputs and diagnostic summaries are excluded from version control via `.gitignore` (`data/`, `docs/figures/`, `logs/`). External archival instructions: [`docs/DATA_AVAILABILITY.md`](docs/DATA_AVAILABILITY.md).
 
 ---
 
@@ -266,6 +266,7 @@ Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) 
 | `docs/technical_documentation.md` | Per-stage implementation notes |
 | `docs/data_dictionary.md` | All output file schemas |
 | `docs/reproduce.md` | Reproduction guide and environment setup |
+| `docs/DATA_AVAILABILITY.md` | Zenodo/ORCID archival plan for code, figures, and diagnostics |
 | `scripts/diagnostics/summarize_mesh_daily_peaks.py` | Optional mesh-era peak CSV/ECDF diagnostic |
 | `scripts/diagnostics/hail_day_climatology.py` | Per-cell hail-day climatology and MESH75 threshold sensitivity |
 | `docs/uncertainty.md` | Six-category uncertainty budget |

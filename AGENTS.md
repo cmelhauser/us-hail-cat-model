@@ -37,7 +37,7 @@ bump.
 | 4 | `event_peaks.npz` is authoritative for Stage 13. Sparse arrays are the source of truth. |
 | 5 | The 0.05 degree grid is fixed. Convective-day definition (12 UTC start) is versioned in v2.2; any change requires a version bump and full rerun. |
 | 11 | Daily MESH labels use **convective days** (12 UTC → 12 UTC). Stages 01, 02, 04b, 04c filter timesteps with `scripts/_io.py` helpers; do not revert to calendar UTC midnight without a version bump. |
-| Rule | 6 | Never commit generated data files, logs, figures, model artifacts, or local bootstrap files. **Exception:** `data/analysis/mesh_daily_peaks/` and `data/analysis/hail_day_climatology/` diagnostic summaries (CSV/PNG/TIFF + README). |
+| 6 | Never commit generated data files, logs, figures, model artifacts, or local bootstrap files (including diagnostic summaries under `data/analysis/`). |
 | 7 | Update tests and docs whenever methodology, output schemas, or stage behavior changes. |
 | 8 | Grid constants come from `scripts/_config.py`. Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, or `LON_MIN` in stage scripts. |
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
@@ -97,7 +97,7 @@ us-hail-cat-model/
 |       `-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
 |-- tests/                      <- unit and synthetic integration tests
 |-- docs/                       <- full documentation
-|-- data/                       <- gitignored generated data (except data/analysis/mesh_daily_peaks/)
+|-- data/                       <- gitignored generated data
 `-- logs/                       <- gitignored stage logs
 ```
 
@@ -255,7 +255,7 @@ As of 2026-06-30:
 | Corrected archive | **9,797** days (era-pooled QM; 29 mm winter filter) |
 | Event catalog | **8,798** events at **29 mm** (~303 yr⁻¹) |
 | Stochastic catalog | **50,000** yr; **15.17M** synthetic events; validation passed |
-| Hail-day climatology | `data/analysis/hail_day_climatology/` (tracked diagnostic) |
+| Hail-day climatology | `data/analysis/hail_day_climatology/` (regenerate locally or load from external store) |
 | Regression / golden tests | Pending frozen checksums |
 | Bootstrap CIs on RP maps | Pending |
 
@@ -291,6 +291,7 @@ Optional follow-ups:
 | Per-stage implementation | `docs/technical_documentation.md` |
 | Output schemas | `docs/data_dictionary.md` |
 | Reproduction guide | `docs/reproduce.md` |
+| Data / Zenodo archival | `docs/DATA_AVAILABILITY.md` |
 | Uncertainty disclosures | `docs/uncertainty.md` |
 | Extended AI operating rules | `docs/ai_instructions.md` |
 | Canonical project state | `docs/project_memory.md` |

@@ -11,14 +11,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`docs/DATA_AVAILABILITY.md`:** Zenodo/ORCID archival plan, publication-bundle tarball
+  layout, and DOI placeholders (ORCID `0009-0000-4234-5419`; code DOI via GitHub Release).
+- **`.zenodo.json`:** Zenodo metadata for GitHub–Zenodo integration on release.
 - **`scripts/diagnostics/hail_day_climatology.py`:** per-cell hail-days-per-year climatology
-  at six literature MESH75 thresholds; tracked outputs under `data/analysis/hail_day_climatology/`.
+  at six literature MESH75 thresholds; outputs under `data/analysis/hail_day_climatology/` (gitignored).
 - **Stage 13 memory-safe full catalog:** disk-backed `np.memmap` for annual maxima, streamed
   Parquet event summaries (`StochasticEventWriter`), chunked empirical RP computation; temp
   memmap removed after successful run.
 
 ### Changed
 
+- **Data policy:** `data/analysis/mesh_daily_peaks/` and `data/analysis/hail_day_climatology/` are gitignored like other generated outputs; store diagnostic bundles externally and regenerate with the diagnostic scripts.
+- **`CITATION.cff`:** ORCID `0009-0000-4234-5419` for Christopher Melhauser.
 - **Model v2.2.1:** `EVENT_ACTIVE_THRESH_MM = 29.0` (Cintineo 2012; Wendt & Jirak 2021) for
   Stage 08 event footprints and Stage 05 subtropical-winter environmental filter; `DAMAGE_THRESH_MM`
   (25.4 mm) unchanged for damage/vulnerability stages.

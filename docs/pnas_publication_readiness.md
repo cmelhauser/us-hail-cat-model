@@ -121,6 +121,10 @@ Before submission:
 - document where large outputs can be retained or regenerated;
 - preserve logs and manifests for the final full run.
 
+See **[`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md)** for ORCID/Zenodo setup, tarball
+layout, and DOI placeholders (maintainer ORCID:
+[0009-0000-4234-5419](https://orcid.org/0009-0000-4234-5419)).
+
 ---
 
 ## Suggested Main Figures
