@@ -538,7 +538,17 @@ The code is publicly available at:
 https://github.com/cmelhauser/us-hail-cat-model
 ```
 
-Input datasets are public or publicly documented. Generated data products are reproducible from the pipeline but are not committed to the source repository because of size. The exact code release used for the manuscript will be archived at [repository DOI to be inserted — e.g., via Zenodo], and large generated artifacts will be retained or regenerated according to [artifact-retention instructions to be inserted].
+**Maintainer ORCID:** [0009-0000-4234-5419](https://orcid.org/0009-0000-4234-5419)
+
+Input datasets are public or publicly documented. Generated data products are reproducible from the pipeline but are not committed to the source repository because of size (`data/`, `docs/figures/`, `logs/` are gitignored).
+
+| Artifact | Location |
+|----------|----------|
+| Source code | [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model) (commit SHA: *TBD at submission*) |
+| Code archive DOI | *TBD — Zenodo deposit minted on GitHub Release `v2.X.X`* |
+| Generated outputs DOI | *TBD — Zenodo dataset tarball; see `docs/DATA_AVAILABILITY.md`* |
+
+Full upload instructions, tarball layout, and pre-submission checklist: **`docs/DATA_AVAILABILITY.md`**.
 
 ---
 

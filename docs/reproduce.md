@@ -421,3 +421,16 @@ Example:
 9. Run Stage 13 with 50,000 years.
 10. Run Stage 14 and Stage 15.
 11. Archive logs and manifest.
+
+---
+
+## 13. External archival (publication)
+
+Generated data and figures are **not** committed to git. For PNAS submission and
+long-term access, archive externally following
+[`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md):
+
+- **ORCID:** [0009-0000-4234-5419](https://orcid.org/0009-0000-4234-5419) (Christopher Melhauser)
+- **Code DOI:** publish GitHub Release `v2.2.1` with Zenodo–GitHub integration enabled
+- **Figures + diagnostics DOI:** upload the generated-outputs tarball described in `DATA_AVAILABILITY.md`
+- **Local machine transfer:** copy `data/` and `docs/figures/` via external drive (see `DATA_AVAILABILITY.md` §3)

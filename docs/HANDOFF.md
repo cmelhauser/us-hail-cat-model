@@ -69,7 +69,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 3. **SPC = validation only.** Never a hazard input.
 4. **`event_peaks.npz`** (rows/cols/vals per event_id) is the authoritative event store.
 5. **0.05° grid is fixed.** Convective-day definition (12 UTC start) is versioned in v2.2; see `docs/methodology.md` §2.6.
-6. **Never commit data files.** `.tif`, `.npy`, `.npz`, `.grib2`, `.parquet`, and most `.csv` outputs are gitignored. **Exception:** `data/analysis/mesh_daily_peaks/` and `data/analysis/hail_day_climatology/` (tracked diagnostic summaries).
+6. **Never commit data files.** `.tif`, `.npy`, `.npz`, `.grib2`, `.parquet`, diagnostic CSV/PNG outputs, and all of `data/` are gitignored.
 7. **`scripts/_config.py` is the single source of truth for grid constants.** Never define `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` inline in a stage script.
 8. **Stage 01 manifest is authoritative** for distinguishing missing-source days from true no-hail days. Do not infer source availability from GeoTIFF values alone.
 9. **Convective days:** Stages 01/02/04b/04c use 12 UTC → 12 UTC windows; see `docs/literature_review.md` §3.6.

@@ -1,0 +1,28 @@
+{
+  "title": "CONUS Hail Catastrophe Model",
+  "description": "A radar-based probabilistic hail hazard model for the Continental United States. Ingests NOAA MYRORSS, NCAR GridRad, and NOAA MRMS radar-derived MESH over a 28-year convective-day record (1998–present), applies bias correction and environmental filtering, fits regional Generalised Pareto Distribution tails, and generates analytical and 50,000-year stochastic return-period hazard maps on a 0.05° CONUS grid.",
+  "upload_type": "software",
+  "publication_date": "2026-06-27",
+  "creators": [
+    {
+      "name": "Melhauser, Christopher",
+      "affiliation": "",
+      "orcid": "0009-0000-4234-5419"
+    }
+  ],
+  "keywords": [
+    "hail",
+    "catastrophe model",
+    "hazard",
+    "MESH",
+    "MYRORSS",
+    "GridRad",
+    "MRMS",
+    "extreme value theory",
+    "stochastic simulation",
+    "return period",
+    "CONUS"
+  ],
+  "license": "MIT",
+  "notes": "Generated pipeline outputs and figures are not included in this GitHub archive. See docs/DATA_AVAILABILITY.md for the matching v2.X.X generated-outputs Zenodo dataset and reproduction instructions."
+}

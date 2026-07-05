@@ -22,6 +22,7 @@ Use the reading paths below to orient yourself quickly.
 8. [`vulnerability_derivation.md`](vulnerability_derivation.md) — MDR curve sources, limitations, calibration path
 9. [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) — draft PNAS-style article on AI-assisted model construction
 10. [`pnas_publication_readiness.md`](pnas_publication_readiness.md) — novelty assessment, evidence gaps, and submission-readiness checklist
+11. [`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md) — Zenodo/ORCID archival plan, tarball layout, DOI placeholders
 
 **Engineer / developer running the pipeline:**
 1. [`RUN_NOTES.md`](RUN_NOTES.md) — live run status, restart commands, disk/workers notes
