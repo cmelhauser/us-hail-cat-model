@@ -22,7 +22,7 @@ practice (Grossi & Kunreuther 2005; Mitchell-Wallace et al. 2017):
 3. **Sampling uncertainty** — finite record length limits tail estimation
 4. **Model uncertainty** — the choice of statistical model and its parameters
 5. **Stochastic uncertainty** — variability in the synthetic catalog
-6. **Vulnerability uncertainty** — damage ratio curve errors
+6. **Loss-side uncertainty (future work)** — MDR curve, exposure, and policy-term errors when a loss module is added
 
 ---
 
@@ -38,6 +38,26 @@ roughly ±5–10% in SHI and ±1–3 mm in MESH75 at moderate hail sizes.
 
 **Current treatment:** Accepted as irreducible. No per-radar calibration
 correction is applied beyond the MYRORSS compositing procedure.
+
+### 1.2 NEXRAD range geometry and speckle (v2.2.1+)
+
+GridRad-era products can exhibit **range-dependent bias** and **isolated speckle
+spikes** aligned with WSR-88D site geometry. These propagate into sparse event
+footprints and stochastic return-period maps if uncorrected.
+
+**Diagnostic (2026-07-05, 9,797 corrected days):**
+
+| Metric | GridRad (before debias rerun) | After range debias + speckle |
+|--------|------------------------------:|-----------------------------:|
+| Mean speckle fraction (active cells) | 9.7% | 6.1% |
+| P95 speckle fraction | 50% | 33% |
+| Mean annual max @ 62 km from radar | 5.11 mm | 5.18 mm |
+| MRMS mean annual max @ 275 km | 5.36 mm | 3.52 mm |
+
+**Current treatment:** Stage 05 applies SPC-collocated **range debias**
+(`range_debias.npz`) and a **GridRad speckle filter** (3×3 median test).
+Residual broad GridRad−MYRORSS climatological offsets remain in era-comparison
+diagnostics. Re-run Stages 06–15 after debias changes.
 
 ### 1.2 MESH75 formula residuals
 
@@ -344,30 +364,11 @@ mandatory review before interpretation.
 
 ---
 
-## 6. Vulnerability Uncertainty
+## 6. Loss-Side Uncertainty (Future Work)
 
-### 6.1 Placeholder status
+Vulnerability, exposure, and financial loss are **out of scope** for this hazard-only repository (Stage 14 removed 2026-07). Uncertainty in MDR curves, roof age, construction quality, and policy terms would dominate any loss estimate and requires claims-calibrated modules documented as future work in `docs/methodology.md` §14.
 
-The Stage 14 MDR (mean damage ratio) curves are derived from published literature
-parameters (Brown et al. 2015; IBHS impact testing). They are **not calibrated
-against insurance claims data**. The curves represent a reasonable literature-
-based prior but are subject to large uncertainty:
-
-- μ_v and σ_v are eyeballed from published damage onset thresholds, not fitted
-  to observed claims.
-- Roof age distribution (which strongly affects vulnerability) is not modelled.
-- Geographic variation in construction quality is not captured.
-
-**Typical uncertainty range:** MDR estimates from un-calibrated curves may be
-off by a factor of 2–5× relative to claims-calibrated curves for the same
-hail size and construction class (Pita et al. 2013).
-
-**Current treatment:** Clearly marked as placeholder. Stage 14 prints a warning
-at runtime.
-
-**Required for production use:** Calibration against proprietary claims data is
-mandatory before the vulnerability module is used for any financial or
-insurance-related purpose.
+Prior literature suggests un-calibrated MDR priors may differ from claims-calibrated curves by factors of 2–5× for the same hail size and construction class (Pita et al. 2013). Any future loss extension should propagate this uncertainty explicitly.
 
 ---
 
@@ -398,11 +399,11 @@ The following disclosures must accompany any publication of v2.2 model outputs:
 2. The model assumes **stationarity**. Results may not be valid for future
    climate scenarios without non-stationarity adjustment.
 
-3. Vulnerability curves are **placeholders**. Loss estimates should not be used
-   for financial decision-making without claims calibration.
+3. This repository is **hazard-only**. No exposure, vulnerability curves, or financial
+   loss outputs are produced. Loss-side extensions are future work (`docs/methodology.md` §14).
 
 4. The stochastic catalog uses **Poisson event frequency**, which may
-   underestimate aggregate loss in active years.
+   underrepresent year-to-year event-count variability (see index of dispersion in Stage 08).
 
 5. Topographic correction uses an **uncited coefficient** (0.25). Results in
    complex terrain (Rockies, Appalachians, Pacific Coast ranges) should be

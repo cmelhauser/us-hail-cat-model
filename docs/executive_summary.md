@@ -43,7 +43,7 @@ The main goal of v2.1 is not to add complexity for its own sake. The goal is to 
 
 ### Bias correction
 
-Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. This reduces the risk of applying a single global correction across meteorologically different regimes.
+Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.1+** adds SPC-collocated **range debias** and a **GridRad speckle filter** to reduce NEXRAD ring artifacts in stochastic return-period maps (see `docs/methodology.md` §5.5).
 
 ### Environmental filtering
 
@@ -83,10 +83,9 @@ The model produces:
 - occurrence probability rasters;
 - stochastic return-period maps;
 - occurrence and aggregate probable exceedance tables;
-- validation tables and figures;
-- placeholder vulnerability curves.
+- validation tables and figures.
 
-These outputs support hazard analysis, model comparison, portfolio screening, and technical review.
+These outputs support hazard analysis, model comparison, and technical review.
 
 ---
 
@@ -110,8 +109,7 @@ Important limitations remain:
 
 - Long return periods remain extrapolative.
 - Spatial dependence is simplified.
-- The vulnerability module is not claims-calibrated.
-- No exposure layer is included.
+- **Hazard-only:** no exposure, vulnerability, or financial loss module (future work; §14 methodology).
 - GridRad hourly data may miss short-lived hail peaks when GridRad-Severe is unavailable; off-season and non-severe warm-season days may have no NCAR GridRad product (V3.1 ends 2017; V4.2 warm-season hourly is Apr–Aug only).
 - Climate non-stationarity is diagnostic only and not embedded in the main hazard fit.
 - SPC validation data are useful but imperfect.
@@ -143,4 +141,4 @@ For underwriting or regulatory use, the model should be accompanied by:
 
 ## 8. Bottom Line
 
-v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. The **v2.2.1** production hazard layer is complete on **9,797** convective days: **8,798** historical events at **29 mm** (~**303 yr⁻¹**), analytical and **50,000-year** stochastic return-period maps, and **15.17 million** synthetic catalog events. It is a strong transparent hazard-modeling framework, but not yet a complete production loss model (placeholder vulnerability curves only).
+v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. The **v2.2.1** production hazard layer is complete on **9,797** convective days: **8,798** historical events at **29 mm** (~**303 yr⁻¹**), analytical and **50,000-year** stochastic return-period maps, and **15.17 million** synthetic catalog events. It is a strong transparent **hazard-only** modeling framework; exposure and vulnerability are documented as future work (methodology §14).

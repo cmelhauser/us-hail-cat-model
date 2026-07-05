@@ -9,8 +9,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **Stage 14 vulnerability** — deleted `scripts/14_build_vulnerability.py`, related tests, and
+  `docs/vulnerability_derivation.md`. Repository is hazard-only; exposure/MDR/loss are future work
+  (`docs/methodology.md` §14, PNAS manuscript).
+
 ### Added
 
+- **`scripts/_radar_geometry.py`:** CONUS WSR-88D site geometry (~140 sites), nearest-radar
+  distance grid, SPC-collocated range-dependent debias fit/apply, GridRad speckle spike removal.
+- **`scripts/diagnostics/radar_artifact_diagnostic.py`:** speckle scores, range-binned annual
+  maxima, GridRad−MYRORSS difference maps, and `range_debias.npz` from Stage 06 pairs.
+- **Stage 05 range debias:** applies `data/analysis/calibration/range_debias.npz` when present
+  (`--no-range-debias` to disable); per-era factors normalized at 125 km from nearest radar.
+- **Stage 05 GridRad speckle filter:** zeros isolated spikes (>2.5× local 3×3 median;
+  `--no-speckle-filter` to disable).
 - **`docs/DATA_AVAILABILITY.md`:** Zenodo/ORCID archival plan, publication-bundle tarball
   layout, and DOI placeholders (ORCID `0009-0000-4234-5419`; code DOI via GitHub Release).
 - **`.zenodo.json`:** Zenodo metadata for GitHub–Zenodo integration on release.
@@ -26,14 +40,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`CITATION.cff`:** ORCID `0009-0000-4234-5419` for Christopher Melhauser.
 - **Model v2.2.1:** `EVENT_ACTIVE_THRESH_MM = 29.0` (Cintineo 2012; Wendt & Jirak 2021) for
   Stage 08 event footprints and Stage 05 subtropical-winter environmental filter; `DAMAGE_THRESH_MM`
-  (25.4 mm) unchanged for damage/vulnerability stages.
+  (25.4 mm) unchanged for occurrence products and severe-cell counts.
 - **Stage 05:** era-pooled MYRORSS (2005–2011) vs GridRad (2012–2019) quantile mapping when
   same-day overlap is insufficient (replaces identity fallback for gap-era calibration).
+- **Stage 05 (2026-07-05):** range-dependent debias + GridRad speckle filter rerun on full
+  archive; mean pixels filtered **5.8% → 17.2%**; GridRad speckle fraction **9.7% → 6.1%**
+  (diagnostic on corrected archive).
 
 ### Production
 
 - **Full v2.2.1 hazard run complete (2026-06-30):** Stages 05–15 on 9,797 convective days;
   8,798 events at 29 mm; 50,000-yr stochastic catalog (15.17M events); all output validation passed.
+- **Stage 05 debias rerun (2026-07-05):** corrected archive rebuilt with range debias and
+  speckle filter; downstream Stages 06–15 rerun in progress for updated event/stochastic outputs.
 
 ## [2.2.1] — 2026-06-27
 

@@ -11,7 +11,7 @@ Usage:
     python run_pipeline.py --from 5     # Resume from stage 5
     python run_pipeline.py --only 4b    # Run a single stage
     python run_pipeline.py --dry-run    # Print stages without running
-    python run_pipeline.py --skip 14,15 # Skip stages
+    python run_pipeline.py --skip 15      # Skip figure rendering
     python run_pipeline.py --validate   # Validate outputs only
     python run_pipeline.py --skip-ml    # Use deterministic v2.1 fallbacks
 
@@ -85,7 +85,6 @@ STAGES = [
     ("11b", "11b_prepare_topography.py",       "Download and resample NOAA ETOPO 2022 DEM",        "~10–30 min"),
     ("12",  "12_apply_conus_mask.py",          "CONUS mask + topographic correction",              "~10 min"),
     ("13",  "13_generate_stochastic_catalog.py","50,000-yr stochastic catalog",                    "~3 hrs"),
-    ("14",  "14_build_vulnerability.py",       "MDR vulnerability curves [placeholder]",           "~5 min"),
     ("15",  "15_render_figures.py",            "Render all figures + validation report",            "~45 min"),
 ]
 

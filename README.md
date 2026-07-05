@@ -33,8 +33,10 @@ Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**.
 | Constant | Value | Use |
 |----------|------:|-----|
 | `EVENT_ACTIVE_THRESH_MM` | **29.0 mm** | Stage 08 event footprints; Stage 05 subtropical winter filter |
-| `DAMAGE_THRESH_MM` | 25.4 mm | Damage onset, vulnerability, occurrence products |
+| `DAMAGE_THRESH_MM` | 25.4 mm | Damage onset; occurrence products and Stage 13 severe-cell counts |
 | GridRad calibration | era-pooled QM | MYRORSS 2005–2011 vs GridRad 2012–2019 (median ratio ~1.10) |
+| Range debias | SPC-collocated | Per-era multiplicative factors vs nearest-radar distance (125 km reference) |
+| GridRad artifact filter | 3-pass (speckle + azimuthal + filament) | GridRad days only, Stage 05; see `methodology.md` §5.5 |
 
 The model produces:
 
@@ -46,7 +48,7 @@ The model produces:
 - A 50,000-year stochastic event catalog
 - Exceedance probability tables and tail-stability diagnostics
 
-**Scope.** Hail hazard only. The vulnerability module is a placeholder and is not claims-calibrated. No exposure integration or financial loss output is included in this release.
+**Scope.** Hail hazard only — gridded occurrence, intensity, return periods, and stochastic event catalogs. No exposure integration, vulnerability curves, or financial loss output. Claims-calibrated damage functions are documented as **future work** (see `docs/methodology.md` §14).
 
 ### Production run (v2.2.1, completed 2026-06-30)
 
@@ -78,7 +80,7 @@ Stage 06 cross-validates the corrected MESH record against SPC storm reports (va
 Stage 09 fits a Generalized Pareto Distribution (GPD) to the tail of each grid cell's MESH distribution using L-moments, with K-means regional pooling (k = 6) and automated threshold diagnostics. Stage 10 applies spatial smoothing (150 km radius, 75 km exponential decay) to stabilize tail estimates. Stage 11 maps exceedance probabilities at eight MESH thresholds.
 
 **Phase 4 — Hazard Output (Stages 12–15)**
-Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correction factor (bounded 1.0–1.25). Stage 13 generates a 50,000-year stochastic catalog by resampling the historical event library with calibrated intensity perturbation and ±3-cell spatial translation — all operations remain sparse throughout. Stage 14 applies the placeholder vulnerability curves. Stage 15 renders diagnostic figures and compares analytical (CDF-derived) against empirical (stochastic) return-period maps; divergence between the two flags GPD misspecification.
+Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correction factor (bounded 1.0–1.25). Stage 13 generates a 50,000-year stochastic catalog by resampling the historical event library with calibrated intensity perturbation and ±3-cell spatial translation — all operations remain sparse throughout. Stage 15 renders diagnostic figures and compares analytical (CDF-derived) against empirical (stochastic) return-period maps; divergence between the two flags GPD misspecification.
 
 ---
 
@@ -101,8 +103,7 @@ Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correc
 | 11 | `11_build_occurrence_probs.py` | Exceedance probability rasters |
 | 11b | `11b_prepare_topography.py` | NOAA ETOPO 2022 DEM download and 0.05° resampling |
 | 12 | `12_apply_conus_mask.py` | CONUS mask and topographic correction |
-| 13 | `13_generate_stochastic_catalog.py` | 50,000-year stochastic simulation |
-| 14 | `14_build_vulnerability.py` | Placeholder vulnerability curves |
+| 13 | `13_generate_stochastic_catalog.py` | 50,000-year stochastic catalog |
 | 15 | `15_render_figures.py` | Return-period maps and diagnostics |
 
 The pipeline is orchestrated by `run_pipeline.py`:
@@ -197,7 +198,7 @@ Or run individual stages, ranges, or subsets:
 ```bash
 python run_pipeline.py --only 9          # re-fit EVT
 python run_pipeline.py --from 13         # resume from stochastic
-python run_pipeline.py --skip 14,15      # skip vulnerability and figures
+python run_pipeline.py --skip 15           # skip figure rendering
 ```
 
 **Stage 05 without ML artifacts:**
@@ -250,9 +251,10 @@ The following limitations should be documented before any underwriting, regulato
 - **Long return periods are extrapolative.** RP > ~500 years exceed the observed record and rely on GPD tail assumptions.
 - **Spatial dependence is simplified.** The stochastic catalog does not model inter-event spatial correlation beyond the historical footprint.
 - **Climate non-stationarity is not modeled.** The model assumes a stationary hail climate over the radar record.
-- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions.
+- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. v2.2.1 adds range-dependent debias and GridRad speckle filtering (Stage 05), but a broad GridRad–MYRORSS climatological offset can remain in era-comparison diagnostics.
+- **Radar-site artifacts.** GridRad-era data can exhibit NEXRAD range rings and speckle in stochastic return-period maps if uncorrected; rerun Stage 05 with debias/speckle filter and Stages 06–15 after calibration changes.
 - **SPC validation is incomplete.** Report density is spatially and temporally uneven; rural areas are systematically underrepresented.
-- **Vulnerability is a placeholder.** The five-class lognormal curves are literature-based and not calibrated to claims data.
+- **Vulnerability and loss modeling are out of scope.** This repository delivers hazard only; MDR curves, exposure, and financial loss are future work (see `docs/methodology.md` §14).
 
 ---
 
@@ -269,6 +271,7 @@ Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) 
 | `docs/DATA_AVAILABILITY.md` | Zenodo/ORCID archival plan for code, figures, and diagnostics |
 | `scripts/diagnostics/summarize_mesh_daily_peaks.py` | Optional mesh-era peak CSV/ECDF diagnostic |
 | `scripts/diagnostics/hail_day_climatology.py` | Per-cell hail-day climatology and MESH75 threshold sensitivity |
+| `scripts/diagnostics/radar_artifact_diagnostic.py` | Speckle scores, range debias fit, GridRad−MYRORSS artifact maps |
 | `docs/uncertainty.md` | Six-category uncertainty budget |
 | `docs/executive_summary.md` | Non-technical overview |
 | `docs/explainer.md` | Plain-language model explanation |

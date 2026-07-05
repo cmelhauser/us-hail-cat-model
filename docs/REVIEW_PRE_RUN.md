@@ -142,7 +142,7 @@ The following are tracked but not blockers for v2.1:
    Trend diagnostics are recommended, but the main model remains stationary.
 
 3. **Vulnerability is placeholder.**  
-   Stage 14 is not claims-calibrated.
+   Hazard-only scope; vulnerability module removed (future work §14 methodology).
 
 4. **GridRad gap uncertainty remains.**  
    Conditional calibration helps but cannot fully recover missed short-lived peaks.
@@ -239,8 +239,7 @@ The following are tracked but not blockers for v2.1:
 
 ### Stage 14
 
-- Confirm MDR curves are monotonic.
-- Keep placeholder caveat clear.
+**Removed (2026-07).** Hazard-only repository; vulnerability/loss is future work (`docs/methodology.md` §14).
 
 ### Stage 15
 
@@ -291,7 +290,6 @@ The test suite should include:
 - return-period monotonicity;
 - topographic correction bounds;
 - sparse stochastic translation/scaling;
-- vulnerability monotonicity;
 - figure-render smoke tests;
 - run_pipeline selection/dry-run tests.
 

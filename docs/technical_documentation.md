@@ -400,6 +400,8 @@ Deterministic environmental filters (v2.2.1):
 ```text
 noise floor: 5 mm
 subtropical winter (Nov–Feb, lat < 30°N): require >= EVENT_ACTIVE_THRESH_MM (29.0 mm)
+range debias: multiply by per-era factor(range_km) when range_debias.npz exists
+GridRad speckle filter: zero cells > 2.5 × local 3×3 median (>= 5 mm active threshold)
 ```
 
 Optional ML path (when artifacts exist and `--skip-ml` is false):
@@ -414,7 +416,11 @@ if hail-filter artifact exists:
 ```text
 data/analysis/calibration/gridrad_cqm_model.pkl
 data/analysis/calibration/hail_filter_model.pkl
+data/analysis/calibration/range_debias.npz          # from radar_artifact_diagnostic.py
+data/analysis/calibration/nearest_radar_distance_km.npy
 ```
+
+CLI flags: `--no-range-debias`, `--no-speckle-filter` (GridRad era only).
 
 ### 9.3 Hard requirement
 
@@ -511,7 +517,7 @@ event_peaks.npz
 
 ### 12.2 Event grouping constraints
 
-Active cells use **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.1. `DAMAGE_THRESH_MM` (25.4 mm) applies to vulnerability and occurrence stages only.
+Active cells use **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.1. `DAMAGE_THRESH_MM` (25.4 mm) applies to occurrence products and Stage 13 severe-cell counts.
 
 ```text
 temporal gap <= 2 days
@@ -555,6 +561,16 @@ Review:
 - `threshold_benchmark_summary.csv` — Great Plains max/mean days/yr vs literature;
 - `national_annual_hail_days.csv` — CONUS any-cell counts (comparable to Stage 08 λ);
 - seasonal PNG — winter inflation at conventional 25.4 mm vs SPC report-day seasonality.
+
+### 12.6 Post-run radar artifact diagnostic
+
+**Script:** `scripts/diagnostics/radar_artifact_diagnostic.py` (optional)  
+**Helpers:** `scripts/_radar_geometry.py`  
+**Output:** `data/analysis/radar_artifacts/`; fit `data/analysis/calibration/range_debias.npz`
+
+Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Stage 05 applies `range_debias.npz` automatically on the next rerun.
+
+**2026-07-05 production rerun:** GridRad speckle **9.7% → 6.1%**; Stage 05 mean pixels filtered **5.8% → 17.2%**. Residual GridRad−MYRORSS climatological offset remains; re-run Stages **06–15** after debias changes.
 
 ---
 
@@ -799,34 +815,11 @@ Resume after failure: `python run_pipeline.py --from 13 --skip-ml`. Ensure **~12
 
 ---
 
-## 19. Stage 14 - Vulnerability
-
-**Script:** `scripts/14_build_vulnerability.py`
-
-### 19.1 Outputs
-
-```text
-mdr_curves.csv
-mdr_parameters.npz
-```
-
-### 19.2 Important caveat
-
-These curves are placeholders. They are suitable for pipeline integration and demonstration, but they are not production loss curves and should not be used for financial decisions without claims calibration.
-
-### 19.3 Validation
-
-- Curves are monotonic with hail size.
-- Mean damage ratios remain in `[0, 1]`.
-- Runtime warning or documentation clearly labels placeholder status.
-
----
-
-## 20. Stage 15 - Figures
+## 19. Stage 15 - Figures
 
 **Script:** `scripts/15_render_figures.py`
 
-### 20.1 Output directories
+### 19.1 Output directories
 
 ```text
 docs/figures/historical/
@@ -834,7 +827,7 @@ docs/figures/stochastic/
 docs/figures/analysis/
 ```
 
-### 20.2 Required categories
+### 19.2 Required categories
 
 - analytical return-period maps;
 - stochastic return-period maps;
@@ -842,10 +835,9 @@ docs/figures/analysis/
 - validation figures;
 - analytical-vs-stochastic comparisons;
 - event summaries;
-- vulnerability curves;
 - GPD and tail diagnostics.
 
-### 20.3 Figure QA
+### 19.3 Figure QA
 
 Figures are scientific diagnostics, not decoration. Review for:
 

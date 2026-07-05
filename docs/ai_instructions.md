@@ -15,7 +15,7 @@ This document gives future AI agents and developers explicit instructions for wo
 
 When changing the project:
 
-1. Preserve the 15-stage pipeline unless the user explicitly requests a future major-version redesign.
+1. Preserve the 14-stage hazard pipeline (01–13, 15) unless the user explicitly requests a future major-version redesign.
 2. Preserve file paths and output schemas unless a migration is documented.
 3. Keep raster operations vectorized whenever possible.
 4. Use sparse event arrays for event storage and stochastic simulation.
@@ -38,7 +38,7 @@ Do not:
 2. Make Stage 05 dependent on optional ML artifacts.
 3. Use SPC reports as the primary hazard surface.
 4. Change grid constants without a model-version bump.
-5. Treat Stage 14 vulnerability curves as claims-calibrated.
+5. Implement vulnerability or loss modules without explicit hazard-only scope review (future work only; see `docs/methodology.md` §14).
 6. Ignore analytical/stochastic divergence.
 7. Remove validation outputs to simplify runtime.
 8. Replace deterministic logic with black-box-only logic.
@@ -58,9 +58,13 @@ Must support:
 
 - MESH75 correction;
 - GridRad quantile fallback;
+- **range-dependent debias** when `range_debias.npz` exists (`--no-range-debias` to disable);
+- **GridRad artifact filter** (isolated speckle + azimuthal annulus + background filament on GridRad days; `--no-speckle-filter` to disable);
 - optional conditional calibration;
 - optional probabilistic filtering;
 - deterministic fallback with `--skip-ml`.
+
+After debias methodology changes: delete `mesh_0.05deg_corrected/`, re-run Stage 05, then Stages 06–15.
 
 ### Stage 08 — Event catalog
 
@@ -136,7 +140,6 @@ Tests should cover:
 - RP monotonicity;
 - topographic correction bounds;
 - sparse stochastic translation and scaling;
-- MDR monotonicity;
 - figure smoke tests;
 - run_pipeline stage selection and dry run;
 - **no duplicated grid constants across stage scripts**;
@@ -244,7 +247,7 @@ Current repository state:
 - `docs/sensitivity.md` — hyperparameter sweep plan
 - `docs/benchmarks.md` — published RP comparison framework
 - `docs/FAQ.md`
-- `docs/vulnerability_derivation.md`
+- `docs/methodology.md` §14 (future loss work)
 - `docs/methodology.md §0` notation glossary
 
 **Science / methodology gaps to close:**
@@ -258,12 +261,18 @@ Current repository state:
 - Regression / golden-output tests
 - Bootstrap CIs on Stage 09 RP estimates
 
-**Immediate run priorities (2026-06-27):**
+**Immediate run priorities (2026-07-05):**
+- Monitor Stages 06–15 rerun after Stage 05 debias rebuild (`logs/pipeline_from06_post_debias.run.log`).
+- Compare stochastic RP maps before/after debias rerun.
+- Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stage 05/06 to verify speckle reduction.
+
+**Prior priorities (2026-06-27):**
 - Confirm Stage 04c `--missing-only` backfill is finished (or accept manifest `missing_source` days).
 - Re-run Stages 05–15 with `--skip-ml` against the full dataset.
 - Run Stage 13 smoke (`--n-years 1000`) before the full 50,000-year catalog.
 - Regenerate mesh-era diagnostic if ingest changes: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 - Regenerate hail-day climatology after Stage 05: `scripts/diagnostics/hail_day_climatology.py`.
+- Regenerate radar artifact diagnostic after Stage 05/06: `scripts/diagnostics/radar_artifact_diagnostic.py`.
 
 **Stage 04a CDS access note:** Stage 04a needs more than a valid
 `~/.cdsapirc`. The Copernicus account used for the token must also accept the

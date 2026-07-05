@@ -27,6 +27,8 @@ Internal Phases (run automatically in order)
     Then apply environmental filter to all sources.
   Optional range-dependent debias (when ``data/analysis/calibration/range_debias.npz``
   exists from ``scripts/diagnostics/radar_artifact_diagnostic.py``).
+  GridRad days also pass through a radar artifact filter (isolated speckle, azimuthal
+  spokes/rings, quiet-background filaments; disable with ``--no-speckle-filter``).
   Output to: data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif
 
 MESH75 Recalibration (Witt-algorithm sources)
@@ -117,6 +119,7 @@ _cqm_model    = None
 _filter_model = None
 _range_debias = None
 _range_km_grid = None
+_site_idx_grid = None
 
 log = get_logger("05_apply_mesh_bias_correction", LOG_ROOT).info
 
@@ -125,7 +128,6 @@ def init_range_debias(*, enable: bool = True) -> bool:
     """Load optional range-debias table and distance grid."""
     global _range_debias, _range_km_grid
     _range_debias = None
-    _range_km_grid = None
     if not enable:
         return False
     try:
@@ -135,8 +137,23 @@ def init_range_debias(*, enable: bool = True) -> bool:
     _range_debias = load_range_debias()
     if _range_debias is None:
         return False
-    _range_km_grid = ensure_range_km_grid()
+    if _range_km_grid is None:
+        _range_km_grid = ensure_range_km_grid()
     return True
+
+
+def init_artifact_grids(*, speckle_filter: bool = True) -> None:
+    """Load cached NEXRAD distance and nearest-site grids for GridRad artifact removal."""
+    global _range_km_grid, _site_idx_grid
+    if not speckle_filter:
+        return
+    try:
+        from _radar_geometry import ensure_nearest_site_index_grid, ensure_range_km_grid
+    except ImportError:  # pragma: no cover
+        from scripts._radar_geometry import ensure_nearest_site_index_grid, ensure_range_km_grid
+    if _range_km_grid is None:
+        _range_km_grid = ensure_range_km_grid()
+    _site_idx_grid = ensure_nearest_site_index_grid()
 
 def load_gridrad_days() -> set:
     global _gridrad_days
@@ -432,7 +449,7 @@ def apply_environmental_filter(data, day_of_year, lat_grid):
         out[(lat_grid < 30.0) & (out < MIN_MESH75_SEVERE)] = 0.0
     return out
 
-def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debias: bool = True):
+def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debias: bool = True, speckle_filter: bool = True):
     import rasterio
 
     if out_path.exists():
@@ -462,6 +479,19 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debia
         src_era = classify_mesh_source_from_yyyymmdd(datestr)
         corrected = _apply_range_debias(corrected, _range_km_grid, src_era, _range_debias)
 
+    n_speckle = 0
+    artifact_counts: dict[str, int] = {}
+    if speckle_filter and source == "GridRad":
+        try:
+            from _radar_geometry import remove_gridrad_artifacts
+        except ImportError:  # pragma: no cover
+            from scripts._radar_geometry import remove_gridrad_artifacts
+        if _range_km_grid is not None and _site_idx_grid is not None:
+            corrected, artifact_counts = remove_gridrad_artifacts(
+                corrected, _range_km_grid, _site_idx_grid,
+            )
+            n_speckle = sum(artifact_counts.values())
+
     filtered = apply_probabilistic_filter(corrected, doy, lat_grid, skip_ml=skip_ml)
     filtered, n_repaired = sanitize_hail_values(filtered, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
     if n_repaired:
@@ -481,6 +511,8 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debia
         "peak_in_mm":   round(float(data.max()), 1) if in_nz else 0.0,
         "peak_out_mm":  round(float(filtered.max()), 1) if out_nz else 0.0,
         "filtered_pct": round(100 * (1 - out_nz / max(in_nz, 1)), 1),
+        "speckle_removed": n_speckle,
+        "artifact_counts": artifact_counts,
     }
 
 def validate_outputs():
@@ -539,6 +571,8 @@ def main():
                         help="Accepted for pipeline compatibility; training is external to this script")
     parser.add_argument("--no-range-debias", action="store_true",
                         help="Disable range-dependent debias even if range_debias.npz exists")
+    parser.add_argument("--no-speckle-filter", action="store_true",
+                        help="Disable GridRad speckle spike removal (3×3 median test)")
     args = parser.parse_args()
 
     if args.validate:
@@ -569,6 +603,11 @@ def main():
         log("  Range debias: ON (range_debias.npz)")
     else:
         log("  Range debias: OFF (run radar_artifact_diagnostic.py to build range_debias.npz)")
+    if args.no_speckle_filter:
+        log("  GridRad artifact filter: OFF")
+    else:
+        log("  GridRad artifact filter: ON (isolated + azimuthal + filament)")
+    init_artifact_grids(speckle_filter=not args.no_speckle_filter)
 
     log("\n[Phase B] Applying corrections to all rasters")
     lat_grid = build_lat_grid()
@@ -592,6 +631,7 @@ def main():
             in_path, out_path, lat_grid,
             skip_ml=args.skip_ml,
             range_debias=not args.no_range_debias,
+            speckle_filter=not args.no_speckle_filter,
         )
 
         if result.get("skipped"):

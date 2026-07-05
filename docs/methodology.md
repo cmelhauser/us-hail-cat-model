@@ -10,7 +10,7 @@ The CONUS Hail Catastrophe Model v2.2 is a radar-first probabilistic hail hazard
 
 The central methodological choice is to use radar-derived Maximum Expected Size of Hail (MESH) fields as the primary hazard observation, while reserving SPC hail reports for validation and calibration support. That choice reflects the well-documented non-meteorological bias in human hail reports, including population density, road density, observation practices, report-size rounding, and historical changes in severe-hail reporting thresholds (Allen and Tippett 2015; Blair et al. 2011, 2017). Radar products have their own uncertainties, but they provide spatially continuous observations over rural and urban domains and are therefore better suited to gridded hazard estimation.
 
-v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. **v2.2.1** (§2.7) adopts **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for event footprints and era-pooled GridRad calibration after per-cell hail-day diagnostics. v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the same 15-stage architecture.
+v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. **v2.2.1** (§2.7) adopts **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for event footprints and era-pooled GridRad calibration after per-cell hail-day diagnostics; **§5.5** adds range-dependent debias and GridRad speckle filtering after radar-artifact QA (2026-07). v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the same 14-stage hazard architecture (Stage 14 vulnerability removed; loss is future work).
 
 ---
 
@@ -47,7 +47,7 @@ This glossary defines symbols and abbreviations used throughout the document. Va
 |--------|-----------|
 | `p_occ(i,j)` | Annual exceedance probability at cell (i,j): fraction of years with nonzero severe hail |
 | `active(i,j,d)` | Indicator: 1 if `MESH75_corrected(i,j,d) ≥ EVENT_ACTIVE_THRESH_MM` (29.0 mm in v2.2.1), else 0 |
-| `DAMAGE_THRESH_MM` | 25.4 mm — residential damage onset; used for vulnerability and occurrence products |
+| `DAMAGE_THRESH_MM` | 25.4 mm — residential damage onset; used for occurrence products and severe-cell counts |
 | `EVENT_ACTIVE_THRESH_MM` | 29.0 mm — Cintineo/Wendt severe-hail skill threshold; Stage 08 events and Stage 05 winter filter |
 | `climo_doy(i,j)` | Mean MESH75 for a given day-of-year at cell (i,j), averaged across all years |
 | `λ` | Mean annual event count (Poisson rate for stochastic simulation) |
@@ -84,13 +84,13 @@ This glossary defines symbols and abbreviations used throughout the document. Va
 | `elevation_km` | Cell elevation in km above sea level (from 0.05° DEM) |
 | `freezing_level_km` | ERA5 monthly 0°C isotherm height in km above sea level |
 
-### Vulnerability
+### Loss-side notation (future work — see §14)
 
 | Symbol | Definition |
 |--------|-----------|
 | `MDR(h)` | Mean damage ratio at hail size `h` — fraction of replacement value expected to be damaged |
-| `μ_v` | Log-scale location parameter of the lognormal MDR curve; `exp(μ_v)` ≈ median-damage hail size |
-| `σ_v` | Log-scale dispersion parameter of the lognormal MDR curve |
+| `μ_v` | Log-scale location parameter of a lognormal MDR curve; `exp(μ_v)` ≈ median-damage hail size |
+| `σ_v` | Log-scale dispersion parameter of a lognormal MDR curve |
 | `Φ` | Standard normal CDF |
 
 ### Data sources and abbreviations
@@ -127,7 +127,7 @@ The model estimates hazard, not loss. A complete insurance catastrophe model wou
 6. financial terms;
 7. uncertainty propagation.
 
-v2.1 implements the first three elements and provides placeholder vulnerability curves for integration testing only. It does not include property exposure, policy conditions, claims-calibrated vulnerability, demand surge, repair-cost inflation, or portfolio aggregation. Any loss interpretation should therefore be treated as illustrative.
+v2.1 implements the first three hazard elements (occurrence, intensity/footprint, stochastic catalog). It does not include property exposure, vulnerability curves, policy conditions, claims-calibrated damage functions, demand surge, repair-cost inflation, or portfolio aggregation. **Future work** for a complete insurance catastrophe model is documented in §14.
 
 The spatial domain is CONUS and the target hazard variable is hail size in millimeters, represented as MESH75 where possible. MESH75 is interpreted as a radar-derived estimate of the 75th percentile of observed maximum hail size conditional on the storm and radar retrieval, following the corrected MESH relationships in the Murillo and Homeyer literature.
 
@@ -196,7 +196,7 @@ v2.2.1 separates **damage onset** from **severe-hail event identification** afte
 
 | Constant | Value | Role |
 |----------|------:|------|
-| `DAMAGE_THRESH_MM` | 25.4 mm (1.0 in) | Residential damage onset; vulnerability (Stage 14), occurrence tables (Stage 11), Stage 13 severe-cell counts |
+| `DAMAGE_THRESH_MM` | 25.4 mm (1.0 in) | Residential damage onset; occurrence tables (Stage 11), Stage 13 severe-cell counts |
 | `EVENT_ACTIVE_THRESH_MM` | 29.0 mm (~1.14 in) | Stage 08 event active cells; Stage 05 subtropical winter filter (Nov–Feb, lat &lt; 30°N) |
 | `GPD_THRESH_MM_DEFAULT` | 50.8 mm (2.0 in) | EVT tail threshold (Stage 09); automated MRL selection preferred where supported |
 | `MAX_CENTROID_KM_DAY` | 150 km/day | Stage 08 merge cap |
@@ -328,7 +328,36 @@ data/analysis/calibration/hail_filter_model.pkl
 
 If absent, Stage 05 applies deterministic safety floors. The deterministic path is not a second-class mode; it is the reproducible baseline. Hard filters are deliberately simple and should be reviewed as part of the uncertainty budget.
 
-### 5.4 Source homogeneity
+### 5.5 Radar artifact diagnostic, range debias, and GridRad artifact filter (v2.2.1+)
+
+GridRad-era MESH can exhibit **NEXRAD range-dependent bias**, **isolated speckle spikes**, and **correlated range-ring/spoke geometry** that propagate into sparse event footprints and stochastic return-period maps. Published hail climatologies address these at **native volume**, **hourly**, and **daily-grid** stages before long-term aggregation (see `literature_review.md` §3.7). v2.2.1 applies automated daily-grid QC in Stage 05 after cross-source calibration.
+
+**Layers (in order within Stage 05):**
+
+1. **Era-pooled quantile mapping** (§5.2) — aligns marginal pixel distributions across sources.
+2. **Range-dependent debias** — `scripts/diagnostics/radar_artifact_diagnostic.py` fits per-era multiplicative factors from **173k+** Stage 06 SPC–MESH pairs binned by distance to the nearest CONUS WSR-88D site (~140 `K*` radars). Factors are normalized to **1.0 at 125 km** and clipped to **[0.45, 1.15]**. Applied when `data/analysis/calibration/range_debias.npz` exists (`--no-range-debias` to disable).
+3. **GridRad artifact filter** (`scripts/_radar_geometry.remove_gridrad_artifacts`) — GridRad days only; disable with `--no-speckle-filter`:
+   - **Isolated speckle** — active cells > **2.5×** local **3×3 median** (≥ 5 mm); Wendt & Jirak (2021)-style isolated-pixel removal.
+   - **Azimuthal annulus** — per (nearest radar site, range bin), zero cells > **2.5×** annulus median; targets radial spokes and hot pixels on range rings (WSR-88D azimuth-median analogue in Cartesian space).
+   - **Background filament** — **21×21** background median; zero active cells > background + **20 mm** when background < **15 mm**; targets thin rings in quiet areas.
+4. **Environmental filter** and `sanitize_hail_values` — applied after artifact removal.
+
+**Upstream gap (Stage 04c):** NCAR GridRad provides `GRIDRAD_REMOVE_CLUTTER` / `GRIDRAD_FILTER` on native reflectivity; Murillo et al. (2021) additionally exclude failed radar volumes manually. Stage **04c** does not yet apply equivalent reflectivity QC before SHI integration—future work for stronger ring suppression.
+
+**Prior diagnostic (2026-07-05, speckle-only pass, 9,797 days):**
+
+| Metric | Before debias rerun | After debias + speckle only |
+|--------|--------------------:|----------------------------:|
+| GridRad mean speckle fraction (active cells) | 9.7% | **6.1%** |
+| GridRad P95 speckle fraction | 50% | **33%** |
+| Stage 05 mean pixels filtered | 5.8% | **17.2%** |
+| Residual ring geometry in GridRad−MYRORSS diff map | visible | **still visible** (speckle alone insufficient) |
+
+Re-run **Stage 05** (delete `mesh_0.05deg_corrected/` first), then `radar_artifact_diagnostic.py`, then **Stages 06–15** after any methodology change.
+
+Diagnostic outputs: `data/analysis/radar_artifacts/` (maps, CSVs); fit table: `range_debias_factors.csv`.
+
+### 5.6 Source homogeneity
 
 The final corrected daily archive combines MYRORSS, GridRad, and MRMS. The model assumes that Stage 05 reduces source-transition artifacts enough for pooled tail estimation. Stage 06 diagnostics should check this assumption through source-stratified distributions, regional summaries, and top-event review. Any visible discontinuity at 2012 or 2020 should be treated as a first-order model risk.
 
@@ -373,7 +402,7 @@ Leap day is represented explicitly as day 366. Downstream smoothing or calendar-
 Stage 08 converts daily rasters into event footprints. Event active cells use the
 literature severe-hail skill threshold (29.0 mm; Cintineo et al. 2012; Wendt &
 Jirak 2021). The 25.4 mm damage threshold (`DAMAGE_THRESH_MM`) remains canonical
-for vulnerability and occurrence products.
+for occurrence products and Stage 13 severe-cell counts.
 
 ```text
 active(i, j, d) = 1 if MESH75_corrected(i, j, d) >= 29.0 mm
@@ -594,15 +623,16 @@ For each simulated year, annual maxima are updated on the compact active-cell in
 
 ---
 
-## 14. Vulnerability Placeholder
+## 14. Future Work — Vulnerability, Exposure, and Loss
 
-Stage 14 constructs illustrative mean-damage-ratio curves:
+This repository is **hazard-only**. A complete insurance catastrophe model would add:
 
-```text
-MDR(h) = Phi((ln(h) - mu_v) / sigma_v)
-```
+1. **Exposure** — geocoded building/inventory attributes (construction class, roof material, age, value).
+2. **Vulnerability** — claims-calibrated mean-damage-ratio (MDR) or loss functions by peril and construction type (Brown et al. 2015; IBHS hail testing literature).
+3. **Financial terms** — deductibles, limits, coinsurance, time element.
+4. **Loss aggregation** — portfolio roll-ups with correlation and demand surge.
 
-These curves are literature-informed priors for demonstration and integration testing. They are not calibrated to insurance claims. Production vulnerability modeling would require claims, exposure attributes, roof material, age, construction class, repair-cost normalization, deductibles, limits, and a formal validation framework.
+Prior development explored literature-based lognormal MDR priors for five construction classes; that work was **removed from the codebase** because it was not claims-calibrated and risked misinterpretation as production loss capability. The recommended path is to fit vulnerability from insurer or public claims data, then multiply hazard footprints × exposure × MDR in a separate loss module.
 
 ---
 
@@ -615,7 +645,7 @@ Stage 15 renders:
 - validation figures;
 - event summaries;
 - analytical-vs-stochastic comparison;
-- vulnerability curves;
+- event summaries;
 - GPD and tail diagnostics.
 
 Figure review is a required scientific QA step. Maps should be checked for source-transition artifacts, grid-orientation errors, excessive smoothing, physically implausible gradients, boundary artifacts, and unexpected maxima outside known hail corridors. Analytical-vs-stochastic divergence at long return periods should be recorded, not waved away.
@@ -630,8 +660,9 @@ The major uncertainty categories are:
 - algorithmic uncertainty from source processing, calibration, filtering, and aggregation;
 - sampling uncertainty from the short radar record;
 - model uncertainty from GPD threshold, regional pooling, smoothing, and stationarity assumptions;
-- stochastic uncertainty from event-count and perturbation assumptions;
-- vulnerability uncertainty because Stage 14 is not claims-calibrated.
+- stochastic uncertainty from event-count and perturbation assumptions.
+
+Loss-side uncertainty (vulnerability, exposure, financial terms) is **out of scope**; see §14.
 
 The model is stationary. It does not condition the tail distribution on climate covariates or future climate scenarios. Trend diagnostics are recommended, but v2.1 does not force non-stationarity into the tail model because the homogeneous radar record is short for long-return-period estimation.
 

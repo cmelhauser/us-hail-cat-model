@@ -105,12 +105,12 @@ Hazard means:
 
 > How large is the hail, and how often does it happen?
 
-To estimate financial loss, two more pieces are needed:
+To estimate financial loss, two more pieces would be needed ( **future work**, not in this repository):
 
 1. exposure — what buildings are there and what are they worth?
 2. vulnerability — how much damage does hail cause to those buildings?
 
-The repository includes placeholder vulnerability curves, but they are not calibrated to insurance claims.
+See `docs/methodology.md` §14 for the planned loss-side extension.
 
 ---
 
@@ -124,7 +124,7 @@ A responsible interpretation should include:
 - the validation report;
 - the stochastic comparison;
 - the tail-stability diagnostics;
-- a clear statement that vulnerability is placeholder only.
+- acknowledgment that loss modeling (exposure, vulnerability) is future work.
 
 ---
 

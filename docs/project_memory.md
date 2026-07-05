@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-06-30 (`v2.2.1` — full production run complete; Stages 01–15 validated)**
+**Last updated: 2026-07-05 (`v2.2.1` — Stage 05 range debias + speckle filter; downstream rerun from Stage 06)**
 
 ---
 
@@ -13,28 +13,26 @@
 - **Domain:** continental United States
 - **Primary hazard input:** radar-derived MESH / MESH75
 - **Grid:** 0.05°, 520 rows × 1180 columns
-- **Core architecture:** 15-stage Python pipeline
+- **Core architecture:** 14-stage hazard pipeline (01–13, 15; no vulnerability stage)
 - **Core stochastic design:** sparse event resampling
 - **Primary output:** gridded hail hazard return-period maps and stochastic event diagnostics
 - **Not included:** production exposure, financial loss, or claims-calibrated vulnerability
 
 ---
 
-## 2. Current State (as of 2026-06-30)
+## 2. Current State (as of 2026-07-05)
 
-Branch `v2.2.1` is active development; model `v2.2.1` on `v2.2.1`; `v2.2.0` remains on `main` until merged.
+Branch `main` includes radar debias code (merged PR #14). **Stage 05 debias rerun complete**; **Stages 06–15 rerun in progress** (`logs/pipeline_from06_post_debias.run.log`).
 
-**v2.2.1 production run complete (2026-06-30):** full pipeline Stages 01–15 validated with `--skip-ml`.
+**Prior v2.2.1 production run (2026-06-30):** full pipeline Stages 01–15 validated with `--skip-ml` (pre-debias stochastic catalog superseded after rerun).
 
 | Metric | Value |
 |--------|------:|
 | Convective-day archive | 9,797 (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Corrected MESH75 | 9,797 days; era-pooled QM; 29 mm winter filter |
-| Historical events | 8,798 at 29 mm (~303 yr⁻¹) |
-| Stochastic catalog | 50,000 yr; 15.17M synthetic events; σ = 0.225 |
-| Stage 13 wall time | ~5.4 h (memmap-backed annual maxima) |
-
-All stages 01–15: **complete** and output validation passed.
+| Corrected MESH75 | 9,797 days; era-pooled QM; **range debias**; **GridRad speckle filter**; 29 mm winter filter |
+| Radar artifact QA | GridRad speckle 9.7%→6.1%; Stage 05 mean pixels filtered 5.8%→17.2% (2026-07-05) |
+| Historical events | 8,798 at 29 mm (~303 yr⁻¹) — **pending rerun** |
+| Stochastic catalog | 50,000 yr; 15.17M events — **pending rerun** |
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -83,7 +81,7 @@ Any future methodology change must update tests and documentation in the same co
 
 ### Stage 05
 
-Handles source calibration and environmental filtering. Must run with or without optional ML artifacts (`--skip-ml`).
+Handles source calibration, **range-dependent debias** (`range_debias.npz`), **GridRad speckle filtering**, and environmental filtering. Must run with or without optional ML artifacts (`--skip-ml`). Re-run Stages 06–15 after debias methodology changes.
 
 ### Stage 08
 
@@ -128,7 +126,7 @@ Generates the stochastic catalog. Must remain sparse-safe. Must not reconstruct 
 2. Spatial dependence is simplified; inter-event correlation is not modeled.
 3. Climate non-stationarity is not embedded in the hazard fit.
 4. GridRad gap-fill uncertainty at the 2011 and 2020 source transitions.
-5. Vulnerability is placeholder only; not claims-calibrated.
+5. **Hazard-only scope:** no exposure, vulnerability, or financial loss module (future work; methodology §14).
 6. SPC validation is spatially biased and incomplete (rural underreporting).
 
 ---
@@ -243,7 +241,7 @@ Complete grep scan and refactor of all 15 stage scripts confirming:
 - Shared `_io.py` helpers are wired where needed (`write_geotiff`, `haversine_km`, `latlon_to_grid`)
 - `RP_YEARS`, `DAMAGE_THRESH_MM`, `MAX_HAIL_MM`, and `MAX_CENTROID_KM_DAY` are sourced from `_config.py` where used
 - 28 pytest files exist, including `tests/integration/test_smoke_synthetic.py`
-- Missing docs: sensitivity.md, benchmarks.md, FAQ.md, vulnerability_derivation.md
+- Missing docs: sensitivity.md, benchmarks.md, FAQ.md
 
 Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instructions.md
 
@@ -281,7 +279,7 @@ In order:
 3. Add non-stationarity diagnostics (Mann-Kendall trend test on annual MESH maxima).
 4. Improve spatial dependence documentation (extremogram, tail dependence).
 5. Add exposure integration.
-6. Add claims-calibrated vulnerability if data become available.
+6. Add claims-calibrated vulnerability and exposure modules if data become available (see `docs/methodology.md` §14).
 7. Consider a v3.0 generative storm swath model.
 
 ---

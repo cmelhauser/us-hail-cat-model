@@ -19,7 +19,7 @@ Use the reading paths below to orient yourself quickly.
 5. [`uncertainty.md`](uncertainty.md) — uncertainty budget: measurement, algorithmic, sampling, model, stochastic
 6. [`sensitivity.md`](sensitivity.md) — hyperparameter sweep plan; run after first pipeline execution
 7. [`benchmarks.md`](benchmarks.md) — published RP comparison framework; post-run validation targets
-8. [`vulnerability_derivation.md`](vulnerability_derivation.md) — MDR curve sources, limitations, calibration path
+8. [`methodology.md`](methodology.md) §14 — future work: exposure, vulnerability, loss
 9. [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) — draft PNAS-style article on AI-assisted model construction
 10. [`pnas_publication_readiness.md`](pnas_publication_readiness.md) — novelty assessment, evidence gaps, and submission-readiness checklist
 11. [`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md) — Zenodo/ORCID archival plan, tarball layout, DOI placeholders
@@ -32,6 +32,7 @@ Use the reading paths below to orient yourself quickly.
 5. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
 6. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
 7. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
+8. [`../scripts/diagnostics/radar_artifact_diagnostic.py`](../scripts/diagnostics/radar_artifact_diagnostic.py) — speckle/range debias QA (`data/analysis/radar_artifacts/`)
 
 **AI agent or future developer:**
 1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation
@@ -53,12 +54,11 @@ Use the reading paths below to orient yourself quickly.
 |---|---|---|
 | [`executive_summary.md`](executive_summary.md) | Overview | 5-minute model overview for decision-makers |
 | [`explainer.md`](explainer.md) | Overview | Plain-language methodology with no equations |
-| [`methodology.md`](methodology.md) | Scientific | Full methodology: MESH75, EVT, stochastic simulation, vulnerability — includes §0 notation glossary |
+| [`methodology.md`](methodology.md) | Scientific | Full methodology: MESH75, EVT, stochastic simulation — includes §0 notation glossary and §14 future loss work |
 | [`literature_review.md`](literature_review.md) | Scientific | Annotated bibliography covering all model components |
 | [`uncertainty.md`](uncertainty.md) | Scientific | Uncertainty budget across six categories; companion to methodology |
 | [`sensitivity.md`](sensitivity.md) | Scientific | Hyperparameter sensitivity sweep plan: stages 08, 09, 10, 12, 13 |
 | [`benchmarks.md`](benchmarks.md) | Scientific | Published RP comparison framework; post-run validation targets |
-| [`vulnerability_derivation.md`](vulnerability_derivation.md) | Scientific | MDR curve derivation, placeholder limitations, calibration roadmap |
 | [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) | Manuscript | Draft PNAS-style article on AI-assisted catastrophe model development |
 | [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) | Diagnostic | Per-cell hail-day climatology vs Cintineo/Murillo thresholds |
 | [`pnas_publication_readiness.md`](pnas_publication_readiness.md) | Manuscript | PNAS novelty assessment, reviewer risks, evidence plan, go/no-go criteria |

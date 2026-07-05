@@ -20,7 +20,17 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-06-30** — **v2.2.1 production run complete**:
+Snapshot taken **2026-07-05** — **Stage 05 debias rerun complete**; **Stages 06–15 rerun in progress**:
+
+| Stage | Status | Notes |
+|-------|--------|-------|
+| Stage 05 | ✅ Rebuilt | **9,797** days in **5.0 min**; range debias ON; GridRad speckle filter ON; mean pixels filtered **17.2%** (was 5.8%). |
+| Stages 06–15 | ⏳ Running | `run_pipeline.py --from 06 --skip-ml`; log: `logs/pipeline_from06_post_debias.run.log` |
+| Prior production (2026-06-30) | ✅ Superseded for stochastic | Pre-debias event catalog and 50k-yr catalog; replace after rerun completes. |
+
+**Radar artifact diagnostic (2026-07-05):** GridRad speckle **9.7% → 6.1%**; see `data/analysis/radar_artifacts/`.
+
+Previous snapshot **2026-06-30** — **v2.2.1 production run complete**:
 
 | Stage | Status | Notes |
 |-------|--------|-------|
@@ -35,7 +45,7 @@ Snapshot taken **2026-06-30** — **v2.2.1 production run complete**:
 | Stage 08 | ✅ Complete | **8,798** events at **29 mm** (~303 yr⁻¹); validation passed. |
 | Stages 09–12 | ✅ Complete | Analytical/smoothed RP maps through 50,000 yr. |
 | Stage 13 | ✅ Complete | **50,000** yr; **15.17M** synthetic events; **~5.4 h** (memmap fix 2026-06-30). |
-| Stages 14–15 | ✅ Complete | Placeholder vulnerability + figures; validation passed. |
+| Stage 15 | ✅ Complete | Figures and validation report (`15_render_figures.py`) |
 
 **v2.2.1 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled GridRad QM; see `docs/methodology.md` §2.7.
 
@@ -178,7 +188,6 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 .venv/bin/python run_pipeline.py --from 05 --skip-ml
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000
-.venv/bin/python run_pipeline.py --only 14
 .venv/bin/python run_pipeline.py --only 15
 .venv/bin/python run_pipeline.py --validate
 .venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py

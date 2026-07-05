@@ -1,7 +1,7 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.2
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-06-30 (**v2.2.1 production run complete** — Stages 01–15 validated).
+> Last updated: 2026-07-05 (**Stage 05 range debias + speckle filter**; downstream rerun from Stage 06 in progress).
 
 ---
 
@@ -19,7 +19,7 @@
 ## What This Project Is
 
 A radar-based probabilistic hail hazard model for the Continental United States.
-15-stage Python pipeline on a fixed 0.05° CONUS grid (520 × 1180 cells). Ingests
+14-stage Python pipeline on a fixed 0.05° CONUS grid (520 × 1180 cells). Ingests
 NOAA MESH data from three sources, fits regional GPD extreme-value distributions
 via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard only
 — no exposure, no financial loss, no claims-calibrated vulnerability.**
@@ -33,7 +33,7 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 | Ingestion & Calibration | 01–05 | MYRORSS / GridRad / MRMS ingestion, ERA5 isotherms, bias correction, ML filtering |
 | Event Catalog | 06–08 | SPC validation, climatology, sparse event grouping |
 | EVT Fitting | 09–11 | Regional GPD (L-moments), spatial smoothing, exceedance probabilities |
-| Hazard Output | 12–15 | CONUS mask, topographic correction, 50k-yr stochastic catalog, vulnerability placeholder, figures |
+| Hazard Output | 12–15 | CONUS mask, topographic correction, 50k-yr stochastic catalog, figures |
 
 ---
 
@@ -47,11 +47,13 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 04b_download_gridrad.py         04c_fill_gridrad_gap.py
 12_apply_conus_mask.py
 05_apply_mesh_bias_correction.py 13_generate_stochastic_catalog.py
-06_validate_mesh_vs_spc.py      14_build_vulnerability.py
-07_build_hail_climo.py          15_render_figures.py
+06_validate_mesh_vs_spc.py      15_render_figures.py
+07_build_hail_climo.py
 
 scripts/diagnostics/summarize_mesh_daily_peaks.py  ← optional mesh-era peak CSV/ECDF
 scripts/diagnostics/hail_day_climatology.py      ← per-cell hail-day threshold sensitivity
+scripts/diagnostics/radar_artifact_diagnostic.py ← speckle/range debias QA
+scripts/_radar_geometry.py                       ← NEXRAD sites, debias, speckle filter
 
 scripts/_config.py   ← all grid constants, paths, EVT defaults (wired into all stage scripts)
 scripts/_logging.py  ← get_logger() factory (wired into all stage scripts)
@@ -95,7 +97,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 | POOL_RADIUS_KM | 150 km (75 km decay) |
 | N_REGIONS_DEFAULT | 6 (K-means) |
 | RNG_SEED | 42 |
-| DAMAGE_THRESH_MM | 25.4 mm (damage onset; vulnerability, occurrence) |
+| DAMAGE_THRESH_MM | 25.4 mm (damage onset; occurrence, Stage 13) |
 | EVENT_ACTIVE_THRESH_MM | 29.0 mm (Stage 08 events; Stage 05 subtropical winter filter) |
 | MAX_CENTROID_KM_DAY | 150.0 (canonical; stage 08 corrected to match 2026-05-03) |
 
@@ -116,7 +118,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 - `docs/README.md` (documentation index)
 - `docs/uncertainty.md` (six-category uncertainty budget)
 - `docs/methodology.md §0` — notation glossary added 2026-05-03
-- All other docs (technical_documentation, data_dictionary, reproduce, ai_instructions, project_memory, literature_review, executive_summary, explainer, migration_plan, sensitivity, benchmarks, FAQ, vulnerability_derivation)
+- All other docs (technical_documentation, data_dictionary, reproduce, ai_instructions, project_memory, literature_review, executive_summary, explainer, migration_plan, sensitivity, benchmarks, FAQ)
 
 **Code helpers (on disk and wired into stage scripts):**
 - `scripts/_config.py` — single source of truth; **15/15 stage scripts import from it**
@@ -156,7 +158,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 | 05 | 9,797 corrected days; era-pooled QM; 0 skipped |
 | 08 | 8,798 events at 29 mm (~303 yr⁻¹) |
 | 13 | 50,000 yr; 15.17M synthetic events; memmap-backed (~5.4 h) |
-| 14–15 | Placeholder vulnerability + figures |
+| 15 | Figures + validation report |
 
 **Re-run Stage 05** only if deleting `mesh_0.05deg_corrected/` and changing calibration methodology.
 
@@ -189,7 +191,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 # After Stage 13 smoke passes (default n_years=1000), do the full 50k run:
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
 .venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000
-.venv/bin/python run_pipeline.py --only 14
+.venv/bin/python run_pipeline.py --only 15
 .venv/bin/python run_pipeline.py --only 15
 .venv/bin/python run_pipeline.py --validate
 .venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py
@@ -209,7 +211,6 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 - ✅ `docs/sensitivity.md` — hyperparameter sweep plan
 - ✅ `docs/benchmarks.md` — published RP comparison framework
 - ✅ `docs/FAQ.md` — common questions
-- ✅ `docs/vulnerability_derivation.md` — MDR curve sources and limitations
 - ✅ `tests/integration/test_smoke_synthetic.py` — stage 08→13 end-to-end smoke test
 - ✅ `tests/test_no_duplicated_constants.py` — constant values vs _config.py
 - ✅ `docs/README.md` updated with new documents
@@ -267,5 +268,5 @@ python run_pipeline.py --dry-run
 Recommended first-run stage order:
 ```
 01 → 02 → 03 → 04a → 04c → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
-→ 13 (--n-years 1000 smoke first) → 13 (full 50k) → 14 → 15
+→ 13 (--n-years 1000 smoke first) → 13 (full 50k) → 15
 ```
