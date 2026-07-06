@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-05 (`v2.2.2`; Stage 05 artifact filter rerun — see `docs/RUN_NOTES.md`)**
+**Last updated: 2026-07-06 (`v2.2.2`; four-pass GridRad artifact filter + Stage 05 rebuild — see `docs/RUN_NOTES.md`)**
 
 ---
 
@@ -59,12 +59,18 @@ Must support:
 - MESH75 correction;
 - GridRad quantile fallback;
 - **range-dependent debias** when `range_debias.npz` exists (`--no-range-debias` to disable);
-- **GridRad artifact filter** (isolated speckle + azimuthal annulus + background filament on GridRad days; `--no-speckle-filter` to disable);
+- **GridRad artifact filter** (four passes on GridRad days: isolated speckle, radial range ring, azimuthal annulus, background filament; `--no-speckle-filter` to disable);
 - optional conditional calibration;
 - optional probabilistic filtering;
 - deterministic fallback with `--skip-ml`.
 
-After debias methodology changes: delete `mesh_0.05deg_corrected/`, re-run Stage 05, then Stages 06–14.
+After debias or artifact-filter changes: use **`python scripts/rerun_stage05.py`** (or
+`run_pipeline.py --only 05 --clean-from 05 --skip-ml --skip-calibration`) to wipe Stages
+05–14 outputs and rebuild the corrected archive **in the foreground**. Do not launch Stage 05
+via `nohup`/`&` from agent shells — the process dies when the session ends.
+
+After Stage 05 completes: run `radar_artifact_diagnostic.py`, then Stage 06; review the
+GridRad−MYRORSS diff map before Stages 07–14.
 
 ### Stage 08 — Event catalog
 

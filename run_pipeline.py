@@ -14,6 +14,11 @@ Usage:
     python run_pipeline.py --skip 14      # Skip figure rendering
     python run_pipeline.py --validate   # Validate outputs only
     python run_pipeline.py --skip-ml    # Use deterministic v2.1 fallbacks
+    python run_pipeline.py --clean-from 05 --only 05 --skip-ml --skip-calibration
+                                        # Wipe Stage 05+ outputs, then rebuild Stage 05
+
+For a blocking Stage 05 rebuild after filter/debias changes, prefer
+``scripts/rerun_stage05.py`` (waits for any running Stage 05, cleans 05+, foreground run).
 
 Stage 04c is invoked with ``--with-04b-download --workers 4`` (per convective
 day download, four convective days in parallel; GridRad inputs deleted after each
@@ -27,6 +32,7 @@ legacy NCAR download stage alone.
 
 import argparse
 import importlib
+import os
 import subprocess
 import sys
 import time
@@ -142,7 +148,8 @@ def print_header():
 
 def run_stage(stage_id: str, script: str, desc: str, eta: str,
               dry_run: bool, validate_only: bool = False,
-              retrain_models: bool = False, skip_ml: bool = False) -> bool:
+              retrain_models: bool = False, skip_ml: bool = False,
+              skip_calibration: bool = False) -> bool:
     script_path = SCRIPTS / script
     log_path    = LOGS / f"{script.replace('.py', '')}.log"
     LOGS.mkdir(exist_ok=True)
@@ -162,7 +169,7 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
     t0 = time.time()
     print(f"       {CYAN}▶ {'Validating' if validate_only else 'Running'}...{RESET}", flush=True)
 
-    cmd = [sys.executable, str(script_path)]
+    cmd = [sys.executable, str(REPO_ROOT / "scripts" / script)]
     if validate_only:
         cmd.append("--validate")
     elif stage_id == "04c":
@@ -170,16 +177,24 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
         # (04c default; no --keep-gridrad-inputs) to avoid multi-TB full-archive staging.
         cmd.extend(["--with-04b-download", "--workers", "4"])
     elif stage_id == "05":
+        if skip_calibration:
+            cmd.append("--skip-calibration")
         if retrain_models:
             cmd.append("--retrain-models")
         if skip_ml:
             cmd.append("--skip-ml")
 
+    env = os.environ.copy()
+    env.setdefault("OPENBLAS_NUM_THREADS", "1")
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    env.setdefault("MPLCONFIGDIR", str(LOGS / "mplconfig"))
+
     try:
         with open(log_path, "w") as log_fh:
             log_fh.write(f"[{datetime.now().isoformat()}] Starting {script} ({mode})\n\n")
             proc = subprocess.Popen(
-                cmd, cwd=str(SCRIPTS),
+                cmd, cwd=str(REPO_ROOT),
+                env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, bufsize=1,
             )
@@ -225,7 +240,25 @@ def main():
                         help="Retrain optional v2.1 calibration/filter models where supported")
     parser.add_argument("--skip-ml", dest="skip_ml", action="store_true",
                         help="Disable optional v2.1 ML calibration/filtering and use deterministic fallbacks")
+    parser.add_argument("--skip-calibration", dest="skip_calibration", action="store_true",
+                        help="Stage 05: skip Phase A cross-calibration rebuild (--skip-calibration)")
+    parser.add_argument("--clean-from", dest="clean_from", type=str, default=None,
+                        help="Delete generated outputs from this stage onward before running (e.g. 05)")
     args = parser.parse_args()
+
+    if not args.dry_run and args.clean_from:
+        from scripts._pipeline_cleanup import clean_from_stage, STAGE_ORDER
+
+        if args.clean_from not in STAGE_ORDER:
+            print(f"{RED}Unknown stage for --clean-from: {args.clean_from!r}{RESET}")
+            print(f"Available: {', '.join(STAGE_ORDER)}")
+            sys.exit(1)
+        removed = clean_from_stage(args.clean_from, dry_run=False, include_diagnostics=args.clean_from == "05")
+        if removed:
+            print(f"  {YELLOW}Cleaned {len(removed)} path(s) from stage {args.clean_from} onward{RESET}")
+            for p in removed:
+                print(f"    - {p}")
+            print()
 
     if not args.dry_run:
         if not check_dependencies():
@@ -287,7 +320,7 @@ def main():
 
     for stage_id, script, desc, eta in stages_to_run:
         ok = run_stage(stage_id, script, desc, eta, args.dry_run, args.validate_only,
-                       args.retrain_models, args.skip_ml)
+                       args.retrain_models, args.skip_ml, args.skip_calibration)
         results.append((stage_id, desc, ok))
         if not ok and not args.dry_run:
             print(f"{RED}{BOLD}Pipeline stopped at stage {stage_id}.{RESET}")

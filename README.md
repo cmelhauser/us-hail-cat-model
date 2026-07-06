@@ -36,7 +36,7 @@ Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**.
 | `DAMAGE_THRESH_MM` | 25.4 mm | Damage onset; occurrence products and Stage 13 severe-cell counts |
 | GridRad calibration | era-pooled QM | MYRORSS 2005–2011 vs GridRad 2012–2019 (median ratio ~1.10) |
 | Range debias | SPC-collocated | Per-era multiplicative factors vs nearest-radar distance (125 km reference) |
-| GridRad artifact filter | 3-pass (speckle + azimuthal + filament) | GridRad days only, Stage 05; see `methodology.md` §5.5 |
+| GridRad artifact filter | 4-pass (speckle + radial ring + azimuthal + filament) | GridRad days only, Stage 05; see `methodology.md` §5.5 |
 
 The model produces:
 
@@ -109,7 +109,7 @@ Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correc
 The pipeline is orchestrated by `run_pipeline.py`:
 
 ```bash
-python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--retrain-models]
+python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--skip-calibration] [--clean-from N] [--retrain-models]
 ```
 
 ---
@@ -184,7 +184,7 @@ python run_pipeline.py --dry-run
 
 ```
 01 → 02 → 03 → 04a → 04c → 05 (--skip-ml) → 06 → 07 → 08 → 09 → 10 → 11 → 11b → 12
-→ Stage 13 smoke (--n-years 1000) → Stage 13 full → 14 → 14
+→ Stage 13 smoke (--n-years 1000) → Stage 13 full → 14
 ```
 
 Run the full pipeline in one command:
@@ -204,7 +204,15 @@ python run_pipeline.py --skip 14           # skip figure rendering
 **Stage 05 without ML artifacts:**
 
 ```bash
-python run_pipeline.py --only 5 --skip-ml
+python run_pipeline.py --only 05 --skip-ml --skip-calibration
+```
+
+**Stage 05 rebuild after filter or debias changes** (blocking; cleans Stages 05–14 outputs):
+
+```bash
+python scripts/rerun_stage05.py
+# equivalent:
+python run_pipeline.py --only 05 --clean-from 05 --skip-ml --skip-calibration
 ```
 
 **Stage 13 smoke test (before committing to the 50,000-year run):**
@@ -251,8 +259,8 @@ The following limitations should be documented before any underwriting, regulato
 - **Long return periods are extrapolative.** RP > ~500 years exceed the observed record and rely on GPD tail assumptions.
 - **Spatial dependence is simplified.** The stochastic catalog does not model inter-event spatial correlation beyond the historical footprint.
 - **Climate non-stationarity is not modeled.** The model assumes a stationary hail climate over the radar record.
-- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. v2.2.2 adds range-dependent debias and GridRad speckle filtering (Stage 05), but a broad GridRad–MYRORSS climatological offset can remain in era-comparison diagnostics.
-- **Radar-site artifacts.** GridRad-era data can exhibit NEXRAD range rings and speckle in stochastic return-period maps if uncorrected; rerun Stage 05 with debias/speckle filter and Stages 06–14 after calibration changes.
+- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. v2.2.2 adds range-dependent debias and a four-pass GridRad artifact filter (Stage 05), but a broad GridRad–MYRORSS climatological offset can remain in era-comparison diagnostics.
+- **Radar-site artifacts.** GridRad-era data can exhibit NEXRAD range rings and speckle in return-period maps if uncorrected; delete `mesh_0.05deg_corrected/`, rerun Stage 05 with the artifact filter, then `radar_artifact_diagnostic.py` and downstream stages after calibration changes.
 - **SPC validation is incomplete.** Report density is spatially and temporally uneven; rural areas are systematically underrepresented.
 - **Vulnerability and loss modeling are out of scope.** This repository delivers hazard only; MDR curves, exposure, and financial loss are future work (see `docs/methodology.md` §14).
 

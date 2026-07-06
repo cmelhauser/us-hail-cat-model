@@ -20,15 +20,18 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-07-05** — **Stage 05 debias rerun complete**; **Stages 06–14 rerun in progress**:
+Snapshot taken **2026-07-06** — **Stage 05 rebuild** with four-pass GridRad artifact filter
+(isolated speckle + **radial range ring** + azimuthal + filament):
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 05 | ✅ Rebuilt | **9,797** days in **5.0 min**; range debias ON; GridRad speckle filter ON; mean pixels filtered **17.2%** (was 5.8%). |
-| Stages 06–14 | ⏳ Running | `run_pipeline.py --from 06 --skip-ml`; log: `logs/pipeline_from06_post_debias.run.log` |
-| Prior production (2026-06-30) | ✅ Superseded for stochastic | Pre-debias event catalog and 50k-yr catalog; replace after rerun completes. |
+| Stage 05 | ⏳ In progress | `python scripts/rerun_stage05.py`; log: `logs/stage05_rerun.run.log` |
+| Stages 06–14 | ⏸ Cleared | Removed with Stage 05+ wipe; restart after artifact QA |
 
-**Radar artifact diagnostic (2026-07-05):** GridRad speckle **9.7% → 6.1%**; see `data/analysis/radar_artifacts/`.
+After Stage 05: run `radar_artifact_diagnostic.py`, then Stage 06 for SPC pairs / debias refit.
+Review `map_gridrad_minus_myrorss_mean_annual_max.png` before downstream stages.
+
+Previous snapshot **2026-07-05** — three-pass filter (no radial ring); superseded.
 
 Previous snapshot **2026-06-30** — **v2.2.1 production run complete**:
 

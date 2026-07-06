@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-07-05 (Stage 05 range debias + speckle filter; downstream rerun from Stage 06).
+Last updated: 2026-07-06 (four-pass GridRad artifact filter; Stage 05 rebuild in progress).
 
 ## What This Project Is
 
@@ -73,7 +73,9 @@ us-hail-cat-model/
 |   |-- _config.py              <- grid constants, paths, EVT defaults
 |   |-- _logging.py             <- shared logger factory
 |   |-- _io.py                  <- write_geotiff, haversine_km, latlon_to_grid
-|   |-- _radar_geometry.py      <- NEXRAD sites, range debias, speckle filter
+|   |-- _radar_geometry.py      <- NEXRAD sites, range debias, four-pass artifact filter
+|   |-- _pipeline_cleanup.py    <- delete Stage N+ outputs (used by rerun / --clean-from)
+|   |-- rerun_stage05.py        <- wait, clean 05+, blocking Stage 05 rebuild
 |   |-- 01_download_myrorss.py
 |   |-- 02_download_mrms_mesh.py
 |   |-- 03_download_spc.py
@@ -129,7 +131,13 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --dry-run          # validate config and I/O paths without executing
 --validate         # re-run output validation for all stages
 --skip-ml          # force deterministic fallback in Stage 05
+--skip-calibration # Stage 05: skip ML calibration (with --skip-ml)
+--clean-from N     # delete outputs from stage N onward before run (e.g. 05)
 --retrain-models   # retrain optional ML artifacts in Stage 05
+
+# Stage 05 rebuild (four-pass filter) — blocking; do not background from agents
+python scripts/rerun_stage05.py
+python run_pipeline.py --only 05 --clean-from 05 --skip-ml --skip-calibration
 
 # Stage 02 is often run directly (MRMS); optional throughput flag:
 # python scripts/02_download_mrms_mesh.py --workers 8
@@ -252,7 +260,7 @@ As of 2026-06-30:
 | Tests | 37 pytest modules (199 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
 | **First full v2.2.1 production run** | **Complete** (2026-06-30) — Stages 01–14, `--skip-ml` |
 | Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,714** GridRad + 2,060 MRMS) |
-| Corrected archive | **9,797** days (era-pooled QM; range debias; GridRad speckle filter; 29 mm winter filter) |
+| Corrected archive | **rebuilding** (2026-07-06) — four-pass GridRad filter + range debias + era-pooled QM |
 | Event catalog | **8,798** events at **29 mm** (~303 yr⁻¹) |
 | Stochastic catalog | **50,000** yr; **15.17M** synthetic events; validation passed |
 | Hail-day climatology | `data/analysis/hail_day_climatology/` (regenerate locally or load from external store) |
@@ -272,12 +280,11 @@ As of 2026-06-30:
 
 ## Current Run Watch
 
-**Stage 06–14 rerun in progress (2026-07-05)** after Stage 05 rebuild with range debias
-and GridRad speckle filter. Monitor `logs/pipeline_from06_post_debias.run.log`.
+**Stage 05 rebuild (2026-07-06)** with four-pass GridRad artifact filter (adds radial
+range-ring pass). Monitor `logs/stage05_rerun.run.log` (or `logs/stage05.pid` while running).
 
-Stage 05 debias rerun (2026-07-05): **9,797** days in **5.0 min**; range debias ON;
-speckle filter ON; mean pixels filtered **17.2%** (was **5.8%**). Diagnostic post-rerun:
-GridRad speckle **9.7% → 6.1%**; MRMS far-range annual max improved at 275+ km.
+After Stage 05: run `radar_artifact_diagnostic.py`, then Stage 06 for SPC pairs / debias
+refit. Do **not** start Stages 07–14 until the GridRad−MYRORSS diff map is reviewed.
 
 Prior production run finished **2026-06-30 ~18:42 EDT** (pre-debias stochastic catalog).
 

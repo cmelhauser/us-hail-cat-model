@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-05 (`v2.2.2` — Stage 05 range debias + speckle filter; downstream rerun from Stage 06)**
+**Last updated: 2026-07-06 (`v2.2.2` — four-pass GridRad artifact filter; Stage 05 rebuild)**
 
 ---
 
@@ -29,8 +29,8 @@ Branch `main` includes radar debias code (merged PR #14). **Stage 05 debias reru
 | Metric | Value |
 |--------|------:|
 | Convective-day archive | 9,797 (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Corrected MESH75 | 9,797 days; era-pooled QM; **range debias**; **GridRad speckle filter**; 29 mm winter filter |
-| Radar artifact QA | GridRad speckle 9.7%→6.1%; Stage 05 mean pixels filtered 5.8%→17.2% (2026-07-05) |
+| Corrected MESH75 | rebuilding (2026-07-06); four-pass GridRad filter + range debias + era-pooled QM |
+| Radar artifact QA | radial range-ring pass added; diagnostic after Stage 05/06 |
 | Historical events | 8,798 at 29 mm (~303 yr⁻¹) — **pending rerun** |
 | Stochastic catalog | 50,000 yr; 15.17M events — **pending rerun** |
 
@@ -81,7 +81,7 @@ Any future methodology change must update tests and documentation in the same co
 
 ### Stage 05
 
-Handles source calibration, **range-dependent debias** (`range_debias.npz`), **GridRad speckle filtering**, and environmental filtering. Must run with or without optional ML artifacts (`--skip-ml`). Re-run Stages 06–14 after debias methodology changes.
+Handles source calibration, **range-dependent debias** (`range_debias.npz`), **four-pass GridRad artifact filtering** (speckle, radial ring, azimuthal, filament), and environmental filtering.
 
 ### Stage 08
 

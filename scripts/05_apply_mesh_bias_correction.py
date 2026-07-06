@@ -27,8 +27,9 @@ Internal Phases (run automatically in order)
     Then apply environmental filter to all sources.
   Optional range-dependent debias (when ``data/analysis/calibration/range_debias.npz``
   exists from ``scripts/diagnostics/radar_artifact_diagnostic.py``).
-  GridRad days also pass through a radar artifact filter (isolated speckle, azimuthal
-  spokes/rings, quiet-background filaments; disable with ``--no-speckle-filter``).
+  GridRad days also pass through a radar artifact filter (isolated speckle, radial
+  range rings, azimuthal spokes, quiet-background filaments; disable with
+  ``--no-speckle-filter``).
   Output to: data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif
 
 MESH75 Recalibration (Witt-algorithm sources)
@@ -57,6 +58,7 @@ Usage
 
 import argparse
 import csv
+import os
 import sys
 import time
 from datetime import datetime
@@ -72,10 +74,12 @@ try:
     from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM
     from _io import sanitize_hail_values, write_geotiff
     from _logging import get_logger
+    from _pipeline_cleanup import STAGE05_PID
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM
     from scripts._io import sanitize_hail_values, write_geotiff
     from scripts._logging import get_logger
+    from scripts._pipeline_cleanup import STAGE05_PID
 
 IN_DIR    = DATA_ROOT / "historical" / "mesh_0.05deg"
 OUT_DIR   = DATA_ROOT / "historical" / "mesh_0.05deg_corrected"
@@ -572,7 +576,7 @@ def main():
     parser.add_argument("--no-range-debias", action="store_true",
                         help="Disable range-dependent debias even if range_debias.npz exists")
     parser.add_argument("--no-speckle-filter", action="store_true",
-                        help="Disable GridRad speckle spike removal (3×3 median test)")
+                        help="Disable GridRad artifact filter (four-pass: speckle, radial ring, azimuthal, filament)")
     args = parser.parse_args()
 
     if args.validate:
@@ -581,6 +585,18 @@ def main():
     if args.retrain_models:
         log("  NOTE: --retrain-models accepted; train artifacts externally, then rerun Stage 05")
 
+    LOG_ROOT.mkdir(parents=True, exist_ok=True)
+    STAGE05_PID.write_text(str(os.getpid()))
+    try:
+        _run_stage05_body(args)
+    finally:
+        try:
+            STAGE05_PID.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _run_stage05_body(args) -> None:
     log(f"\n{'='*60}")
     log(f"  Unified MESH Bias Correction — Stage 05")
     log(f"{'='*60}")
@@ -606,7 +622,7 @@ def main():
     if args.no_speckle_filter:
         log("  GridRad artifact filter: OFF")
     else:
-        log("  GridRad artifact filter: ON (isolated + azimuthal + filament)")
+        log("  GridRad artifact filter: ON (isolated + radial ring + azimuthal + filament)")
     init_artifact_grids(speckle_filter=not args.no_speckle_filter)
 
     log("\n[Phase B] Applying corrections to all rasters")

@@ -55,7 +55,10 @@ footprints and stochastic return-period maps if uncorrected.
 | MRMS mean annual max @ 275 km | 5.36 mm | 3.52 mm |
 
 **Current treatment:** Stage 05 applies SPC-collocated **range debias**
-(`range_debias.npz`) and a **GridRad speckle filter** (3×3 median test).
+(`range_debias.npz`) and a **four-pass GridRad artifact filter** (isolated speckle,
+radial range ring, azimuthal annulus, background filament; `methodology.md` §5.5).
+Stage 05 rebuild with the radial pass underway **2026-07-06**; review
+`radar_artifact_diagnostic.py` diff maps before downstream stages.
 Residual broad GridRad−MYRORSS climatological offsets remain in era-comparison
 diagnostics. Re-run Stages 06–14 after debias changes.
 

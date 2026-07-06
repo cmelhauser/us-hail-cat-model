@@ -177,6 +177,8 @@ _NEXRAD_CONUS: dict[str, tuple[float, float]] = {
 DEFAULT_RANGE_BIN_EDGES_KM = np.array(
     [0, 25, 50, 75, 100, 125, 150, 175, 200, 250, 300, 400], dtype=np.float32
 )
+# Finer bins for per-site radial ring detection (10 km).
+RADIAL_RING_BIN_EDGES_KM = np.arange(0, 405, 10, dtype=np.float32)
 REFERENCE_RANGE_KM = 125.0
 MM_PER_INCH = 25.4
 
@@ -481,9 +483,99 @@ def remove_speckle_spikes(
 # Ring/spoke artifacts: cells along a range annulus share elevated values (3×3 test misses them).
 AZIMUTH_ANNULUS_FACTOR = 2.5
 AZIMUTH_MIN_ANNULUS_CELLS = 8
+# Uniform range rings: entire annulus elevated vs adjacent radial bins at the same site.
+RADIAL_RING_FACTOR = 1.20
+RADIAL_RING_FAR_FACTOR = 1.25
+RADIAL_RING_NEAR_RANGE_KM = 100.0
+RADIAL_RING_MIN_ANNULUS_CELLS = 5
+RADIAL_RING_CELL_MARGIN_MM = 8.0
 FILAMENT_BG_SIZE = 21  # ~1° at 0.05° grid — wider than typical ring width
 FILAMENT_MARGIN_MM = 20.0
 FILAMENT_QUIET_BG_MM = 15.0
+
+
+def remove_radial_range_rings(
+    data: np.ndarray,
+    site_idx_grid: np.ndarray,
+    range_km_grid: np.ndarray,
+    *,
+    edges: np.ndarray | None = None,
+    active_mm: float = SPECKLE_ACTIVE_MM,
+    ring_factor: float = RADIAL_RING_FACTOR,
+    far_ring_factor: float = RADIAL_RING_FAR_FACTOR,
+    near_range_km: float = RADIAL_RING_NEAR_RANGE_KM,
+    min_annulus_cells: int = RADIAL_RING_MIN_ANNULUS_CELLS,
+    cell_margin_mm: float = RADIAL_RING_CELL_MARGIN_MM,
+) -> tuple[np.ndarray, int]:
+    """
+    Zero cells on range annuli that sit high vs adjacent radial bins at the same site.
+
+    Isolated-speckle and azimuthal passes miss **uniform** range rings: every azimuth
+    on the annulus is elevated so the annulus median tracks the ring. Compare each
+    (site, range bin) median to neighbor-bin and (for far range) near-range medians.
+    """
+    edges = np.asarray(edges if edges is not None else RADIAL_RING_BIN_EDGES_KM, dtype=np.float32)
+    centers = ((edges[:-1] + edges[1:]) / 2.0).astype(np.float32)
+    out = data.astype(np.float32, copy=True)
+    active = out >= active_mm
+    if not np.any(active):
+        return out, 0
+    bin_idx = _bin_index(range_km_grid, edges)
+    site_idx = site_idx_grid.astype(np.int16, copy=False)
+    n_bins = len(edges) - 1
+    n_sites = int(site_idx.max()) + 1
+    medians = np.full((n_sites, n_bins), np.nan, dtype=np.float32)
+    for si in range(n_sites):
+        site_mask = site_idx == si
+        if not site_mask.any():
+            continue
+        for bi in range(n_bins):
+            mask = active & site_mask & (bin_idx == bi)
+            if int(mask.sum()) < min_annulus_cells:
+                continue
+            medians[si, bi] = float(np.median(out[mask]))
+
+    def _neighbor_median(row: np.ndarray, bi: int) -> float | None:
+        vals: list[float] = []
+        for off in (-2, -1, 1, 2):
+            j = bi + off
+            if 0 <= j < n_bins and np.isfinite(row[j]):
+                vals.append(float(row[j]))
+        if not vals:
+            return None
+        return float(np.median(vals))
+
+    remove = np.zeros(data.shape, dtype=bool)
+    for si in range(n_sites):
+        site_mask = site_idx == si
+        row = medians[si]
+        near_vals = [
+            float(row[bi])
+            for bi in range(n_bins)
+            if np.isfinite(row[bi]) and float(centers[bi]) <= near_range_km
+        ]
+        near_ref = float(np.median(near_vals)) if near_vals else np.nan
+        for bi in range(n_bins):
+            med_b = row[bi]
+            if not np.isfinite(med_b):
+                continue
+            nbr = _neighbor_median(row, bi)
+            if nbr is None and not np.isfinite(near_ref):
+                continue
+            ref = max(nbr if nbr is not None else 0.0, 1.0)
+            if float(centers[bi]) > near_range_km and np.isfinite(near_ref):
+                ref = max(ref, near_ref)
+            thresh_factor = far_ring_factor if float(centers[bi]) > near_range_km else ring_factor
+            if med_b <= thresh_factor * ref:
+                continue
+            excess = med_b - ref
+            cell_thresh = ref + max(cell_margin_mm, 0.5 * excess)
+            mask = active & site_mask & (bin_idx == bi)
+            remove |= mask & (out > cell_thresh)
+    n_removed = int(remove.sum())
+    if n_removed:
+        out[remove] = 0.0
+    return out, n_removed
 
 
 def remove_azimuthal_ring_artifacts(
@@ -564,8 +656,14 @@ def remove_gridrad_artifacts(
     range_km_grid: np.ndarray,
     site_idx_grid: np.ndarray,
 ) -> tuple[np.ndarray, dict[str, int]]:
-    """Full GridRad artifact pass: isolated speckle, azimuthal spokes, quiet-background filaments."""
+    """Full GridRad artifact pass: speckle, radial rings, azimuthal spokes, filaments."""
     out, n_iso = remove_speckle_spikes(data)
+    out, n_rad = remove_radial_range_rings(out, site_idx_grid, range_km_grid)
     out, n_az = remove_azimuthal_ring_artifacts(out, site_idx_grid, range_km_grid)
     out, n_fil = remove_background_filament_artifacts(out)
-    return out, {"isolated": n_iso, "azimuthal": n_az, "filament": n_fil}
+    return out, {
+        "isolated": n_iso,
+        "radial_ring": n_rad,
+        "azimuthal": n_az,
+        "filament": n_fil,
+    }

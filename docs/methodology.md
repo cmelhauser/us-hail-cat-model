@@ -338,20 +338,25 @@ GridRad-era MESH can exhibit **NEXRAD range-dependent bias**, **isolated speckle
 2. **Range-dependent debias** — `scripts/diagnostics/radar_artifact_diagnostic.py` fits per-era multiplicative factors from **173k+** Stage 06 SPC–MESH pairs binned by distance to the nearest CONUS WSR-88D site (~140 `K*` radars). Factors are normalized to **1.0 at 125 km** and clipped to **[0.45, 1.15]**. Applied when `data/analysis/calibration/range_debias.npz` exists (`--no-range-debias` to disable).
 3. **GridRad artifact filter** (`scripts/_radar_geometry.remove_gridrad_artifacts`) — GridRad days only; disable with `--no-speckle-filter`:
    - **Isolated speckle** — active cells > **2.5×** local **3×3 median** (≥ 5 mm); Wendt & Jirak (2021)-style isolated-pixel removal.
+   - **Radial range ring** — per (nearest radar site, **10 km** range bin), compare annulus median to ±1/±2 neighbor bins and (for range **> 100 km**) the site near-range median; zero cells above reference + margin when the annulus exceeds **>1.2×** neighbors (**>1.25×** far range). Targets uniform rings that speckle/azimuthal passes miss.
    - **Azimuthal annulus** — per (nearest radar site, range bin), zero cells > **2.5×** annulus median; targets radial spokes and hot pixels on range rings (WSR-88D azimuth-median analogue in Cartesian space).
    - **Background filament** — **21×21** background median; zero active cells > background + **20 mm** when background < **15 mm**; targets thin rings in quiet areas.
 4. **Environmental filter** and `sanitize_hail_values` — applied after artifact removal.
 
 **Upstream gap (Stage 04c):** NCAR GridRad provides `GRIDRAD_REMOVE_CLUTTER` / `GRIDRAD_FILTER` on native reflectivity; Murillo et al. (2021) additionally exclude failed radar volumes manually. Stage **04c** does not yet apply equivalent reflectivity QC before SHI integration—future work for stronger ring suppression.
 
-**Prior diagnostic (2026-07-05, speckle-only pass, 9,797 days):**
+**Prior diagnostic (2026-07-05, three-pass filter without radial ring, 9,797 days):**
 
-| Metric | Before debias rerun | After debias + speckle only |
-|--------|--------------------:|----------------------------:|
+| Metric | Before debias rerun | After debias + 3-pass filter |
+|--------|--------------------:|-----------------------------:|
 | GridRad mean speckle fraction (active cells) | 9.7% | **6.1%** |
 | GridRad P95 speckle fraction | 50% | **33%** |
 | Stage 05 mean pixels filtered | 5.8% | **17.2%** |
-| Residual ring geometry in GridRad−MYRORSS diff map | visible | **still visible** (speckle alone insufficient) |
+| Residual ring geometry in GridRad−MYRORSS diff map | visible | **still visible** (uniform rings need radial pass) |
+
+**2026-07-06:** four-pass filter adds `remove_radial_range_rings()`; Stage 05 corrected archive
+rebuilt from scratch. Re-run `radar_artifact_diagnostic.py` after Stage 05 (and Stage 06 for debias
+refit) before downstream stages.
 
 Re-run **Stage 05** (delete `mesh_0.05deg_corrected/` first), then `radar_artifact_diagnostic.py`, then **Stages 06–14** after any methodology change.
 

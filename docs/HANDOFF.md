@@ -1,7 +1,7 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.2
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-07-05 (**Stage 05 range debias + speckle filter**; downstream rerun from Stage 06 in progress).
+> Last updated: 2026-07-06 (**four-pass GridRad artifact filter**; Stage 05 rebuild in progress).
 
 ---
 
@@ -53,14 +53,16 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 scripts/diagnostics/summarize_mesh_daily_peaks.py  ← optional mesh-era peak CSV/ECDF
 scripts/diagnostics/hail_day_climatology.py      ← per-cell hail-day threshold sensitivity
 scripts/diagnostics/radar_artifact_diagnostic.py ← speckle/range debias QA
-scripts/_radar_geometry.py                       ← NEXRAD sites, debias, speckle filter
+scripts/_radar_geometry.py                       ← NEXRAD sites, debias, four-pass artifact filter
+scripts/_pipeline_cleanup.py                     ← delete Stage N+ outputs (--clean-from / rerun)
+scripts/rerun_stage05.py                         ← blocking Stage 05 rebuild (wait, clean 05+, run)
 
 scripts/_config.py   ← all grid constants, paths, EVT defaults (wired into all stage scripts)
 scripts/_logging.py  ← get_logger() factory (wired into all stage scripts)
 scripts/_io.py       ← shared write_geotiff (optional GDAL tags), haversine_km, latlon_to_grid
 ```
 
-Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--retrain-models]`
+Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--skip-calibration] [--clean-from N] [--retrain-models]`
 
 ---
 

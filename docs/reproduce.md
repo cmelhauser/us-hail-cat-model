@@ -257,11 +257,9 @@ After Stage 05 and Stage 06 validation pairs exist:
 .venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
 ```
 
-Writes `data/analysis/radar_artifacts/` (range maps, speckle scores, source-era comparisons) and fits `data/analysis/calibration/range_debias.npz` from SPC collocated pairs. Stage 05 applies range debias automatically when that file exists (`--no-range-debias` to disable) and runs the three-pass GridRad artifact filter by default (`--no-speckle-filter` to disable): isolated speckle, azimuthal annulus, quiet-background filament (`methodology.md` §5.5; `literature_review.md` §3.7).
+Writes `data/analysis/radar_artifacts/` (range maps, speckle scores, source-era comparisons) and fits `data/analysis/calibration/range_debias.npz` from SPC collocated pairs. Stage 05 applies range debias automatically when that file exists (`--no-range-debias` to disable) and runs the four-pass GridRad artifact filter by default (`--no-speckle-filter` to disable): isolated speckle, radial range ring, azimuthal annulus, quiet-background filament (`methodology.md` §5.5; `literature_review.md` §3.7).
 
-**2026-07-05 findings (9,797 days):** GridRad speckle **9.7% → 6.1%** after debias rerun; Stage 05 mean pixels filtered **5.8% → 17.2%**; residual GridRad−MYRORSS climatological offset remains in era-comparison maps.
-
-**Re-run Stage 05** after generating or updating `range_debias.npz` (delete `mesh_0.05deg_corrected/` first), then **re-run Stages 06–14** so the event catalog and stochastic RP maps pick up the cleaned archive.
+**2026-07-06:** Stage 05 rebuilt with four-pass filter (adds radial range-ring pass for uniform NEXRAD annuli). After Stage 05 completes, run this diagnostic; if `range_debias.npz` changes materially, delete `mesh_0.05deg_corrected/` and rerun Stage 05 before downstream stages.
 
 ## 6. Stage 05 Modes
 

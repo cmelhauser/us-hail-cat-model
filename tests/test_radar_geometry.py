@@ -17,6 +17,7 @@ from scripts._radar_geometry import (
     remove_azimuthal_ring_artifacts,
     remove_background_filament_artifacts,
     remove_gridrad_artifacts,
+    remove_radial_range_rings,
     remove_speckle_spikes,
     save_range_debias,
 )
@@ -87,6 +88,34 @@ def test_remove_speckle_spikes_keeps_uniform_patch():
     assert np.all(out == 40.0)
 
 
+def test_remove_radial_range_rings_uniform_annulus():
+    """Uniform elevation on one range bin vs quiet neighbors (classic range ring)."""
+    site_idx = np.zeros((12, 12), dtype=np.int16)
+    range_km = np.full((12, 12), 55.0, dtype=np.float32)
+    range_km[:, :4] = 45.0
+    range_km[:, 8:] = 65.0
+    data = np.full((12, 12), 10.0, dtype=np.float32)
+    data[:, 4:8] = 45.0
+    out, n = remove_radial_range_rings(
+        data, site_idx, range_km, min_annulus_cells=4,
+    )
+    assert n > 0
+    assert np.all(out[:, 4:8] == 0.0)
+    assert np.all(out[:, :4] == 10.0)
+
+
+def test_remove_radial_range_rings_keeps_broad_storm():
+    """Storm spanning adjacent range bins should not be flagged as a thin ring."""
+    site_idx = np.zeros((12, 12), dtype=np.int16)
+    range_km = np.full((12, 12), 55.0, dtype=np.float32)
+    range_km[:, :6] = 45.0
+    range_km[:, 6:] = 55.0
+    data = np.full((12, 12), 35.0, dtype=np.float32)
+    out, n = remove_radial_range_rings(data, site_idx, range_km, min_annulus_cells=4)
+    assert n == 0
+    assert np.all(out == 35.0)
+
+
 def test_remove_azimuthal_ring_artifacts_spoke():
     site_idx = np.zeros((10, 10), dtype=np.int16)
     range_km = np.full((10, 10), 50.0, dtype=np.float32)
@@ -117,4 +146,5 @@ def test_remove_gridrad_artifacts_chain():
     data[5, 4:7] = 10.0
     out, counts = remove_gridrad_artifacts(data, range_km, site_idx)
     assert counts["isolated"] >= 1
+    assert "radial_ring" in counts
     assert out[2, 2] == 0.0

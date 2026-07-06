@@ -210,15 +210,19 @@ Run with `--skip-ml`. The ML artifacts (`gridrad_cqm_model.pkl`, `hail_filter_mo
 
 **Q: Stochastic return-period maps show radar rings or spokes. What do I do?**
 
-This is a known GridRad-era artifact (speckle and range-dependent bias). Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stages 05–06, then rebuild the corrected archive with range debias and speckle filtering:
+This is a known GridRad-era artifact (speckle, uniform range rings, and range-dependent bias). Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stages 05–06, then rebuild the corrected archive with range debias and the four-pass artifact filter:
 
 ```bash
 rm -rf data/historical/mesh_0.05deg_corrected/
-.venv/bin/python scripts/05_apply_mesh_bias_correction.py --skip-ml
-.venv/bin/python run_pipeline.py --from 06 --skip-ml
+.venv/bin/python scripts/05_apply_mesh_bias_correction.py --skip-calibration --skip-ml
+.venv/bin/python scripts/06_validate_mesh_vs_spc.py
+.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
 ```
 
-Stage 05 logs `Range debias: ON` and `Speckle filter: ON (GridRad era only)` when active. See `docs/methodology.md` §5.5.
+Review `data/analysis/radar_artifacts/map_gridrad_minus_myrorss_mean_annual_max.png`
+before restarting downstream stages. Stage 05 logs `Range debias: ON` and
+`GridRad artifact filter: ON (isolated + radial ring + azimuthal + filament)` when active.
+See `docs/methodology.md` §5.5.
 
 **Q: Stage 01 produces all-zero GeoTIFFs for some days.**
 

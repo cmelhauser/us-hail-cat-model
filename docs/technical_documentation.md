@@ -401,7 +401,11 @@ Deterministic environmental filters (v2.2.2):
 noise floor: 5 mm
 subtropical winter (Nov–Feb, lat < 30°N): require >= EVENT_ACTIVE_THRESH_MM (29.0 mm)
 range debias: multiply by per-era factor(range_km) when range_debias.npz exists
-GridRad speckle filter: zero cells > 2.5 × local 3×3 median (>= 5 mm active threshold)
+GridRad artifact filter (four passes on GridRad days only):
+  1. Isolated speckle — zero cells > 2.5 × local 3×3 median (>= 5 mm)
+  2. Radial range ring — per (site, 10 km bin) vs neighbor/near-range radial profile
+  3. Azimuthal annulus — zero cells > 2.5 × annulus median (spokes)
+  4. Background filament — 21×21 background; quiet-area thin rings
 ```
 
 Optional ML path (when artifacts exist and `--skip-ml` is false):
@@ -420,7 +424,7 @@ data/analysis/calibration/range_debias.npz          # from radar_artifact_diagno
 data/analysis/calibration/nearest_radar_distance_km.npy
 ```
 
-CLI flags: `--no-range-debias`, `--no-speckle-filter` (GridRad era only).
+CLI flags: `--no-range-debias`, `--no-speckle-filter` (disables full four-pass GridRad filter).
 
 ### 9.3 Hard requirement
 
@@ -570,7 +574,8 @@ Review:
 
 Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Stage 05 applies `range_debias.npz` automatically on the next rerun.
 
-**2026-07-05 production rerun:** GridRad speckle **9.7% → 6.1%**; Stage 05 mean pixels filtered **5.8% → 17.2%**. Residual GridRad−MYRORSS climatological offset remains; re-run Stages **06–14** after debias changes.
+**2026-07-06:** four-pass filter adds radial range-ring removal; Stage 05 corrected archive
+rebuilt. Run diagnostic after Stage 05/06 before downstream stages.
 
 ---
 
