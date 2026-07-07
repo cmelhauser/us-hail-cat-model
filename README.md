@@ -36,7 +36,7 @@ Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**.
 | `DAMAGE_THRESH_MM` | 25.4 mm | Damage onset; occurrence products and Stage 13 severe-cell counts |
 | GridRad calibration | era-pooled QM | MYRORSS 2005–2011 vs GridRad 2012–2019 (median ratio ~1.10) |
 | Range debias | SPC-collocated | Per-era multiplicative factors vs nearest-radar distance (125 km reference) |
-| GridRad artifact filter | 4-pass (speckle + radial ring + azimuthal + filament) | GridRad days only, Stage 05; see `methodology.md` §5.5 |
+| GridRad artifact filter | 4-pass (speckle + inner-ref radial ring + azimuthal + filament) | GridRad days only, Stage 05; see `methodology.md` §5.5 |
 
 The model produces:
 
@@ -52,6 +52,8 @@ The model produces:
 
 ### Production run (v2.2.1, completed 2026-06-30)
 
+Historical reference only — superseded by **v2.2.2** artifact-filter and debias rebuilds (2026-07).
+
 | Metric | Value |
 |--------|------:|
 | Convective-day archive | 9,797 days (1998–2026) |
@@ -62,7 +64,7 @@ The model produces:
 | Stochastic 100-yr CONUS peak | 157.8 mm (6.21 in) |
 | Stochastic 50,000-yr CONUS peak | 300.0 mm (11.81 in) |
 
-Full pipeline validated with `run_pipeline.py --from 05 --skip-ml` and Stage 13 memmap-backed catalog generation. See `docs/RUN_NOTES.md` and `docs/pnas_article_ai_hail_model.md` for details.
+Full pipeline validated with `run_pipeline.py --from 05 --skip-ml` and Stage 13 memmap-backed catalog generation. **v2.2.2** is rebuilding Stages 05–07 with four-pass GridRad filtering and inner-range radial ring detection; see `docs/RUN_NOTES.md`.
 
 ---
 

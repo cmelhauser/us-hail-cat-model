@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-06 (`v2.2.2`; four-pass GridRad artifact filter + Stage 05 rebuild — see `docs/RUN_NOTES.md`)**
+**Last updated: 2026-07-06 (`v2.2.2`; inner-range radial ring pass + Stages 05–07 rebuild — see `docs/RUN_NOTES.md`)**
 
 ---
 
@@ -59,7 +59,7 @@ Must support:
 - MESH75 correction;
 - GridRad quantile fallback;
 - **range-dependent debias** when `range_debias.npz` exists (`--no-range-debias` to disable);
-- **GridRad artifact filter** (four passes on GridRad days: isolated speckle, radial range ring, azimuthal annulus, background filament; `--no-speckle-filter` to disable);
+- **GridRad artifact filter** (four passes on GridRad days: isolated speckle, inner-range radial ring, azimuthal annulus, background filament; `--no-speckle-filter` to disable);
 - optional conditional calibration;
 - optional probabilistic filtering;
 - deterministic fallback with `--skip-ml`.
@@ -267,10 +267,10 @@ Current repository state:
 - Regression / golden-output tests
 - Bootstrap CIs on Stage 09 RP estimates
 
-**Immediate run priorities (2026-07-05):**
-- Monitor Stages 06–14 rerun after Stage 05 debias rebuild (`logs/pipeline_from06_post_debias.run.log`).
-- Compare stochastic RP maps before/after debias rerun.
-- Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stage 05/06 to verify speckle reduction.
+**Immediate run priorities (2026-07-06):**
+- Monitor Stages 05–07 rebuild (`logs/pipeline_05_07.run.log`).
+- Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stage 06 to refit debias and verify speckle / diff-map rings.
+- Compare stochastic RP maps before/after inner-range radial pass before Stages 08–14.
 
 **Prior priorities (2026-06-27):**
 - Confirm Stage 04c `--missing-only` backfill is finished (or accept manifest `missing_source` days).

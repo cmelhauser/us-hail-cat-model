@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-07-06 (four-pass GridRad artifact filter; Stage 05 rebuild in progress).
+Last updated: 2026-07-06 (inner-range radial ring pass; Stages 05–07 rebuild in progress).
 
 ## What This Project Is
 
@@ -260,7 +260,7 @@ As of 2026-06-30:
 | Tests | 37 pytest modules (199 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
 | **First full v2.2.1 production run** | **Complete** (2026-06-30) — Stages 01–14, `--skip-ml` |
 | Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,714** GridRad + 2,060 MRMS) |
-| Corrected archive | **rebuilding** (2026-07-06) — four-pass GridRad filter + range debias + era-pooled QM |
+| Corrected archive | **rebuilding** (2026-07-06) — inner-range radial ring pass + range debias + era-pooled QM |
 | Event catalog | **8,798** events at **29 mm** (~303 yr⁻¹) |
 | Stochastic catalog | **50,000** yr; **15.17M** synthetic events; validation passed |
 | Hail-day climatology | `data/analysis/hail_day_climatology/` (regenerate locally or load from external store) |
@@ -280,11 +280,19 @@ As of 2026-06-30:
 
 ## Current Run Watch
 
-**Stage 05 rebuild (2026-07-06)** with four-pass GridRad artifact filter (adds radial
-range-ring pass). Monitor `logs/stage05_rerun.run.log` (or `logs/stage05.pid` while running).
+**Stages 05–07 rebuild (2026-07-06 ~23:24 EDT)** with inner-range radial ring pass
+(1.12× / 1.18× vs ≤75 km baseline). Monitor `logs/pipeline_05_07.run.log`.
 
-After Stage 05: run `radar_artifact_diagnostic.py`, then Stage 06 for SPC pairs / debias
-refit. Do **not** start Stages 07–14 until the GridRad−MYRORSS diff map is reviewed.
+```bash
+python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
+```
+
+After Stage 06: run `radar_artifact_diagnostic.py` to refit `range_debias.npz`, then
+review `map_gridrad_minus_myrorss_mean_annual_max.png` before Stages 08–14.
+
+Prior Stage 05 rebuild (four-pass, neighbor-only radial) finished **2026-07-06 ~19:56 EDT**
+(~110 min; GridRad speckle **1.8%** mean vs **6.1%** three-pass). Residual rings in the
+diff map (NE, Oklahoma, Plains, Montana) motivated the inner-range refinement.
 
 Prior production run finished **2026-06-30 ~18:42 EDT** (pre-debias stochastic catalog).
 

@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-06 (`v2.2.2` — four-pass GridRad artifact filter; Stage 05 rebuild)**
+**Last updated: 2026-07-06 (`v2.2.2` — inner-range radial ring pass; Stages 05–07 rebuild)**
 
 ---
 
@@ -20,19 +20,22 @@
 
 ---
 
-## 2. Current State (as of 2026-07-05)
+## 2. Current State (as of 2026-07-06)
 
-Branch `main` includes radar debias code (merged PR #14). **Stage 05 debias rerun complete**; **Stages 06–14 rerun in progress** (`logs/pipeline_from06_post_debias.run.log`).
+**Stages 05–07 rebuild in progress** (`logs/pipeline_05_07.run.log`) with inner-range radial
+ring pass. Prior four-pass Stage 05 completed **2026-07-06 ~19:56 EDT** (GridRad speckle
+**1.8%** mean, **9.1%** P95).
 
-**Prior v2.2.1 production run (2026-06-30):** full pipeline Stages 01–14 validated with `--skip-ml` (pre-debias stochastic catalog superseded after rerun).
+**Prior v2.2.1 production run (2026-06-30):** full pipeline Stages 01–14 validated with
+`--skip-ml` (pre-debias stochastic catalog superseded after rerun).
 
 | Metric | Value |
 |--------|------:|
 | Convective-day archive | 9,797 (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Corrected MESH75 | rebuilding (2026-07-06); four-pass GridRad filter + range debias + era-pooled QM |
-| Radar artifact QA | radial range-ring pass added; diagnostic after Stage 05/06 |
-| Historical events | 8,798 at 29 mm (~303 yr⁻¹) — **pending rerun** |
-| Stochastic catalog | 50,000 yr; 15.17M events — **pending rerun** |
+| Corrected MESH75 | rebuilding (2026-07-06); inner-range radial ring + range debias + era-pooled QM |
+| Radar artifact QA | four-pass filter; GridRad speckle 1.8% (2026-07-06 diagnostic); diff-map rings under review |
+| Historical events | 8,798 at 29 mm (~303 yr⁻¹) — **pending rerun** after Stage 08 |
+| Stochastic catalog | 50,000 yr; 15.17M events — **pending rerun** after Stage 13 |
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -81,7 +84,7 @@ Any future methodology change must update tests and documentation in the same co
 
 ### Stage 05
 
-Handles source calibration, **range-dependent debias** (`range_debias.npz`), **four-pass GridRad artifact filtering** (speckle, radial ring, azimuthal, filament), and environmental filtering.
+Handles source calibration, **range-dependent debias** (`range_debias.npz`), **four-pass GridRad artifact filtering** (speckle, inner-range radial ring, azimuthal, filament), and environmental filtering.
 
 ### Stage 08
 

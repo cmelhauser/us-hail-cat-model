@@ -134,12 +134,12 @@ Published hail climatologies remove radar rings, speckle, and range-dependent er
 | Cintineo et al. (2012) | Daily MESH maxima **hand-examined**; anomalous propagation and radial fragments **cropped manually** before climatology | Stage **05** automates daily-grid QC on the unified 0.05° archive (substitute for manual crop) |
 | Wendt and Jirak (2021) | Gaussian smooth (σ ≈ 3 cells) masks **isolated** MESH pixels; NLDN lightning within 40 km; cap MESH > 127 mm | Isolated speckle pass in Stage **05** follows the smooth-and-mask logic; lightning mask not implemented |
 | WSR-88D ROC clutter algorithm | Median filter in **range and azimuth** after clutter identification | Azimuthal annulus filter in Stage **05** is a Cartesian analogue for spoke/hot-pixel removal on range annuli |
-| Murillo et al. (2021) | Range-linear reflectivity ramps excluded manually | Radial range-ring pass in Stage **05** compares each (site, 10 km bin) to neighbor bins to suppress uniform annuli |
+| Murillo et al. (2021) | Range-linear reflectivity ramps excluded manually | Radial range-ring pass compares each (site, 10 km bin) to neighbor bins and an inner-range (≤75 km) baseline for outer bins (≥50 km) |
 | Ortega et al. (MYRORSS) | Intensive MESH-based QC and reprocessing of 1998–2011 archive | MYRORSS inputs are pre-QC’d; residual artifacts still visible in era-comparison diagnostics |
 
 **Processing order (literature-aligned):** harmonize sources (quantile mapping, Witt→MESH75) → range debias → **daily-grid artifact removal** → environmental filter → validation and climatology (Stages 06–14). Applying filters after the event catalog or on RP maps would bake artifacts into annual maxima and stochastic footprints.
 
-**Model implication:** Stage **05** applies a four-pass GridRad artifact filter (`remove_gridrad_artifacts`: isolated speckle, radial range ring, azimuthal annulus, quiet-background filament) plus optional SPC-collocated range debias. Residual **GridRad − MYRORSS** climatological offsets may remain where era sampling differs, not only from speckle. Future work: reflectivity QC and bad-volume rejection in Stage **04c** (Murillo-style upstream QC).
+**Model implication:** Stage **05** applies a four-pass GridRad artifact filter (`remove_gridrad_artifacts`: isolated speckle, inner-range radial ring, azimuthal annulus, quiet-background filament) plus optional SPC-collocated range debias. On the 2026-07-06 diagnostic, GridRad residual speckle fell to **1.8%** mean (**9.1%** P95). Residual **GridRad − MYRORSS** climatological offsets (~**1.7×** at mid-range) and ring-shaped diff maps may remain where era sampling differs, not only from per-day artifacts. Future work: reflectivity QC and bad-volume rejection in Stage **04c** (Murillo-style upstream QC).
 
 ---
 

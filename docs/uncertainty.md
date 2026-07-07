@@ -45,20 +45,19 @@ GridRad-era products can exhibit **range-dependent bias** and **isolated speckle
 spikes** aligned with WSR-88D site geometry. These propagate into sparse event
 footprints and stochastic return-period maps if uncorrected.
 
-**Diagnostic (2026-07-05, 9,797 corrected days):**
+**Diagnostic progression (9,797 corrected days):**
 
-| Metric | GridRad (before debias rerun) | After range debias + speckle |
-|--------|------------------------------:|-----------------------------:|
-| Mean speckle fraction (active cells) | 9.7% | 6.1% |
-| P95 speckle fraction | 50% | 33% |
-| Mean annual max @ 62 km from radar | 5.11 mm | 5.18 mm |
-| MRMS mean annual max @ 275 km | 5.36 mm | 3.52 mm |
+| Metric | Pre-debias | Three-pass (2026-07-05) | Four-pass (2026-07-06) |
+|--------|----------:|------------------------:|-----------------------:|
+| GridRad mean speckle fraction | 9.7% | 6.1% | **1.8%** |
+| GridRad P95 speckle fraction | 50% | 33% | **9.1%** |
+| GridRad / MYRORSS mid-range ratio | ~2× | ~1.7× | ~1.7× |
 
 **Current treatment:** Stage 05 applies SPC-collocated **range debias**
 (`range_debias.npz`) and a **four-pass GridRad artifact filter** (isolated speckle,
-radial range ring, azimuthal annulus, background filament; `methodology.md` §5.5).
-Stage 05 rebuild with the radial pass underway **2026-07-06**; review
-`radar_artifact_diagnostic.py` diff maps before downstream stages.
+inner-range radial ring, azimuthal annulus, background filament; `methodology.md` §5.5).
+**Stages 05–07 rebuild** with inner-range radial baseline underway **2026-07-06**;
+review `radar_artifact_diagnostic.py` diff maps after Stage 06 before Stages 08–14.
 Residual broad GridRad−MYRORSS climatological offsets remain in era-comparison
 diagnostics. Re-run Stages 06–14 after debias changes.
 

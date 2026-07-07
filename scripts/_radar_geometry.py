@@ -484,11 +484,13 @@ def remove_speckle_spikes(
 AZIMUTH_ANNULUS_FACTOR = 2.5
 AZIMUTH_MIN_ANNULUS_CELLS = 8
 # Uniform range rings: entire annulus elevated vs adjacent radial bins at the same site.
-RADIAL_RING_FACTOR = 1.20
-RADIAL_RING_FAR_FACTOR = 1.25
-RADIAL_RING_NEAR_RANGE_KM = 100.0
+RADIAL_RING_FACTOR = 1.12
+RADIAL_RING_FAR_FACTOR = 1.18
+RADIAL_RING_INNER_RANGE_KM = 75.0
+RADIAL_RING_MIN_OUTER_RANGE_KM = 50.0
+RADIAL_RING_FAR_RANGE_KM = 100.0
 RADIAL_RING_MIN_ANNULUS_CELLS = 5
-RADIAL_RING_CELL_MARGIN_MM = 8.0
+RADIAL_RING_CELL_MARGIN_MM = 5.0
 FILAMENT_BG_SIZE = 21  # ~1° at 0.05° grid — wider than typical ring width
 FILAMENT_MARGIN_MM = 20.0
 FILAMENT_QUIET_BG_MM = 15.0
@@ -503,7 +505,9 @@ def remove_radial_range_rings(
     active_mm: float = SPECKLE_ACTIVE_MM,
     ring_factor: float = RADIAL_RING_FACTOR,
     far_ring_factor: float = RADIAL_RING_FAR_FACTOR,
-    near_range_km: float = RADIAL_RING_NEAR_RANGE_KM,
+    inner_range_km: float = RADIAL_RING_INNER_RANGE_KM,
+    min_outer_range_km: float = RADIAL_RING_MIN_OUTER_RANGE_KM,
+    far_range_km: float = RADIAL_RING_FAR_RANGE_KM,
     min_annulus_cells: int = RADIAL_RING_MIN_ANNULUS_CELLS,
     cell_margin_mm: float = RADIAL_RING_CELL_MARGIN_MM,
 ) -> tuple[np.ndarray, int]:
@@ -512,7 +516,9 @@ def remove_radial_range_rings(
 
     Isolated-speckle and azimuthal passes miss **uniform** range rings: every azimuth
     on the annulus is elevated so the annulus median tracks the ring. Compare each
-    (site, range bin) median to neighbor-bin and (for far range) near-range medians.
+    (site, range bin) median to neighbor bins and to the inner-range (≤75 km) baseline.
+    The inner reference catches wide mid-range plateaus where several adjacent bins are
+    jointly elevated (common in Oklahoma / Plains overlap regions).
     """
     edges = np.asarray(edges if edges is not None else RADIAL_RING_BIN_EDGES_KM, dtype=np.float32)
     centers = ((edges[:-1] + edges[1:]) / 2.0).astype(np.float32)
@@ -549,23 +555,23 @@ def remove_radial_range_rings(
     for si in range(n_sites):
         site_mask = site_idx == si
         row = medians[si]
-        near_vals = [
+        inner_vals = [
             float(row[bi])
             for bi in range(n_bins)
-            if np.isfinite(row[bi]) and float(centers[bi]) <= near_range_km
+            if np.isfinite(row[bi]) and float(centers[bi]) <= inner_range_km
         ]
-        near_ref = float(np.median(near_vals)) if near_vals else np.nan
+        inner_ref = float(np.median(inner_vals)) if inner_vals else np.nan
         for bi in range(n_bins):
             med_b = row[bi]
             if not np.isfinite(med_b):
                 continue
             nbr = _neighbor_median(row, bi)
-            if nbr is None and not np.isfinite(near_ref):
+            if nbr is None and not np.isfinite(inner_ref):
                 continue
             ref = max(nbr if nbr is not None else 0.0, 1.0)
-            if float(centers[bi]) > near_range_km and np.isfinite(near_ref):
-                ref = max(ref, near_ref)
-            thresh_factor = far_ring_factor if float(centers[bi]) > near_range_km else ring_factor
+            if float(centers[bi]) >= min_outer_range_km and np.isfinite(inner_ref):
+                ref = max(ref, inner_ref)
+            thresh_factor = far_ring_factor if float(centers[bi]) > far_range_km else ring_factor
             if med_b <= thresh_factor * ref:
                 continue
             excess = med_b - ref

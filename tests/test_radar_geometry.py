@@ -116,6 +116,19 @@ def test_remove_radial_range_rings_keeps_broad_storm():
     assert np.all(out == 35.0)
 
 
+def test_remove_radial_range_rings_wide_midrange_plateau():
+    """Wide mid-range plateau elevated vs quiet inner range (multi-bin ring bias)."""
+    site_idx = np.zeros((16, 16), dtype=np.int16)
+    range_km = np.full((16, 16), 55.0, dtype=np.float32)
+    range_km[:, 8:12] = 95.0
+    data = np.full((16, 16), 10.0, dtype=np.float32)
+    data[:, 8:12] = 28.0
+    out, n = remove_radial_range_rings(data, site_idx, range_km, min_annulus_cells=4)
+    assert n > 0
+    assert np.all(out[:, 8:12] == 0.0)
+    assert np.all(out[:, :8] == 10.0)
+
+
 def test_remove_azimuthal_ring_artifacts_spoke():
     site_idx = np.zeros((10, 10), dtype=np.int16)
     range_km = np.full((10, 10), 50.0, dtype=np.float32)

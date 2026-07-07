@@ -259,7 +259,10 @@ After Stage 05 and Stage 06 validation pairs exist:
 
 Writes `data/analysis/radar_artifacts/` (range maps, speckle scores, source-era comparisons) and fits `data/analysis/calibration/range_debias.npz` from SPC collocated pairs. Stage 05 applies range debias automatically when that file exists (`--no-range-debias` to disable) and runs the four-pass GridRad artifact filter by default (`--no-speckle-filter` to disable): isolated speckle, radial range ring, azimuthal annulus, quiet-background filament (`methodology.md` §5.5; `literature_review.md` §3.7).
 
-**2026-07-06:** Stage 05 rebuilt with four-pass filter (adds radial range-ring pass for uniform NEXRAD annuli). After Stage 05 completes, run this diagnostic; if `range_debias.npz` changes materially, delete `mesh_0.05deg_corrected/` and rerun Stage 05 before downstream stages.
+**2026-07-06:** Stage 05 rebuilt with four-pass filter (radial ring with inner-range ≤75 km
+baseline for bins ≥50 km). Stages 05–07 via `run_pipeline.py --clean-from 05 --from 05`.
+After Stage 06 completes, run this diagnostic to refit `range_debias.npz`; if factors change
+materially, delete `mesh_0.05deg_corrected/` and rerun Stage 05 before downstream stages.
 
 ## 6. Stage 05 Modes
 

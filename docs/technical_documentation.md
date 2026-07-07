@@ -403,7 +403,8 @@ subtropical winter (Nov–Feb, lat < 30°N): require >= EVENT_ACTIVE_THRESH_MM (
 range debias: multiply by per-era factor(range_km) when range_debias.npz exists
 GridRad artifact filter (four passes on GridRad days only):
   1. Isolated speckle — zero cells > 2.5 × local 3×3 median (>= 5 mm)
-  2. Radial range ring — per (site, 10 km bin) vs neighbor/near-range radial profile
+  2. Radial range ring — per (site, 10 km bin) vs ±1/±2 neighbors AND inner-range
+     baseline (<= 75 km) for bins >= 50 km; thresholds 1.12× / 1.18× (far range)
   3. Azimuthal annulus — zero cells > 2.5 × annulus median (spokes)
   4. Background filament — 21×21 background; quiet-area thin rings
 ```
@@ -574,8 +575,9 @@ Review:
 
 Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Stage 05 applies `range_debias.npz` automatically on the next rerun.
 
-**2026-07-06:** four-pass filter adds radial range-ring removal; Stage 05 corrected archive
-rebuilt. Run diagnostic after Stage 05/06 before downstream stages.
+**2026-07-06:** four-pass filter with inner-range radial ring baseline (≤75 km for bins
+≥50 km; 1.12× / 1.18×). Stages 05–07 rebuild in progress (`logs/pipeline_05_07.run.log`).
+Run diagnostic after Stage 05/06 before downstream stages.
 
 ---
 

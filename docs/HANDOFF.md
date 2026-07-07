@@ -1,7 +1,7 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.2
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-07-06 (**four-pass GridRad artifact filter**; Stage 05 rebuild in progress).
+> Last updated: 2026-07-06 (**inner-range radial ring pass**; Stages 05–07 rebuild in progress).
 
 ---
 
@@ -151,9 +151,31 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ---
 
+## Pipeline Run Status (as of 2026-07-06)
+
+**Stages 05–07 rebuild in progress** with inner-range radial ring pass
+(`logs/pipeline_05_07.run.log`):
+
+```bash
+python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
+```
+
+| Stage | Status |
+|-------|--------|
+| 05 | ⏳ Rebuilding corrected archive (~110 min) |
+| 06 | ⏸ Queued — SPC validation pairs + debias refit |
+| 07 | ⏸ Queued — 366-day climatology |
+| 08–14 | ⏸ Cleared — restart after artifact QA |
+
+**2026-07-06 diagnostic (four-pass, neighbor-only radial):** GridRad speckle **1.8%**
+mean (**9.1%** P95), down from **6.1%** three-pass. Residual diff-map rings over
+Oklahoma / NE / Plains motivated inner-range baseline refinement.
+
+---
+
 ## Pipeline Run Status (as of 2026-06-30)
 
-**v2.2.1 production run complete.** Stages 01–14 validated (`--skip-ml`).
+**v2.2.1 production run complete.** Stages 01–14 validated (`--skip-ml`). Superseded by v2.2.2 artifact-filter rebuilds.
 
 | Stage | Result |
 |-------|--------|

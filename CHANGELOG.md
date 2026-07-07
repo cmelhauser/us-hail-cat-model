@@ -9,13 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Radial range-ring pass (inner-range baseline)** — `remove_radial_range_rings()` now
+  compares outer bins (≥50 km) to an inner-range baseline (≤75 km) in addition to ±1/±2
+  neighbor bins, catching wide mid-range plateaus (Oklahoma / Plains overlap). Detection
+  thresholds tightened to **1.12×** / **1.18×** (was 1.20× / 1.25×); cell margin **5 mm**
+  (was 8 mm).
+
 ### Added
 
 - **Stage 05 radial range-ring pass** — `remove_radial_range_rings()` in `scripts/_radar_geometry.py`
-  compares each (nearest WSR-88D site, 10 km range bin) to adjacent radial bins and (for range
-  > 100 km) the site near-range median; targets uniform NEXRAD annuli that isolated-speckle and
-  azimuthal passes miss. GridRad filter chain is now four passes (speckle → radial ring →
-  azimuthal → filament).
+  compares each (nearest WSR-88D site, 10 km range bin) to adjacent radial bins and an
+  inner-range baseline; targets uniform NEXRAD annuli that isolated-speckle and azimuthal
+  passes miss. GridRad filter chain is four passes (speckle → radial ring → azimuthal →
+  filament).
 - **Pipeline cleanup and blocking Stage 05 rerun** — `scripts/_pipeline_cleanup.py` removes
   generated outputs from a given stage onward; `scripts/rerun_stage05.py` waits for any running
   Stage 05, cleans 05+, and reruns Stage 05 in the foreground. `run_pipeline.py` adds

@@ -96,7 +96,7 @@ The manuscript needs final values for:
 - analytical return-period maps;
 - stochastic catalog event counts and return-period agreement;
 - map QA confirming no longitude/latitude orientation or Mexico/Canada displacement artifacts;
-- **radar artifact diagnostic** (`radar_artifact_diagnostic.py`) with before/after speckle metrics (GridRad 9.7%→6.1%, 2026-07-05).
+- **radar artifact diagnostic** (`radar_artifact_diagnostic.py`) with progression: GridRad speckle 9.7%→6.1%→**1.8%** (2026-07-06 four-pass + inner-range radial).
 
 ### AI-process evidence
 

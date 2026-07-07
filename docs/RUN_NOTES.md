@@ -20,16 +20,26 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-07-06** — **Stage 05 rebuild** with four-pass GridRad artifact filter
-(isolated speckle + **radial range ring** + azimuthal + filament):
+Snapshot taken **2026-07-06 ~23:24 EDT** — **Stages 05–07 rebuild** with inner-range
+radial ring pass (1.12× / 1.18× vs ≤75 km baseline for bins ≥50 km):
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 05 | ⏳ In progress | `python scripts/rerun_stage05.py`; log: `logs/stage05_rerun.run.log` |
-| Stages 06–14 | ⏸ Cleared | Removed with Stage 05+ wipe; restart after artifact QA |
+| Stage 05 | ⏳ In progress | `logs/pipeline_05_07.run.log` |
+| Stage 06 | ⏸ Queued | SPC validation + debias refit inputs |
+| Stage 07 | ⏸ Queued | 366-day climatology |
+| Stages 08–14 | ⏸ Cleared | Restart after artifact QA |
 
-After Stage 05: run `radar_artifact_diagnostic.py`, then Stage 06 for SPC pairs / debias refit.
-Review `map_gridrad_minus_myrorss_mean_annual_max.png` before downstream stages.
+```bash
+python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
+```
+
+After Stages 05–06: run `radar_artifact_diagnostic.py`; review
+`map_gridrad_minus_myrorss_mean_annual_max.png` before Stages 08–14.
+
+Previous snapshot **2026-07-06 ~19:56 EDT** — four-pass filter (neighbor-only radial);
+GridRad speckle **1.8%** mean (**9.1%** P95) vs **6.1%** (**33%**) three-pass.
+Residual rings in NE / Oklahoma / Plains / Montana motivated inner-range refinement.
 
 Previous snapshot **2026-07-05** — three-pass filter (no radial ring); superseded.
 

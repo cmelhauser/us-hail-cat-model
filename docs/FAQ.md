@@ -210,13 +210,19 @@ Run with `--skip-ml`. The ML artifacts (`gridrad_cqm_model.pkl`, `hail_filter_mo
 
 **Q: Stochastic return-period maps show radar rings or spokes. What do I do?**
 
-This is a known GridRad-era artifact (speckle, uniform range rings, and range-dependent bias). Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stages 05–06, then rebuild the corrected archive with range debias and the four-pass artifact filter:
+This is a known GridRad-era artifact (speckle, uniform range rings, and range-dependent bias). Rebuild the corrected archive with range debias and the four-pass artifact filter (inner-range radial ring pass):
 
 ```bash
-rm -rf data/historical/mesh_0.05deg_corrected/
-.venv/bin/python scripts/05_apply_mesh_bias_correction.py --skip-calibration --skip-ml
-.venv/bin/python scripts/06_validate_mesh_vs_spc.py
-.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
+python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
+# or blocking Stage 05 only:
+python scripts/rerun_stage05.py
+```
+
+Then run validation and diagnostic:
+
+```bash
+python scripts/06_validate_mesh_vs_spc.py
+python scripts/diagnostics/radar_artifact_diagnostic.py
 ```
 
 Review `data/analysis/radar_artifacts/map_gridrad_minus_myrorss_mean_annual_max.png`
