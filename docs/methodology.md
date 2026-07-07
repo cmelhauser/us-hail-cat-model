@@ -216,6 +216,8 @@ Re-run Stage 05 after v2.2.1+ calibration or artifact-filter changes requires de
 
 MYRORSS provides the early radar backbone from April 1998 through December 2011. The archive contains sparse radar-derived NetCDF objects at high temporal frequency and supports a spatially continuous historical hail field. Stage 01 reads both plain `.netcdf` and gzipped `.netcdf.gz` archive objects, accumulates native convective-day maximum MESH (12 UTC → 12 UTC; §2.6), subsets CONUS, aggregates by block maximum, applies finite-value and physical-bound QA, and writes daily GeoTIFFs.
 
+**Sparse-grid coordinates (v2.2.2 fix):** MYRORSS NetCDF uses WDSS-II `SparseLatLonGrid` storage where `pixel_x` indexes the latitude (row) direction and `pixel_y` indexes longitude (columns), with origin at (`Longitude`, `Latitude`) = (−130.005°, 55.005°) and 0.01° spacing. An earlier Stage 01 release swapped these axes, which mis-mapped eastern CONUS hail and produced an apparent vertical cutoff near ~97°W on era maps. The fix requires a full MYRORSS re-ingest.
+
 Stage 01 also writes:
 
 ```text
@@ -341,19 +343,7 @@ GridRad-era MESH can exhibit **NEXRAD range-dependent bias**, **isolated speckle
    - **Radial range ring** — per (nearest radar site, **10 km** range bin), compare annulus median to ±1/±2 neighbor bins **and** the inner-range (≤ **75 km**) baseline for all bins ≥ **50 km**; zero cells above reference + margin when the annulus exceeds **>1.12×** reference (**>1.18×** for range **> 100 km**). The inner baseline catches wide mid-range plateaus (several adjacent bins jointly elevated) that neighbor-only comparison misses—common in Oklahoma / Plains overlap.
    - **Azimuthal annulus** — per (nearest radar site, range bin), zero cells > **2.5×** annulus median; targets radial spokes and hot pixels on range rings (WSR-88D azimuth-median analogue in Cartesian space).
    - **Background filament** — **21×21** background median; zero active cells > background + **20 mm** when background < **15 mm**; targets thin rings in quiet areas.
-   - **Site-specific remediation (pass 5)** — nine WSR-88D domains flagged by visual QA on the GridRad−MYRORSS mean-annual-max diff map (`map_gridrad_minus_myrorss_mean_annual_max.png`, 2026-07-07). Murillo et al. (2021) manually excluded failed radar volumes; Cintineo et al. (2012) cropped radial fragments by hand. For cells whose nearest radar is one of the sites below, Stage 05 re-applies passes 1–4 with **stricter** thresholds (speckle **2.0×**, radial ring **1.05× / 1.10×**, azimuth **1.6×**, filament **+12 mm**) and a **polar spoke** test: per (site, 10 km range bin, **15°** azimuth sector), zero cells > **1.5×** the sector median (WSR-88D range–azimuth median-filter analogue).
-
-| Region (diff-map QA) | WSR-88D ID | Location |
-|----------------------|------------|----------|
-| Northern Nevada | **KLRX** | Elko, NV |
-| Southern Arizona | **KEMX** | Tucson, AZ |
-| South-central Montana | **KBLX** | Billings, MT |
-| West-central Michigan | **KGRR** | Grand Rapids, MI |
-| Northwest Alabama | **KGWX** | Columbus AFB, MS (west AL domain) |
-| East-central Oklahoma | **KTLX** | Oklahoma City, OK |
-| Southwest Ohio | **KILN** | Wilmington, OH |
-| Southwest Kentucky | **KHPX** | Fort Campbell, KY |
-| Central Delaware | **KDOX** | Dover, DE |
+   - **Spatiotemporal range-ring persistence** — fifth pass on GridRad days only. Stage 05 maintains a **21-day** trailing deque of pre-filter MESH rasters. For each (nearest radar site, **10 km** range bin), annuli active on ≥ **60%** of prior days are flagged; cells active on ≥ **35%** of prior days on those annuli are zeroed unless today exceeds **1.75×** the cell's historical median (burst exception) or the annulus shows a coordinated storm-day uplift (**1.5×** historical annulus median). This implements the daily-grid analogue of multi-scan ring discrimination (Chilson et al. 2018; roost-ring temporal dynamics) without requiring optional ML artifacts. Optional **site-specific remediation** (`site_remediation=True`) remains in code for nine QA-flagged radars but is **off by default** after persistence replaced it as pass 5.
 
 4. **Environmental filter** and `sanitize_hail_values` — applied after artifact removal.
 

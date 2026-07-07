@@ -153,8 +153,8 @@ def plot_raster_on_axis(
     """
     Plot an (NROWS, NCOLS) raster on ``ax``.
 
-    Uses ``pcolormesh`` + Lambert Conformal when cartopy is available; otherwise
-    ``imshow`` with geographic extent.
+    Uses ``imshow`` with Plate Carrée cell-edge extent on Lambert geo axes when
+    cartopy is available; otherwise plain ``imshow`` with geographic extent.
     """
     arr = np.asarray(data, dtype=np.float32)
     if symmetric:
@@ -171,32 +171,32 @@ def plot_raster_on_axis(
             vmax = 1.0
 
     lon_edges, lat_edges = lon_lat_edges()
-    lon_2d, lat_2d = np.meshgrid(lon_edges, lat_edges)
+    extent = [lon_edges[0], lon_edges[-1], lat_edges[-1], lat_edges[0]]
 
     if has_cartopy() and hasattr(ax, "projection"):
         import cartopy.crs as ccrs
 
-        return ax.pcolormesh(
-            lon_2d,
-            lat_2d,
+        return ax.imshow(
             arr,
+            origin="upper",
+            extent=extent,
             transform=ccrs.PlateCarree(),
             cmap=cmap,
             vmin=vmin,
             vmax=vmax,
-            shading="flat",
+            interpolation="nearest",
             rasterized=True,
         )
 
-    lons, lats = lon_lat_centers()
     return ax.imshow(
         arr,
         origin="upper",
-        extent=[lons.min(), lons.max(), lats.min(), lats.max()],
+        extent=extent,
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
         aspect="auto",
+        interpolation="nearest",
     )
 
 
@@ -210,7 +210,7 @@ def save_conus_raster_map(
     vmin: float | None = None,
     vmax: float | None = None,
     symmetric: bool = False,
-    figsize: tuple[float, float] = (10.0, 4.5),
+    figsize: tuple[float, float] = (10.0, 5.5),
     dpi: int = 150,
 ) -> Path:
     """Render a single-panel CONUS raster map and save to ``out_path``."""

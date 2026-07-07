@@ -96,8 +96,16 @@ def local_median_8(data: np.ndarray) -> np.ndarray:
     return median_filter(data, size=3, mode="nearest")
 
 
+def _mean_annual_max_from_year_peaks(year_peaks: dict[int, np.ndarray]) -> np.ndarray:
+    """Average per-calendar-year cell maxima (proper mean annual maximum)."""
+    if not year_peaks:
+        return np.zeros((NROWS, NCOLS), dtype=np.float32)
+    stack = np.stack([year_peaks[y] for y in sorted(year_peaks)], axis=0)
+    return stack.mean(axis=0).astype(np.float32)
+
+
 def accumulate_era_stats(mesh_dir: Path, d_min: date | None, d_max: date | None, every_n: int = 1):
-    """Scan archive; return per-era annual-max mean, speckle counts, range-binned sums."""
+    """Scan archive; return per-era mean annual max, speckle counts, range-binned sums."""
     sources = ("MYRORSS", "GridRad", "MRMS")
     edges = DEFAULT_RANGE_BIN_EDGES_KM
     n_bins = len(edges) - 1
@@ -105,7 +113,7 @@ def accumulate_era_stats(mesh_dir: Path, d_min: date | None, d_max: date | None,
     bin_idx = np.clip(np.digitize(range_km, edges, right=False) - 1, 0, n_bins - 1)
 
     era_years: dict[str, set[int]] = {s: set() for s in sources}
-    annual_max: dict[str, np.ndarray] = {s: np.zeros((NROWS, NCOLS), np.float32) for s in sources}
+    year_peaks: dict[str, dict[int, np.ndarray]] = {s: {} for s in sources}
     hail_days: dict[str, np.ndarray] = {s: np.zeros((NROWS, NCOLS), np.uint32) for s in sources}
     speckle_days: dict[str, np.ndarray] = {s: np.zeros((NROWS, NCOLS), np.uint32) for s in sources}
     bin_sum: dict[str, np.ndarray] = {s: np.zeros(n_bins, np.float64) for s in sources}
@@ -127,6 +135,10 @@ def accumulate_era_stats(mesh_dir: Path, d_min: date | None, d_max: date | None,
     for i, (day, path) in enumerate(tifs, 1):
         src = classify_mesh_source(day)
         era_years[src].add(day.year)
+        year_arr = year_peaks[src].get(day.year)
+        if year_arr is None:
+            year_arr = np.zeros((NROWS, NCOLS), dtype=np.float32)
+            year_peaks[src][day.year] = year_arr
         with rasterio.open(path) as src_ds:
             data = src_ds.read(1).astype(np.float32)
         active = data >= ACTIVE_MM
@@ -141,12 +153,12 @@ def accumulate_era_stats(mesh_dir: Path, d_min: date | None, d_max: date | None,
                 if cell_mask.any():
                     bin_sum[src][bi] += daily_peak
                     bin_count[src][bi] += 1
-        np.maximum(annual_max[src], data, out=annual_max[src])
+        np.maximum(year_arr, data, out=year_arr)
         if i % 500 == 0:
             print(f"  scanned {i:,}/{len(tifs):,} rasters ({time.time() - t0:.0f}s)", flush=True)
 
     n_years = {s: max(1, len(era_years[s])) for s in sources}
-    mean_annual = {s: annual_max[s] / n_years[s] for s in sources}
+    mean_annual = {s: _mean_annual_max_from_year_peaks(year_peaks[s]) for s in sources}
     speckle_frac = {
         s: np.divide(
             speckle_days[s].astype(np.float32),
@@ -254,8 +266,43 @@ def plot_range_distance_map(range_km: np.ndarray, out_dir: Path) -> Path:
     )
 
 
+def save_mean_annual_max_maps_per_source(
+    mean_maps: dict[str, np.ndarray],
+    out_dir: Path,
+    *,
+    skip_geotiff: bool = False,
+) -> list[Path]:
+    """Lambert CONUS maps of mean annual max MESH75, one PNG (and GeoTIFF) per radar era."""
+    paths: list[Path] = []
+    for src in ("MYRORSS", "GridRad", "MRMS"):
+        data = mean_maps[src]
+        pos = data[data > 0]
+        vmax = min(80.0, float(np.percentile(pos, 99)) if pos.size else 20.0)
+        vmax = max(vmax, 5.0)
+        slug = src.lower()
+        tif_path = out_dir / f"mean_annual_max_{slug}.tif"
+        if not skip_geotiff:
+            write_geotiff(
+                data.astype(np.float32),
+                tif_path,
+                tags={"SOURCE_ERA": src, "UNITS": "mm", "STAT": "mean_annual_max_mesh75"},
+            )
+            paths.append(tif_path)
+        png_path = save_conus_raster_map(
+            data,
+            out_dir / f"map_mean_annual_max_{slug}.png",
+            title=f"{src} mean annual max MESH75 (mm)",
+            cbar_label="mm",
+            cmap="YlOrRd",
+            vmin=0,
+            vmax=vmax,
+        )
+        paths.append(png_path)
+    return paths
+
+
 def plot_mean_annual_by_source(mean_maps: dict[str, np.ndarray], out_dir: Path) -> Path:
-    fig, axes = create_conus_axes(1, 3, figsize=(14, 4.5), sharex=True, sharey=True)
+    fig, axes = create_conus_axes(1, 3, figsize=(15, 5.0))
     ax_list = np.atleast_1d(axes).ravel()
     vmax = 80.0
     mappable = None
@@ -271,7 +318,7 @@ def plot_mean_annual_by_source(mean_maps: dict[str, np.ndarray], out_dir: Path) 
 
 
 def plot_speckle_by_source(speckle: dict[str, np.ndarray], out_dir: Path) -> Path:
-    fig, axes = create_conus_axes(1, 3, figsize=(14, 4.5), sharex=True, sharey=True)
+    fig, axes = create_conus_axes(1, 3, figsize=(15, 5.0))
     ax_list = np.atleast_1d(axes).ravel()
     mappable = None
     for ax, src in zip(ax_list, ("MYRORSS", "GridRad", "MRMS")):
@@ -352,7 +399,9 @@ def write_readme(out_dir: Path, summary: dict) -> None:
         "| File | Description |",
         "|------|-------------|",
         "| `map_nearest_radar_distance_km.png` | Distance to nearest WSR-88D |",
-        "| `map_mean_annual_max_by_source.png` | Mean annual max by radar era |",
+        "| `map_mean_annual_max_by_source.png` | Mean annual max — three-panel comparison |",
+        "| `map_mean_annual_max_{myrorss,gridrad,mrms}.png` | Mean annual max per radar era (Lambert) |",
+        "| `mean_annual_max_{myrorss,gridrad,mrms}.tif` | Per-era mean annual max GeoTIFFs |",
         "| `map_speckle_fraction_by_source.png` | Isolated-spike fraction by era |",
         "| `range_binned_annual_max_by_source.csv` | Mean annual max vs range bin |",
         "| `spc_mesh_ratio_by_range_source.csv` | SPC/MESH ratio vs range (if pairs exist) |",
@@ -390,6 +439,9 @@ def main() -> None:
 
     plot_range_distance_map(range_km, out_dir)
     plot_mean_annual_by_source(stats["mean_annual_max"], out_dir)
+    save_mean_annual_max_maps_per_source(
+        stats["mean_annual_max"], out_dir, skip_geotiff=args.skip_geotiff,
+    )
     plot_speckle_by_source(stats["speckle_fraction"], out_dir)
 
     rb_rows = []

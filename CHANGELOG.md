@@ -11,11 +11,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **`scripts/diagnostics/_diagnostic_io.py`:** shared `warn_skip`, `require_path`, `require_mesh_tifs`, and `count_mesh_tifs` helpers; all diagnostic scripts warn-and-skip when inputs are absent.
-- **`scripts/diagnostics/literature_validation_suite.py`:** fifteen literature-aligned checks (SPC rural–urban bias, GridRad manifest QC, negative-binomial dispersion, bootstrap RP CI pilot, tail-dependence pilot, ML filter Brier) with citations in-script and in `docs/methodology.md` §6.1 / `docs/technical_documentation.md` §12.7.
-- **`tests/test_diagnostic_io.py`:** data-availability helper tests; extended `tests/test_literature_validation_suite.py`.
+- **Stage 01 MYRORSS sparse-grid coordinate fix** — `pixel_x`/`pixel_y` were swapped vs
+  WDSS-II `SparseLatLonGrid` convention (`pixel_x` = row/lat, `pixel_y` = col/lon). The bug
+  truncated MYRORSS hail to west of ~−96°W; full CONUS re-ingest required.
+- **Stage 05 spatiotemporal range-ring persistence (pass 5)** —
+  `remove_persistent_range_artifacts()` uses a **21-day** trailing window of pre-filter
+  GridRad rasters; chronically active (site, range) annuli are zeroed while burst cells
+  and coordinated storm annuli are retained. Replaces site-specific remediation as the
+  default fifth pass (`site_remediation=False`).
+- **Lambert map rendering** — `scripts/_mapping.py` uses `imshow` + Plate Carrée cell-edge
+  extent on geo axes; diagnostic multi-panel maps drop `sharex`/`sharey`.
+- **Per-source mean annual max maps** — fixed mean-annual-max statistic in
+  `radar_artifact_diagnostic.py` (`_mean_annual_max_from_year_peaks`).
 
-### Added
+### Changed
+
+- **GridRad artifact filter** — five passes: speckle → radial ring → azimuthal → filament →
+  **spatiotemporal persistence** (site-specific remediation remains optional, off by default).
 
 - **`scripts/_mapping.py`:** shared Lambert Conformal CONUS map helpers (central lon
   −96°, lat 39°, standard parallels 33°/45°); Natural Earth **admin_0** country

@@ -27,9 +27,9 @@ Internal Phases (run automatically in order)
     Then apply environmental filter to all sources.
   Optional range-dependent debias (when ``data/analysis/calibration/range_debias.npz``
   exists from ``scripts/diagnostics/radar_artifact_diagnostic.py``).
-  GridRad days also pass through a radar artifact filter (isolated speckle, radial
-  range rings, azimuthal spokes, quiet-background filaments, and site-specific
-  remediation on nine QA-flagged WSR-88D domains; disable with ``--no-speckle-filter``).
+  GridRad days also pass through a five-pass radar artifact filter (isolated speckle, radial
+  range rings, azimuthal spokes, quiet-background filaments, and spatiotemporal range-ring
+  persistence from a 21-day trailing window; disable with ``--no-speckle-filter``).
   Output to: data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif
 
 MESH75 Recalibration (Witt-algorithm sources)
@@ -61,6 +61,7 @@ import csv
 import os
 import sys
 import time
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 
@@ -124,8 +125,15 @@ _filter_model = None
 _range_debias = None
 _range_km_grid = None
 _site_idx_grid = None
+_gridrad_history: deque = deque()
 
 log = get_logger("05_apply_mesh_bias_correction", LOG_ROOT).info
+
+
+def reset_gridrad_history() -> None:
+    """Clear trailing GridRad history (call at start of Phase B)."""
+    global _gridrad_history
+    _gridrad_history = deque()
 
 
 def init_range_debias(*, enable: bool = True) -> bool:
@@ -487,13 +495,32 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debia
     artifact_counts: dict[str, int] = {}
     if speckle_filter and source == "GridRad":
         try:
-            from _radar_geometry import remove_gridrad_artifacts
-        except ImportError:  # pragma: no cover
-            from scripts._radar_geometry import remove_gridrad_artifacts
-        if _range_km_grid is not None and _site_idx_grid is not None:
-            corrected, artifact_counts = remove_gridrad_artifacts(
-                corrected, _range_km_grid, _site_idx_grid,
+            from _radar_geometry import (
+                PERSISTENCE_HISTORY_MAX_DAYS,
+                PERSISTENCE_MIN_HISTORY_DAYS,
+                remove_gridrad_artifacts,
             )
+        except ImportError:  # pragma: no cover
+            from scripts._radar_geometry import (
+                PERSISTENCE_HISTORY_MAX_DAYS,
+                PERSISTENCE_MIN_HISTORY_DAYS,
+                remove_gridrad_artifacts,
+            )
+        if _range_km_grid is not None and _site_idx_grid is not None:
+            global _gridrad_history
+            if _gridrad_history.maxlen != PERSISTENCE_HISTORY_MAX_DAYS:
+                _gridrad_history = deque(_gridrad_history, maxlen=PERSISTENCE_HISTORY_MAX_DAYS)
+            history_stack = None
+            if len(_gridrad_history) >= PERSISTENCE_MIN_HISTORY_DAYS:
+                history_stack = np.stack(list(_gridrad_history), axis=0)
+            pre_filter = corrected.astype(np.float32, copy=True)
+            corrected, artifact_counts = remove_gridrad_artifacts(
+                corrected,
+                _range_km_grid,
+                _site_idx_grid,
+                history=history_stack,
+            )
+            _gridrad_history.append(pre_filter)
             n_speckle = sum(artifact_counts.values())
 
     filtered = apply_probabilistic_filter(corrected, doy, lat_grid, skip_ml=skip_ml)
@@ -576,7 +603,7 @@ def main():
     parser.add_argument("--no-range-debias", action="store_true",
                         help="Disable range-dependent debias even if range_debias.npz exists")
     parser.add_argument("--no-speckle-filter", action="store_true",
-                        help="Disable GridRad artifact filter (five-pass: speckle, radial ring, azimuthal, filament, site remediation)")
+                        help="Disable GridRad artifact filter (five-pass: speckle, radial ring, azimuthal, filament, persistence)")
     args = parser.parse_args()
 
     if args.validate:
@@ -622,8 +649,9 @@ def _run_stage05_body(args) -> None:
     if args.no_speckle_filter:
         log("  GridRad artifact filter: OFF")
     else:
-        log("  GridRad artifact filter: ON (isolated + radial ring + azimuthal + filament + site remediation)")
+        log("  GridRad artifact filter: ON (isolated + radial ring + azimuthal + filament + persistence)")
     init_artifact_grids(speckle_filter=not args.no_speckle_filter)
+    reset_gridrad_history()
 
     log("\n[Phase B] Applying corrections to all rasters")
     lat_grid = build_lat_grid()

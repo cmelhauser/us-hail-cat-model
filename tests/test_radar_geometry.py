@@ -19,6 +19,7 @@ from scripts._radar_geometry import (
     remove_background_filament_artifacts,
     remove_flagged_site_artifacts,
     remove_gridrad_artifacts,
+    remove_persistent_range_artifacts,
     remove_radial_range_rings,
     remove_site_polar_spokes,
     remove_speckle_spikes,
@@ -164,7 +165,24 @@ def test_remove_gridrad_artifacts_chain():
     out, counts = remove_gridrad_artifacts(data, range_km, site_idx, site_remediation=False)
     assert counts["isolated"] >= 1
     assert "radial_ring" in counts
+    assert "persistent_range" in counts
     assert out[2, 2] == 0.0
+
+
+def test_remove_persistent_range_artifacts_chronic_ring():
+    """Cells on a chronically active range annulus are removed; burst cells kept."""
+    site_idx = np.zeros((8, 12), dtype=np.int16)
+    range_km = np.full((8, 12), 55.0, dtype=np.float32)
+    range_km[:, 4:8] = 95.0
+    history = np.full((10, 8, 12), 10.0, dtype=np.float32)
+    history[:, :, 4:8] = 30.0
+    data = np.full((8, 12), 10.0, dtype=np.float32)
+    data[:, 4:8] = 32.0
+    data[4, 5] = 80.0  # burst vs history median ~30
+    out, n = remove_persistent_range_artifacts(data, site_idx, range_km, history)
+    assert n > 0
+    assert out[4, 5] == 80.0
+    assert np.all(out[:, 4:8][out[:, 4:8] < 80.0] == 0.0)
 
 
 def test_site_remediation_ids_count():

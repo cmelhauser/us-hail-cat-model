@@ -407,9 +407,12 @@ GridRad artifact filter (five passes on GridRad days only):
      baseline (<= 75 km) for bins >= 50 km; thresholds 1.12× / 1.18× (far range)
   3. Azimuthal annulus — zero cells > 2.5 × annulus median (spokes)
   4. Background filament — 21×21 background; quiet-area thin rings
-  5. Site remediation — nine QA-flagged WSR-88D (KBLX, KDOX, KEMX, KGRR, KGWX,
-     KHPX, KILN, KLRX, KTLX): stricter re-pass + polar spoke filter (methodology §5.5)
+  5. Spatiotemporal persistence — 21-day trailing history; chronic (site, range)
+     annuli and cells zeroed unless burst/storm-day exceptions apply
 ```
+
+Optional site-specific remediation (`site_remediation=True` in code) remains for nine
+QA-flagged WSR-88D radars but is disabled by default.
 
 Optional ML path (when artifacts exist and `--skip-ml` is false):
 
@@ -427,7 +430,7 @@ data/analysis/calibration/range_debias.npz          # from radar_artifact_diagno
 data/analysis/calibration/nearest_radar_distance_km.npy
 ```
 
-CLI flags: `--no-range-debias`, `--no-speckle-filter` (disables full four-pass GridRad filter).
+CLI flags: `--no-range-debias`, `--no-speckle-filter` (disables full five-pass GridRad filter).
 
 ### 9.3 Hard requirement
 

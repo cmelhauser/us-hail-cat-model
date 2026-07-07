@@ -495,6 +495,18 @@ FILAMENT_BG_SIZE = 21  # ~1° at 0.05° grid — wider than typical ring width
 FILAMENT_MARGIN_MM = 20.0
 FILAMENT_QUIET_BG_MM = 15.0
 
+# Pass 5: spatiotemporal range-ring persistence (Stage 05 rolling history).
+# NEXRAD range rings are stationary in (site, range) but ephemeral storms are not.
+# Chilson et al. (2018) and roost-detection work use multi-scan dynamics; on daily
+# grids we approximate this with a trailing window of pre-filter GridRad rasters.
+PERSISTENCE_ACTIVE_MM = 25.4
+PERSISTENCE_MIN_HISTORY_DAYS = 7
+PERSISTENCE_HISTORY_MAX_DAYS = 21
+PERSISTENCE_RANGE_FRAC = 0.60  # annulus active on ≥60% of prior days
+PERSISTENCE_CELL_FRAC = 0.35  # cell active on ≥35% of prior days
+PERSISTENCE_BURST_FACTOR = 1.75  # keep rare extreme revisits
+PERSISTENCE_ANNULUS_BURST_FACTOR = 1.50  # coordinated storm on a usually-noisy annulus
+
 # Site-specific remediation (visual QA on GridRad−MYRORSS diff map, 2026-07-07).
 # Murillo et al. (2021) manually excluded failed radar volumes; Cintineo et al. (2012)
 # cropped radial fragments by hand. These nine sites retained spoke/ring streaks after the
@@ -682,6 +694,101 @@ def remove_background_filament_artifacts(
     return out, n
 
 
+def remove_persistent_range_artifacts(
+    data: np.ndarray,
+    site_idx_grid: np.ndarray,
+    range_km_grid: np.ndarray,
+    history: np.ndarray | None,
+    *,
+    edges: np.ndarray | None = None,
+    active_mm: float = PERSISTENCE_ACTIVE_MM,
+    min_history_days: int = PERSISTENCE_MIN_HISTORY_DAYS,
+    range_frac: float = PERSISTENCE_RANGE_FRAC,
+    cell_frac: float = PERSISTENCE_CELL_FRAC,
+    burst_factor: float = PERSISTENCE_BURST_FACTOR,
+    annulus_burst_factor: float = PERSISTENCE_ANNULUS_BURST_FACTOR,
+    min_annulus_cells: int = RADIAL_RING_MIN_ANNULUS_CELLS,
+) -> tuple[np.ndarray, int]:
+    """
+    Zero cells on chronically active (site, range) annuli using trailing daily history.
+
+    Range rings reappear at the same radar distance across many days; real hail cores
+    are episodic at fixed grid cells. Requires ``history`` shaped
+    ``(n_days, nrows, ncols)`` of pre-artifact-filter MESH (post calibration/debias).
+    """
+    if history is None or history.ndim != 3 or history.shape[0] < min_history_days:
+        return data.astype(np.float32, copy=True), 0
+    if history.shape[1:] != data.shape:
+        return data.astype(np.float32, copy=True), 0
+
+    edges = np.asarray(edges if edges is not None else RADIAL_RING_BIN_EDGES_KM, dtype=np.float32)
+    out = data.astype(np.float32, copy=True)
+    active = out >= active_mm
+    if not np.any(active):
+        return out, 0
+
+    hist_active = history >= active_mm
+    n_days = hist_active.shape[0]
+    bin_idx = _bin_index(range_km_grid, edges)
+    site_idx = site_idx_grid.astype(np.int16, copy=False)
+    n_bins = len(edges) - 1
+    n_sites = int(site_idx.max()) + 1
+
+    annulus_day_frac = np.zeros((n_sites, n_bins), dtype=np.float32)
+    annulus_hist_med = np.full((n_sites, n_bins), np.nan, dtype=np.float32)
+    annulus_today_med = np.full((n_sites, n_bins), np.nan, dtype=np.float32)
+
+    for si in range(n_sites):
+        site_mask = site_idx == si
+        if not site_mask.any():
+            continue
+        for bi in range(n_bins):
+            ann_mask = site_mask & (bin_idx == bi)
+            n_cells = int(ann_mask.sum())
+            if n_cells < min_annulus_cells:
+                continue
+            day_hits = np.array(
+                [bool(hist_active[d][ann_mask].any()) for d in range(n_days)],
+                dtype=np.float32,
+            )
+            annulus_day_frac[si, bi] = float(day_hits.mean())
+            annulus_hist_med[si, bi] = float(np.median(history[:, ann_mask]))
+            if active[ann_mask].any():
+                annulus_today_med[si, bi] = float(np.median(out[ann_mask]))
+
+    cell_hist_frac = hist_active.mean(axis=0)
+    cell_hist_med = np.median(history, axis=0)
+
+    remove = np.zeros(data.shape, dtype=bool)
+    si_grid = site_idx
+    bi_grid = bin_idx
+    persistent_annulus = annulus_day_frac[si_grid, bi_grid] >= range_frac
+
+    storm_annulus = np.isfinite(annulus_today_med[si_grid, bi_grid]) & np.isfinite(
+        annulus_hist_med[si_grid, bi_grid]
+    )
+    storm_annulus &= (
+        annulus_today_med[si_grid, bi_grid]
+        >= annulus_burst_factor * np.maximum(annulus_hist_med[si_grid, bi_grid], 1.0)
+    )
+    storm_annulus &= annulus_today_med[si_grid, bi_grid] >= active_mm
+
+    chronic_cell = cell_hist_frac >= cell_frac
+    burst_cell = out >= burst_factor * np.maximum(cell_hist_med, 1.0)
+
+    remove = (
+        active
+        & persistent_annulus
+        & chronic_cell
+        & ~burst_cell
+        & ~storm_annulus
+    )
+    n_removed = int(remove.sum())
+    if n_removed:
+        out[remove] = 0.0
+    return out, n_removed
+
+
 def site_remediation_indices(site_ids: tuple[str, ...] | None = None) -> np.ndarray:
     """Integer site indices for ``SITE_REMEDIATION_IDS`` (or override list)."""
     _, _, all_ids = nexrad_sites_conus()
@@ -832,18 +939,23 @@ def remove_gridrad_artifacts(
     range_km_grid: np.ndarray,
     site_idx_grid: np.ndarray,
     *,
-    site_remediation: bool = True,
+    history: np.ndarray | None = None,
+    site_remediation: bool = False,
 ) -> tuple[np.ndarray, dict[str, int]]:
-    """Full GridRad artifact pass: global four passes + optional site remediation."""
+    """Full GridRad artifact pass: spatial four passes + spatiotemporal persistence."""
     out, n_iso = remove_speckle_spikes(data)
     out, n_rad = remove_radial_range_rings(out, site_idx_grid, range_km_grid)
     out, n_az = remove_azimuthal_ring_artifacts(out, site_idx_grid, range_km_grid)
     out, n_fil = remove_background_filament_artifacts(out)
+    out, n_persist = remove_persistent_range_artifacts(
+        out, site_idx_grid, range_km_grid, history,
+    )
     counts = {
         "isolated": n_iso,
         "radial_ring": n_rad,
         "azimuthal": n_az,
         "filament": n_fil,
+        "persistent_range": n_persist,
     }
     if site_remediation:
         out, site_counts = remove_flagged_site_artifacts(out, site_idx_grid, range_km_grid)

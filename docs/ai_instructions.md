@@ -59,7 +59,7 @@ Must support:
 - MESH75 correction;
 - GridRad quantile fallback;
 - **range-dependent debias** when `range_debias.npz` exists (`--no-range-debias` to disable);
-- **GridRad artifact filter** (four passes on GridRad days: isolated speckle, inner-range radial ring, azimuthal annulus, background filament; **fifth pass** site remediation on nine WSR-88D radars; `--no-speckle-filter` to disable);
+- **GridRad artifact filter** (four passes on GridRad days: isolated speckle, inner-range radial ring, azimuthal annulus, background filament; **fifth pass** spatiotemporal range-ring persistence from a 21-day trailing window; `--no-speckle-filter` to disable);
 - optional conditional calibration;
 - optional probabilistic filtering;
 - deterministic fallback with `--skip-ml`.

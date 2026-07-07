@@ -66,3 +66,38 @@ def test_plot_raster_on_axis_symmetric():
         assert m is not None
     finally:
         plt.close(fig)
+
+
+@pytest.mark.skipif(not mp.has_cartopy(), reason="cartopy not installed")
+def test_plot_raster_uses_plate_carree_edge_extent():
+    """Cartopy path must use cell-edge Plate Carrée extent (imshow, not index space)."""
+    import matplotlib.pyplot as plt
+    from matplotlib.image import AxesImage
+
+    from scripts._io import latlon_to_grid
+
+    data = np.zeros((NROWS, NCOLS), dtype=np.float32)
+    lat, lon = 35.5, -97.5
+    row, col = latlon_to_grid(lat, lon)
+    data[row, col] = 80.0
+
+    lon_e, lat_e = mp.lon_lat_edges()
+
+    fig, ax = mp.create_conus_axes(figsize=(10, 5.5))
+    try:
+        artist = mp.plot_raster_on_axis(ax, data, cmap="YlOrRd", vmin=0, vmax=80)
+        assert isinstance(artist, AxesImage)
+
+        ax.scatter([lon], [lat], transform=mp.plate_carree(), c="blue", s=60, marker="x", zorder=10)
+        fig.canvas.draw()
+        marker_disp = ax.transData.transform(
+            ax.projection.transform_point(lon, lat, mp.plate_carree())[:2]
+        )
+        cell_lon = (lon_e[col] + lon_e[col + 1]) / 2.0
+        cell_lat = (lat_e[row] + lat_e[row + 1]) / 2.0
+        cell_disp = ax.transData.transform(
+            ax.projection.transform_point(cell_lon, cell_lat, mp.plate_carree())[:2]
+        )
+        assert np.allclose(marker_disp, cell_disp, atol=0.5)
+    finally:
+        plt.close(fig)

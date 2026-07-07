@@ -8,7 +8,7 @@ AWS S3 for the period April 1998 – December 2011.
 For each **convective day** (12 UTC → 12 UTC; label = date at window start):
   1. Lists MESH timestep files from the two UTC calendar S3 prefixes that overlap the window
   2. Streams each plain or gzipped NetCDF
-  3. Parses sparse-grid data (pixel_x, pixel_y, MESH values in mm)
+  3. Parses sparse-grid data (WDSS-II: pixel_x = row/lat, pixel_y = col/lon; MESH in mm)
   4. Accumulates the convective-day maximum MESH per native 0.01° pixel
   5. Aggregates to 0.05° via block-maximum (5×5 cells)
   6. Saves a single-band float32 GeoTIFF (MESH in mm)
@@ -266,8 +266,8 @@ def sparse_updates_from_netcdf_bytes(
     finally:
         os.unlink(tmp)
 
-    row = py.astype(np.int32)
-    col = px.astype(np.int32)
+    row = px.astype(np.int32)  # pixel_x: latitude direction (WDSS-II row index)
+    col = py.astype(np.int32)  # pixel_y: longitude direction (WDSS-II col index)
     vals = mesh_vals.astype(np.float32)
 
     mask = (
@@ -291,8 +291,10 @@ def parse_sparse_mesh(nc_bytes: bytes, daily_max: np.ndarray) -> int:
     """
     Parse a sparse-grid MYRORSS MESH NetCDF and update daily_max in place.
 
-    The NetCDF uses sparse storage: pixel_x (column), pixel_y (row), and
-    MESH value arrays. We map these into CONUS subset coordinates and
+    The NetCDF uses WDSS-II sparse storage: ``pixel_x`` is the row (latitude)
+    index, ``pixel_y`` is the column (longitude) index, and ``MESH`` holds
+    values in mm. Indices map to lat/lon via the global ``Latitude``,
+    ``Longitude``, ``LatGridSpacing``, and ``LonGridSpacing`` attributes.
     take the element-wise maximum with the running daily_max array.
 
     Parameters

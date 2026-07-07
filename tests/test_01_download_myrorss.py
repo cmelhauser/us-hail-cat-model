@@ -96,3 +96,57 @@ def test_stage01_manifest_row_counts_source_formats():
     assert row["source_valid_pixels"] == 123
     assert row["active_cells_0p05"] == 45
     assert row["status"] == "ok"
+
+
+def test_stage01_sparse_updates_use_wdss_pixel_axes():
+    """pixel_x = row (lat), pixel_y = col (lon) per WDSS-II SparseLatLonGrid."""
+    import os
+    import tempfile
+
+    import netCDF4 as nc
+
+    s = load_stage("01_download_myrorss.py")
+    from scripts._io import latlon_to_grid
+
+    def native_indices(lat: float, lon: float) -> tuple[int, int]:
+        px = int((s.NATIVE_LAT_ORIGIN - lat) / s.NATIVE_DX)
+        py = int((lon - s.NATIVE_LON_ORIGIN) / s.NATIVE_DX)
+        return px, py
+
+    ok_px, ok_py = native_indices(34.98, -97.48)
+    fl_px, fl_py = native_indices(27.48, -81.48)
+    px = np.array([ok_px, fl_px], dtype=np.int16)
+    py = np.array([ok_py, fl_py], dtype=np.int16)
+    mesh = np.array([40.0, 35.0], dtype=np.float32)
+
+    fd, tmp = tempfile.mkstemp(suffix=".nc")
+    os.close(fd)
+    try:
+        with nc.Dataset(tmp, "w") as ds:
+            ds.createDimension("pixel", len(px))
+            ds.createVariable("pixel_x", "i2", ("pixel",))[:] = px
+            ds.createVariable("pixel_y", "i2", ("pixel",))[:] = py
+            v = ds.createVariable("MESH", "f4", ("pixel",))
+            v[:] = mesh
+            ds.Latitude = 55.005
+            ds.Longitude = -130.005
+            ds.LatGridSpacing = 0.01
+            ds.LonGridSpacing = 0.01
+            ds.MissingData = -99900.0
+
+        with open(tmp, "rb") as f:
+            r, c, v, n = s.sparse_updates_from_netcdf_bytes(f.read())
+    finally:
+        os.unlink(tmp)
+
+    assert n == 2
+    ok_r, ok_c = latlon_to_grid(34.98, -97.48)
+    fl_r, fl_c = latlon_to_grid(27.48, -81.48)
+    conus_ok_r = ok_px - s.CONUS_ROW_START
+    conus_ok_c = ok_py - s.CONUS_COL_START
+    conus_fl_r = fl_px - s.CONUS_ROW_START
+    conus_fl_c = fl_py - s.CONUS_COL_START
+    assert (conus_ok_r, conus_ok_c) in set(zip(r.tolist(), c.tolist()))
+    assert (conus_fl_r, conus_fl_c) in set(zip(r.tolist(), c.tolist()))
+    # Florida cell must land east of 95°W on the 0.01° native grid.
+    assert fl_py > (-95.0 - s.NATIVE_LON_ORIGIN) / s.NATIVE_DX

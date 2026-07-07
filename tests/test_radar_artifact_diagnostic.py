@@ -7,6 +7,7 @@ import pytest
 
 from scripts._config import NROWS, NCOLS
 from scripts.diagnostics.radar_artifact_diagnostic import (
+    _mean_annual_max_from_year_peaks,
     local_median_8,
     plot_range_distance_map,
     range_binned_cell_stats,
@@ -18,6 +19,15 @@ def test_local_median_8_peak_isolated():
     data[2, 2] = 100.0
     med = local_median_8(data)
     assert med[2, 2] < 10.0
+
+
+def test_mean_annual_max_from_year_peaks():
+    a = np.zeros((4, 4), dtype=np.float32)
+    a[1, 1] = 40.0
+    b = np.zeros((4, 4), dtype=np.float32)
+    b[1, 1] = 20.0
+    out = _mean_annual_max_from_year_peaks({2020: a, 2021: b})
+    assert out[1, 1] == 30.0
 
 
 def test_range_binned_cell_stats_bins():
