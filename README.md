@@ -36,7 +36,7 @@ Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**.
 | `DAMAGE_THRESH_MM` | 25.4 mm | Damage onset; occurrence products and Stage 13 severe-cell counts |
 | GridRad calibration | era-pooled QM | MYRORSS 2005–2011 vs GridRad 2012–2019 (median ratio ~1.10) |
 | Range debias | SPC-collocated | Per-era multiplicative factors vs nearest-radar distance (125 km reference) |
-| GridRad artifact filter | 4-pass (speckle + inner-ref radial ring + azimuthal + filament) | GridRad days only, Stage 05; see `methodology.md` §5.5 |
+| GridRad artifact filter | 5-pass (speckle + inner-ref radial ring + azimuthal + filament + 21-day persistence) | GridRad days only, Stage 05; see `methodology.md` §5.5 |
 
 The model produces:
 
@@ -64,7 +64,7 @@ Historical reference only — superseded by **v2.2.2** artifact-filter and debia
 | Stochastic 100-yr CONUS peak | 157.8 mm (6.21 in) |
 | Stochastic 50,000-yr CONUS peak | 300.0 mm (11.81 in) |
 
-Full pipeline validated with `run_pipeline.py --from 05 --skip-ml` and Stage 13 memmap-backed catalog generation. **v2.2.2** is rebuilding Stages 05–07 with four-pass GridRad filtering and inner-range radial ring detection; see `docs/RUN_NOTES.md`.
+Full pipeline validated with `run_pipeline.py --from 05 --skip-ml` and Stage 13 memmap-backed catalog generation. **v2.2.2** is re-ingesting MYRORSS (Stage 01 coordinate fix) and rebuilding Stages 05–07 with five-pass GridRad filtering (including spatiotemporal range-ring persistence); see `docs/RUN_NOTES.md`.
 
 ---
 
@@ -261,7 +261,7 @@ The following limitations should be documented before any underwriting, regulato
 - **Long return periods are extrapolative.** RP > ~500 years exceed the observed record and rely on GPD tail assumptions.
 - **Spatial dependence is simplified.** The stochastic catalog does not model inter-event spatial correlation beyond the historical footprint.
 - **Climate non-stationarity is not modeled.** The model assumes a stationary hail climate over the radar record.
-- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. v2.2.2 adds range-dependent debias and a four-pass GridRad artifact filter (Stage 05), but a broad GridRad–MYRORSS climatological offset can remain in era-comparison diagnostics.
+- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. v2.2.2 adds range-dependent debias and a five-pass GridRad artifact filter (Stage 05), including spatiotemporal range-ring persistence from a 21-day trailing window, but a broad GridRad–MYRORSS climatological offset can remain in era-comparison diagnostics until MYRORSS re-ingest and Stage 05 rebuild complete.
 - **Radar-site artifacts.** GridRad-era data can exhibit NEXRAD range rings and speckle in return-period maps if uncorrected; delete `mesh_0.05deg_corrected/`, rerun Stage 05 with the artifact filter, then `radar_artifact_diagnostic.py` and downstream stages after calibration changes.
 - **SPC validation is incomplete.** Report density is spatially and temporally uneven; rural areas are systematically underrepresented.
 - **Vulnerability and loss modeling are out of scope.** This repository delivers hazard only; MDR curves, exposure, and financial loss are future work (see `docs/methodology.md` §14).

@@ -53,7 +53,7 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 scripts/diagnostics/summarize_mesh_daily_peaks.py  ← optional mesh-era peak CSV/ECDF
 scripts/diagnostics/hail_day_climatology.py      ← per-cell hail-day threshold sensitivity
 scripts/diagnostics/radar_artifact_diagnostic.py ← speckle/range debias QA
-scripts/_radar_geometry.py                       ← NEXRAD sites, debias, four-pass artifact filter
+scripts/_radar_geometry.py                       ← NEXRAD sites, debias, five-pass artifact filter
 scripts/_pipeline_cleanup.py                     ← delete Stage N+ outputs (--clean-from / rerun)
 scripts/rerun_stage05.py                         ← blocking Stage 05 rebuild (wait, clean 05+, run)
 
@@ -152,25 +152,32 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ---
 
-## Pipeline Run Status (as of 2026-07-06)
+## Pipeline Run Status (as of 2026-07-07)
 
-**Stages 05–07 rebuild in progress** with inner-range radial ring pass
-(`logs/pipeline_05_07.run.log`):
+**Stage 01 MYRORSS re-ingest in progress** after sparse-grid coordinate fix
+(`logs/01_myrorss_reingest.run.log`):
+
+```bash
+.venv/bin/python scripts/01_download_myrorss.py --workers 8
+```
+
+After completion:
 
 ```bash
 python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
+python scripts/diagnostics/radar_artifact_diagnostic.py
 ```
 
 | Stage | Status |
 |-------|--------|
-| 05 | ⏳ Rebuilding corrected archive (~110 min) |
+| 01 | ⏳ MYRORSS re-ingest (5,023 days) |
+| 05 | ⏸ Queued — five-pass filter incl. 21-day persistence |
 | 06 | ⏸ Queued — SPC validation pairs + debias refit |
 | 07 | ⏸ Queued — 366-day climatology |
 | 08–14 | ⏸ Cleared — restart after artifact QA |
 
-**2026-07-06 diagnostic (four-pass, neighbor-only radial):** GridRad speckle **1.8%**
-mean (**9.1%** P95), down from **6.1%** three-pass. Residual diff-map rings over
-Oklahoma / NE / Plains motivated inner-range baseline refinement.
+**2026-07-07:** Added spatiotemporal persistence pass 5 and Stage 01 MYRORSS axis fix.
+Prior four-pass diagnostic (2026-07-06): GridRad speckle **1.8%** mean (**9.1%** P95).
 
 ---
 

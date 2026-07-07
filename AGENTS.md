@@ -75,7 +75,7 @@ us-hail-cat-model/
 |   |-- _logging.py             <- shared logger factory
 |   |-- _io.py                  <- write_geotiff, haversine_km, latlon_to_grid
 |   |-- _mapping.py             <- Lambert Conformal maps, admin_0/admin_1 boundaries
-|   |-- _radar_geometry.py      <- NEXRAD sites, range debias, four-pass artifact filter
+|   |-- _radar_geometry.py      <- NEXRAD sites, range debias, five-pass artifact filter
 |   |-- _pipeline_cleanup.py    <- delete Stage N+ outputs (used by rerun / --clean-from)
 |   |-- rerun_stage05.py        <- wait, clean 05+, blocking Stage 05 rebuild
 |   |-- 01_download_myrorss.py
@@ -139,7 +139,7 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --clean-from N     # delete outputs from stage N onward before run (e.g. 05)
 --retrain-models   # retrain optional ML artifacts in Stage 05
 
-# Stage 05 rebuild (four-pass filter) — blocking; do not background from agents
+# Stage 05 rebuild (five-pass filter) — blocking; do not background from agents
 python scripts/rerun_stage05.py
 python run_pipeline.py --only 05 --clean-from 05 --skip-ml --skip-calibration
 
@@ -284,21 +284,27 @@ As of 2026-06-30:
 
 ## Current Run Watch
 
-**Stages 05–07 rebuild (2026-07-06 ~23:24 EDT)** with inner-range radial ring pass
-(1.12× / 1.18× vs ≤75 km baseline). Monitor `logs/pipeline_05_07.run.log`.
+**Stage 01 MYRORSS re-ingest (2026-07-07)** — sparse-grid `pixel_x`/`pixel_y` fix
+(restores eastern CONUS hail). Deleted 5,023 buggy-era TIFFs; running:
+
+```bash
+.venv/bin/python scripts/01_download_myrorss.py --workers 8
+```
+
+Monitor `logs/01_myrorss_reingest.run.log`. After completion:
 
 ```bash
 python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
+python scripts/diagnostics/radar_artifact_diagnostic.py
 ```
 
-After Stage 06: run `radar_artifact_diagnostic.py` to refit `range_debias.npz`, then
-review `map_gridrad_minus_myrorss_mean_annual_max.png` before Stages 08–14.
-
-Prior Stage 05 rebuild (four-pass, neighbor-only radial) finished **2026-07-06 ~19:56 EDT**
-(~110 min; GridRad speckle **1.8%** mean vs **6.1%** three-pass). Residual rings in the
-diff map (NE, Oklahoma, Plains, Montana) motivated the inner-range refinement.
+Stage 05 now applies a **five-pass** GridRad artifact filter (speckle → radial ring →
+azimuthal → filament → **21-day spatiotemporal persistence**). Review
+`map_gridrad_minus_myrorss_mean_annual_max.png` after Stage 06 before Stages 08–14.
 
 Prior production run finished **2026-06-30 ~18:42 EDT** (pre-debias stochastic catalog).
+Prior four-pass Stage 05 rebuild finished **2026-07-06 ~19:56 EDT** (GridRad speckle
+**1.8%** mean); inner-range radial and persistence passes followed.
 
 Optional follow-ups after rerun completes:
 

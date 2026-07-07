@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-06 (`v2.2.2` — inner-range radial ring pass; Stages 05–07 rebuild)**
+**Last updated: 2026-07-07 (`v2.2.2` — MYRORSS re-ingest + five-pass persistence filter)**
 
 ---
 
@@ -20,20 +20,19 @@
 
 ---
 
-## 2. Current State (as of 2026-07-06)
+## 2. Current State (as of 2026-07-07)
 
-**Stages 05–07 rebuild in progress** (`logs/pipeline_05_07.run.log`) with inner-range radial
-ring pass. Prior four-pass Stage 05 completed **2026-07-06 ~19:56 EDT** (GridRad speckle
-**1.8%** mean, **9.1%** P95).
+**Stage 01 MYRORSS re-ingest in progress** (`logs/01_myrorss_reingest.run.log`) after
+sparse-grid `pixel_x`/`pixel_y` fix. Stages 05–07 queued after re-ingest completes.
 
 **Prior v2.2.1 production run (2026-06-30):** full pipeline Stages 01–14 validated with
 `--skip-ml` (pre-debias stochastic catalog superseded after rerun).
 
 | Metric | Value |
 |--------|------:|
-| Convective-day archive | 9,797 (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Corrected MESH75 | rebuilding (2026-07-06); inner-range radial ring + range debias + era-pooled QM |
-| Radar artifact QA | four-pass filter; GridRad speckle 1.8% (2026-07-06 diagnostic); diff-map rings under review |
+| Convective-day archive | 9,797 target (MYRORSS re-ingesting; 2,714 GridRad + 2,060 MRMS on disk) |
+| Corrected MESH75 | queued — five-pass filter + range debias + era-pooled QM |
+| Radar artifact QA | five-pass filter (persistence pass 5, 2026-07-07); prior GridRad speckle 1.8% (2026-07-06) |
 | Historical events | 8,798 at 29 mm (~303 yr⁻¹) — **pending rerun** after Stage 08 |
 | Stochastic catalog | 50,000 yr; 15.17M events — **pending rerun** after Stage 13 |
 
@@ -84,7 +83,7 @@ Any future methodology change must update tests and documentation in the same co
 
 ### Stage 05
 
-Handles source calibration, **range-dependent debias** (`range_debias.npz`), **four-pass GridRad artifact filtering** (speckle, inner-range radial ring, azimuthal, filament), and environmental filtering.
+Handles source calibration, **range-dependent debias** (`range_debias.npz`), **five-pass GridRad artifact filtering** (speckle, inner-range radial ring, azimuthal, filament, spatiotemporal persistence), and environmental filtering.
 
 ### Stage 08
 

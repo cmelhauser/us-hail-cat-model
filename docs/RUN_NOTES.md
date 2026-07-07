@@ -20,26 +20,38 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-07-06 ~23:24 EDT** — **Stages 05–07 rebuild** with inner-range
-radial ring pass (1.12× / 1.18× vs ≤75 km baseline for bins ≥50 km):
+Snapshot taken **2026-07-07 ~16:17 EDT** — **Stage 01 MYRORSS re-ingest** after
+sparse-grid coordinate fix (`pixel_x` = row/lat, `pixel_y` = col/lon per WDSS-II).
+Deleted 5,023 buggy-era TIFFs; re-ingest running with `--workers 8`:
+
+```bash
+.venv/bin/python scripts/01_download_myrorss.py --workers 8
+```
+
+Monitor `logs/01_myrorss_reingest.run.log`.
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 05 | ⏳ In progress | `logs/pipeline_05_07.run.log` |
-| Stage 06 | ⏸ Queued | SPC validation + debias refit inputs |
+| Stage 01 | ⏳ In progress | Full MYRORSS re-ingest (1998–2011); eastern CONUS fix |
+| Stage 05 | ⏸ Queued | Five-pass filter incl. 21-day persistence; after 01 completes |
+| Stage 06 | ⏸ Queued | SPC validation + debias refit |
 | Stage 07 | ⏸ Queued | 366-day climatology |
 | Stages 08–14 | ⏸ Cleared | Restart after artifact QA |
 
+After Stage 01 completes:
+
 ```bash
 python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
+python scripts/diagnostics/radar_artifact_diagnostic.py
 ```
 
-After Stages 05–06: run `radar_artifact_diagnostic.py`; review
-`map_gridrad_minus_myrorss_mean_annual_max.png` before Stages 08–14.
+Review `map_gridrad_minus_myrorss_mean_annual_max.png` before Stages 08–14.
 
-Previous snapshot **2026-07-06 ~19:56 EDT** — four-pass filter (neighbor-only radial);
-GridRad speckle **1.8%** mean (**9.1%** P95) vs **6.1%** (**33%**) three-pass.
-Residual rings in NE / Oklahoma / Plains / Montana motivated inner-range refinement.
+Previous snapshot **2026-07-06 ~23:24 EDT** — inner-range radial ring pass (1.12× /
+1.18× vs ≤75 km baseline); superseded by persistence pass 5 + MYRORSS re-ingest.
+
+Previous snapshot **2026-07-06 ~19:56 EDT** — four-pass filter; GridRad speckle **1.8%**
+mean (**9.1%** P95) vs **6.1%** (**33%**) three-pass.
 
 Previous snapshot **2026-07-05** — three-pass filter (no radial ring); superseded.
 

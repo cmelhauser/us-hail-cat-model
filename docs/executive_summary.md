@@ -43,7 +43,7 @@ The main goal of v2.1 is not to add complexity for its own sake. The goal is to 
 
 ### Bias correction
 
-Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.2+** adds SPC-collocated **range debias** and a **four-pass GridRad artifact filter** (isolated speckle, inner-range radial ring, azimuthal annulus, background filament) to reduce NEXRAD ring artifacts in return-period maps (see `docs/methodology.md` §5.5). GridRad speckle fell from **9.7%** to **1.8%** mean after the four-pass filter (2026-07-06 diagnostic).
+Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.2+** adds SPC-collocated **range debias** and a **five-pass GridRad artifact filter** (isolated speckle, inner-range radial ring, azimuthal annulus, background filament, spatiotemporal persistence) to reduce NEXRAD ring artifacts in return-period maps (see `docs/methodology.md` §5.5). GridRad speckle fell from **9.7%** to **1.8%** mean after the four-pass filter (2026-07-06 diagnostic); persistence pass 5 targets chronic range rings.
 
 ### Environmental filtering
 
