@@ -34,9 +34,10 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts._config import LAT_MAX, LON_MIN, NCOLS, NROWS, DX  # noqa: E402
-from scripts._io import write_geotiff  # noqa: E402
-from scripts._mapping import save_conus_raster_map  # noqa: E402
+from scripts._config import LAT_MAX, LON_MIN, NCOLS, NROWS, DX
+from scripts._io import write_geotiff
+from scripts._mapping import save_conus_raster_map
+from scripts.diagnostics._diagnostic_io import exit_if_missing, require_mesh_tifs
 
 CORRECTED_DIR = REPO / "data" / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR = REPO / "data" / "analysis" / "hail_day_climatology"
@@ -316,7 +317,7 @@ def main() -> None:
     d_max = datetime.strptime(args.max_date, "%Y-%m-%d").date() if args.max_date else None
 
     if not args.mesh_dir.is_dir():
-        raise SystemExit(f"Mesh directory not found: {args.mesh_dir}")
+        exit_if_missing(False, "hail_day_climatology", f"mesh directory not found: {args.mesh_dir}")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -325,7 +326,7 @@ def main() -> None:
         args.mesh_dir, specs, d_min, d_max
     )
     if n_files == 0:
-        raise SystemExit(f"No mesh TIFFs under {args.mesh_dir}")
+        exit_if_missing(False, "hail_day_climatology", f"no mesh TIFFs under {args.mesh_dir}")
 
     n_years = len(years)
     print(f"  {n_files:,} rasters over {n_years} years ({years[0]}–{years[-1]})")

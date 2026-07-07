@@ -96,9 +96,11 @@ us-hail-cat-model/
 |   |-- 13_generate_stochastic_catalog.py
 |   |-- 14_render_figures.py
 |   `-- diagnostics/
+|       |-- _diagnostic_io.py            <- shared warn-and-skip data availability helpers
 |       |-- summarize_mesh_daily_peaks.py  <- mesh archive peak CSV/ECDF (optional)
 |       |-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
-|       `-- radar_artifact_diagnostic.py   <- speckle/range debias QA (optional)
+|       |-- radar_artifact_diagnostic.py   <- speckle/range debias QA (optional)
+|       |-- literature_validation_suite.py <- literature benchmarks across stages (optional)
 |-- tests/                      <- unit and synthetic integration tests
 |-- docs/                       <- full documentation
 |-- data/                       <- gitignored generated data

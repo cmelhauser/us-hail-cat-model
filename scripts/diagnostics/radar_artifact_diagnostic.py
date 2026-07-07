@@ -33,14 +33,14 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts._config import NCOLS, NROWS  # noqa: E402
-from scripts._io import write_geotiff  # noqa: E402
-from scripts._mapping import (  # noqa: E402
+from scripts._config import NCOLS, NROWS
+from scripts._io import write_geotiff
+from scripts._mapping import (
     create_conus_axes,
     plot_raster_on_axis,
     save_conus_raster_map,
 )
-from scripts._radar_geometry import (  # noqa: E402
+from scripts._radar_geometry import (
     CALIB_DIR,
     DEFAULT_RANGE_BIN_EDGES_KM,
     MM_PER_INCH,
@@ -52,6 +52,7 @@ from scripts._radar_geometry import (  # noqa: E402
     save_range_debias,
     write_nexrad_sites_csv,
 )
+from scripts.diagnostics._diagnostic_io import exit_if_missing, require_mesh_tifs
 
 CORRECTED_DIR = REPO / "data" / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR = REPO / "data" / "analysis" / "radar_artifacts"
@@ -373,10 +374,13 @@ def main() -> None:
     print(f"  mesh_dir: {args.mesh_dir}")
     print(f"  out_dir:  {out_dir}")
 
+    if not require_mesh_tifs(args.mesh_dir, "radar_artifact_diagnostic"):
+        sys.exit(0)
+
     write_nexrad_sites_csv(out_dir / "nexrad_sites_conus.csv")
     stats = accumulate_era_stats(args.mesh_dir, d_min, d_max, every_n=args.every_n_days)
     if stats is None:
-        raise SystemExit(f"No mesh TIFFs under {args.mesh_dir}")
+        exit_if_missing(False, "radar_artifact_diagnostic", f"no mesh TIFFs under {args.mesh_dir}")
 
     range_km = stats["range_km"]
     edges = stats["edges"]

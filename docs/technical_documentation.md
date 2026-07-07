@@ -581,6 +581,33 @@ Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the c
 ≥50 km; 1.12× / 1.18×). Stages 05–07 rebuild in progress (`logs/pipeline_05_07.run.log`).
 Run diagnostic after Stage 05/06 before downstream stages.
 
+### 12.7 Literature validation suite
+
+**Script:** `scripts/diagnostics/literature_validation_suite.py` (optional)  
+**Output:** `data/analysis/literature_validation/` (`validation_summary.json`, per-check CSVs, `README.md`)
+
+Aggregates fifteen literature-motivated checks beyond per-stage `validate_outputs()`. Each check returns `pass`, `warn`, `fail`, or `skip` when inputs are absent (stdout: `WARNING: SKIP …`). Shared helpers: `scripts/diagnostics/_diagnostic_io.py`.
+
+| Check | Inputs (stages) | Literature |
+|-------|-----------------|------------|
+| Source-transition daily peaks | `mesh_daily_peaks.csv` or corrected TIFFs (05) | Murillo et al. (2021) |
+| SPC detection + report rounding | `mesh_vs_spc_pairs.csv` (06) | Blair et al. (2017) |
+| Radar vs SPC seasonality | peaks + pairs (05–06) | Allen & Tippett (2015) |
+| SPC rural–urban reporting bias | pairs + metro-distance proxy (06) | Allen & Tippett (2015) |
+| Mann–Kendall on CONUS annual max | peaks (05) | Stationarity disclosure |
+| Poisson dispersion of event counts | `event_catalog.csv` (08) | Stochastic catalog literature |
+| Negative-binomial vs Poisson | `event_catalog.csv` (08) | Cameron & Trivedi (1998); literature_review §9 |
+| GPD threshold rollup | `threshold_selection.csv` (09) | Coles (2001) |
+| Pilot bootstrap CI on 100-yr RP | `cdf_parameters.npz` (09) | Coles (2001) |
+| Analytical RP monotonicity | `rp_*yr_hail_smooth.tif` (09–10) | EVT return levels |
+| Analytical vs stochastic RP | analytical + `rp_*yr_stochastic.tif` (09–13) | Tail misspecification diagnostic |
+| Pilot tail dependence / extremogram | corrected/raw mesh TIFFs (05) | Schlather (2002); Davis & Mikosch (2009) |
+| GridRad upstream ingest QA | `manifest_stage04c_gridrad.csv` (04c) | Murillo et al. (2021) |
+| Hail-day literature benchmarks | `hail_day_climatology/` (05) | Cintineo (2012); Murillo (2021) |
+| ML hail-filter reliability | `hail_filter_model.pkl` + diagnostics (05) | Gneiting et al. (2005); Murphy (1973) |
+
+Run after relevant stages exist; re-run before publication QA. Use `--only check1,check2` for partial runs.
+
 ---
 
 ## 13. Stage 09 - Regional CDF Fitting

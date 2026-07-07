@@ -279,6 +279,7 @@ Current repository state:
 - Regenerate mesh-era diagnostic if ingest changes: `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 - Regenerate hail-day climatology after Stage 05: `scripts/diagnostics/hail_day_climatology.py`.
 - Regenerate radar artifact diagnostic after Stage 05/06: `scripts/diagnostics/radar_artifact_diagnostic.py`.
+- Run literature validation suite after Stages 05–13: `scripts/diagnostics/literature_validation_suite.py` (15 checks; missing inputs warn-and-skip via `_diagnostic_io.py`).
 
 **Stage 04a CDS access note:** Stage 04a needs more than a valid
 `~/.cdsapirc`. The Copernicus account used for the token must also accept the

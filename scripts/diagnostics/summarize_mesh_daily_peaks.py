@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from datetime import date, datetime
 from pathlib import Path
 
@@ -22,6 +23,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rasterio
+
+from scripts.diagnostics._diagnostic_io import require_mesh_tifs
 
 REPO = Path(__file__).resolve().parents[2]
 MESH_DIR = REPO / "data" / "historical" / "mesh_0.05deg"
@@ -381,6 +384,9 @@ def main() -> None:
     d_min = datetime.strptime(args.min_date, "%Y-%m-%d").date() if args.min_date else None
     d_max = datetime.strptime(args.max_date, "%Y-%m-%d").date() if args.max_date else None
     hail_only = not args.all_days
+
+    if not require_mesh_tifs(args.mesh_dir, "summarize_mesh_daily_peaks"):
+        sys.exit(0)
 
     df = scan_mesh_peaks(args.mesh_dir, d_min=d_min, d_max=d_max, prefer_tags=True)
     if df.empty:

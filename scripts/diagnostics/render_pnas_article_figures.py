@@ -28,8 +28,9 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts._config import MODEL_VERSION  # noqa: E402
-from scripts._mapping import save_conus_raster_map  # noqa: E402
+from scripts._config import MODEL_VERSION
+from scripts._mapping import save_conus_raster_map
+from scripts.diagnostics._diagnostic_io import warn_skip
 
 MESH_DIR = REPO / "data" / "historical" / "mesh_0.05deg"
 CORRECTED_DIR = REPO / "data" / "historical" / "mesh_0.05deg_corrected"
@@ -75,6 +76,18 @@ def setup_plt():
     })
 
 
+def run_figure(step: str, fn, *args, default=None, **kwargs):
+    """Run one figure step; warn and skip when inputs are missing."""
+    try:
+        return fn(*args, **kwargs)
+    except FileNotFoundError as exc:
+        warn_skip(step, str(exc))
+        return default
+    except OSError as exc:
+        warn_skip(step, str(exc))
+        return default
+
+
 def classify_source(day: date) -> str:
     if day >= MRMS_START:
         return "MRMS"
@@ -115,9 +128,13 @@ def fig_data_source_timeline(out: Path) -> None:
     plt.close(fig)
 
 
-def fig_manifest_coverage(manifests: dict[str, pd.DataFrame], out: Path) -> pd.DataFrame:
+def fig_manifest_coverage(manifests: dict[str, Path], out: Path) -> pd.DataFrame:
     """Figure 2: stacked manifest status by year."""
-    frames = [load_manifest(p, s) for s, p in manifests.items()]
+    available = {s: p for s, p in manifests.items() if p.is_file()}
+    if not available:
+        warn_skip("fig02_manifest_coverage", "no manifest CSVs found")
+        return pd.DataFrame()
+    frames = [load_manifest(p, s) for s, p in available.items()]
     all_df = pd.concat(frames, ignore_index=True)
     pivot = (
         all_df.groupby(["year", "status"])
@@ -145,6 +162,9 @@ def fig_manifest_coverage(manifests: dict[str, pd.DataFrame], out: Path) -> pd.D
 
 def fig_source_transition_peaks(out: Path) -> dict:
     """Figure 3: daily peak distributions at source splice windows (literature transition QA)."""
+    if not PEAKS_CSV.is_file():
+        warn_skip("fig03_source_transition", f"required file not found: {PEAKS_CSV}")
+        return {}
     df = pd.read_csv(PEAKS_CSV, parse_dates=["date"])
     df["source"] = df["date"].apply(lambda d: classify_source(d.date()))
     df["year"] = df["date"].dt.year
@@ -189,6 +209,7 @@ def fig_source_transition_peaks(out: Path) -> dict:
 def fig_calibration_ecdf(out: Path) -> dict:
     """Figure 4: raw vs era-pooled calibrated daily peaks by source."""
     if not CAL_PEAKS_CSV.exists():
+        warn_skip("fig04_calibration_ecdf", f"required file not found: {CAL_PEAKS_CSV}")
         return {}
     df = pd.read_csv(CAL_PEAKS_CSV)
     fig, ax = plt.subplots(figsize=(7, 4.5))
@@ -225,7 +246,11 @@ def fig_seasonal_thresholds(out: Path) -> None:
         import shutil
         shutil.copy2(src, out)
         return
-    monthly = pd.read_csv(HAIL_CLIM_DIR / "monthly_national_hail_days.csv")
+    monthly_path = HAIL_CLIM_DIR / "monthly_national_hail_days.csv"
+    if not monthly_path.is_file():
+        warn_skip("fig05_seasonal_thresholds", f"required file not found: {monthly_path}")
+        return
+    monthly = pd.read_csv(monthly_path)
     fig, ax = plt.subplots(figsize=(9, 4))
     months = list(range(1, 13))
     labels = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"]
@@ -251,6 +276,9 @@ def fig_hail_days_map(out: Path) -> None:
         shutil.copy2(src, out)
         return
     tif = HAIL_CLIM_DIR / "hail_days_per_year_skill_29mm.tif"
+    if not tif.is_file():
+        warn_skip("fig06_hail_days_map", f"required file not found: {tif}")
+        return
     with rasterio.open(tif) as src_r:
         data = src_r.read(1).astype(np.float32)
     vmax = min(15.0, float(np.percentile(data[data > 0], 99)) if np.any(data > 0) else 5)
@@ -267,7 +295,11 @@ def fig_hail_days_map(out: Path) -> None:
 
 def fig_validation_by_bin(out: Path) -> dict:
     """Figure 7: SPC validation bias and POD by report-size bin."""
-    cal = pd.read_csv(VALID_DIR / "calibration_report.csv")
+    cal_path = VALID_DIR / "calibration_report.csv"
+    if not cal_path.is_file():
+        warn_skip("fig07_validation_by_bin", f"required file not found: {cal_path}")
+        return {}
+    cal = pd.read_csv(cal_path)
     cal = cal[cal["n"] > 0]
     fig, ax1 = plt.subplots(figsize=(7, 4))
     x = np.arange(len(cal))
@@ -313,6 +345,9 @@ def fig_rp_maps(out_100: Path, out_1000: Path) -> dict:
 
 def fig_event_dispersion(out: Path) -> dict:
     """Figure 10: annual event counts and index of dispersion (literature Poisson benchmark)."""
+    if not EVENT_CSV.is_file():
+        warn_skip("fig10_event_dispersion", f"required file not found: {EVENT_CSV}")
+        return {}
     ec = pd.read_csv(EVENT_CSV, parse_dates=["start_date"])
     annual = ec.groupby(ec["start_date"].dt.year).size()
     fig, ax = plt.subplots(figsize=(9, 3.8))
@@ -364,34 +399,40 @@ def fig_ai_workflow(out: Path) -> None:
 
 def collect_metrics(manifest_pivot: pd.DataFrame, extra: dict) -> dict:
     """Assemble JSON metrics for manuscript insertion."""
-    m01 = load_manifest(MANIFESTS["MYRORSS"], "MYRORSS")
-    m04 = load_manifest(MANIFESTS["GridRad"], "GridRad")
-    m02 = load_manifest(MANIFESTS["MRMS"], "MRMS")
-    thresh = pd.read_csv(HAIL_CLIM_DIR / "threshold_benchmark_summary.csv")
-    t29 = thresh[thresh["threshold_key"] == "skill_29mm"].iloc[0]
-    nat = pd.read_csv(HAIL_CLIM_DIR / "national_annual_hail_days.csv")
-
-    n_tifs = sum(1 for _ in CORRECTED_DIR.rglob("mesh_????????.tif"))
-    return {
+    metrics: dict = {
         "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
         "model_version": MODEL_VERSION,
-        "total_daily_rasters": n_tifs,
-        "myrorss_days": int(len(m01)),
-        "gridrad_days": int(len(m04)),
-        "mrms_days": int(len(m02)),
-        "manifest_status": {
-            "myrorss": m01["status"].value_counts().to_dict(),
-            "gridrad": m04["status"].value_counts().to_dict(),
-            "mrms": m02["status"].value_counts().to_dict(),
-        },
-        "gridrad_missing_source": int((m04["status"] == "missing_source").sum()),
-        "hail_day_climatology_29mm": {
-            "gp_max_days_per_year": float(t29["gp_max_days_per_year"]),
-            "gp_mean_days_per_year": float(t29["gp_mean_days_per_year"]),
-            "national_any_cell_days_per_year": round(float(nat["skill_29mm"].mean()), 1),
-        },
         **extra,
     }
+    if CORRECTED_DIR.is_dir():
+        metrics["total_daily_rasters"] = sum(1 for _ in CORRECTED_DIR.rglob("mesh_????????.tif"))
+    for key, path in MANIFESTS.items():
+        if not path.is_file():
+            warn_skip(f"metrics_manifest_{key}", f"required file not found: {path}")
+            continue
+        m = load_manifest(path, key)
+        metrics[f"{key.lower()}_days"] = int(len(m))
+        if "manifest_status" not in metrics:
+            metrics["manifest_status"] = {}
+        metrics["manifest_status"][key.lower()] = m["status"].value_counts().to_dict()
+        if key == "GridRad":
+            metrics["gridrad_missing_source"] = int((m["status"] == "missing_source").sum())
+    bench_path = HAIL_CLIM_DIR / "threshold_benchmark_summary.csv"
+    nat_path = HAIL_CLIM_DIR / "national_annual_hail_days.csv"
+    if bench_path.is_file() and nat_path.is_file():
+        thresh = pd.read_csv(bench_path)
+        t29 = thresh[thresh["threshold_key"] == "skill_29mm"]
+        if not t29.empty:
+            nat = pd.read_csv(nat_path)
+            row = t29.iloc[0]
+            metrics["hail_day_climatology_29mm"] = {
+                "gp_max_days_per_year": float(row["gp_max_days_per_year"]),
+                "gp_mean_days_per_year": float(row["gp_mean_days_per_year"]),
+                "national_any_cell_days_per_year": round(float(nat["skill_29mm"].mean()), 1),
+            }
+    else:
+        warn_skip("metrics_hail_day_climatology", "hail_day_climatology outputs missing")
+    return metrics
 
 
 def main() -> None:
@@ -400,19 +441,48 @@ def main() -> None:
     t0 = time.time()
     print("Rendering PNAS article figures →", OUT_FIG)
 
-    manifest_pivot = fig_manifest_coverage(MANIFESTS, OUT_FIG / "fig02_manifest_coverage_by_year.png")
-    fig_data_source_timeline(OUT_FIG / "fig01_data_source_timeline.png")
-    transition = fig_source_transition_peaks(OUT_FIG / "fig03_source_transition_daily_peaks.png")
-    calibration = fig_calibration_ecdf(OUT_FIG / "fig04_calibration_ecdf_by_source.png")
-    fig_seasonal_thresholds(OUT_FIG / "fig05_seasonal_national_hail_days.png")
-    fig_hail_days_map(OUT_FIG / "fig06_hail_days_per_year_29mm.png")
-    validation = fig_validation_by_bin(OUT_FIG / "fig07_validation_by_size_bin.png")
-    rp_stats = fig_rp_maps(
+    manifest_pivot = run_figure(
+        "fig02_manifest_coverage",
+        fig_manifest_coverage,
+        MANIFESTS,
+        OUT_FIG / "fig02_manifest_coverage_by_year.png",
+        default=pd.DataFrame(),
+    )
+    run_figure("fig01_data_source_timeline", fig_data_source_timeline, OUT_FIG / "fig01_data_source_timeline.png")
+    transition = run_figure(
+        "fig03_source_transition",
+        fig_source_transition_peaks,
+        OUT_FIG / "fig03_source_transition_daily_peaks.png",
+        default={},
+    )
+    calibration = run_figure(
+        "fig04_calibration_ecdf",
+        fig_calibration_ecdf,
+        OUT_FIG / "fig04_calibration_ecdf_by_source.png",
+        default={},
+    )
+    run_figure("fig05_seasonal_thresholds", fig_seasonal_thresholds, OUT_FIG / "fig05_seasonal_national_hail_days.png")
+    run_figure("fig06_hail_days_map", fig_hail_days_map, OUT_FIG / "fig06_hail_days_per_year_29mm.png")
+    validation = run_figure(
+        "fig07_validation_by_bin",
+        fig_validation_by_bin,
+        OUT_FIG / "fig07_validation_by_size_bin.png",
+        default={},
+    )
+    rp_stats = run_figure(
+        "fig08_09_rp_maps",
+        fig_rp_maps,
         OUT_FIG / "fig08_rp_100yr_analytical.png",
         OUT_FIG / "fig09_rp_1000yr_analytical.png",
+        default={},
     )
-    events = fig_event_dispersion(OUT_FIG / "fig10_annual_event_counts.png")
-    fig_ai_workflow(OUT_FIG / "fig11_ai_development_workflow.png")
+    events = run_figure(
+        "fig10_event_dispersion",
+        fig_event_dispersion,
+        OUT_FIG / "fig10_annual_event_counts.png",
+        default={},
+    )
+    run_figure("fig11_ai_workflow", fig_ai_workflow, OUT_FIG / "fig11_ai_development_workflow.png")
 
     # Copy existing stage-06 scatter if present
     scatter_src = REPO / "docs" / "figures" / "analysis" / "mesh_vs_spc_scatter.png"

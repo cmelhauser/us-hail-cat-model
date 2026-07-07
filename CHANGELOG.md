@@ -11,6 +11,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`scripts/diagnostics/_diagnostic_io.py`:** shared `warn_skip`, `require_path`, `require_mesh_tifs`, and `count_mesh_tifs` helpers; all diagnostic scripts warn-and-skip when inputs are absent.
+- **`scripts/diagnostics/literature_validation_suite.py`:** fifteen literature-aligned checks (SPC rural–urban bias, GridRad manifest QC, negative-binomial dispersion, bootstrap RP CI pilot, tail-dependence pilot, ML filter Brier) with citations in-script and in `docs/methodology.md` §6.1 / `docs/technical_documentation.md` §12.7.
+- **`tests/test_diagnostic_io.py`:** data-availability helper tests; extended `tests/test_literature_validation_suite.py`.
+
+### Added
+
 - **`scripts/_mapping.py`:** shared Lambert Conformal CONUS map helpers (central lon
   −96°, lat 39°, standard parallels 33°/45°); Natural Earth **admin_0** country
   outlines and **admin_1** US state lines. Stage 14 and diagnostic map PNGs

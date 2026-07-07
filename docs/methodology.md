@@ -410,6 +410,12 @@ Core diagnostics include:
 
 Validation outputs should be interpreted alongside the literature on report bias and radar retrieval error. A perfect match to reports would be suspicious because reports are not spatially complete. Conversely, broad mismatch, severe regional drift, or systematic source-era differences indicate a calibration issue.
 
+Allen & Tippett (2015) document rural under-reporting relative to urban areas. The literature validation suite (`scripts/diagnostics/literature_validation_suite.py`, check `spc_rural_urban_bias`) compares severe-report POD (MESH ≥ 25.4 mm) for SPC pairs within vs beyond 75 km of major metro centroids — a coarse proxy, not a substitute for population-density covariates.
+
+### 6.1 Literature validation suite (optional)
+
+After Stages 05–13, run `scripts/diagnostics/literature_validation_suite.py` to aggregate fifteen cross-stage checks motivated by `docs/literature_review.md`: source-transition peaks, SPC detection and rural–urban bias, radar–SPC seasonality, Mann–Kendall stationarity, Poisson and negative-binomial event dispersion, GPD threshold rollup, pilot bootstrap CIs on 100-yr return levels, RP monotonicity, analytical vs stochastic RP maps, pilot spatial tail-dependence on pooled annual maxima, GridRad Stage 04c manifest QA, Murillo/Cintineo hail-day benchmarks, and optional ML filter Brier scores. All diagnostic scripts use `scripts/diagnostics/_diagnostic_io.py` to **warn and skip** when inputs are missing rather than aborting the pipeline QA workflow.
+
 ---
 
 ## 7. Daily and Annual Climatology
