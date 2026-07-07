@@ -28,8 +28,8 @@ Internal Phases (run automatically in order)
   Optional range-dependent debias (when ``data/analysis/calibration/range_debias.npz``
   exists from ``scripts/diagnostics/radar_artifact_diagnostic.py``).
   GridRad days also pass through a radar artifact filter (isolated speckle, radial
-  range rings, azimuthal spokes, quiet-background filaments; disable with
-  ``--no-speckle-filter``).
+  range rings, azimuthal spokes, quiet-background filaments, and site-specific
+  remediation on nine QA-flagged WSR-88D domains; disable with ``--no-speckle-filter``).
   Output to: data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif
 
 MESH75 Recalibration (Witt-algorithm sources)
@@ -576,7 +576,7 @@ def main():
     parser.add_argument("--no-range-debias", action="store_true",
                         help="Disable range-dependent debias even if range_debias.npz exists")
     parser.add_argument("--no-speckle-filter", action="store_true",
-                        help="Disable GridRad artifact filter (four-pass: speckle, radial ring, azimuthal, filament)")
+                        help="Disable GridRad artifact filter (five-pass: speckle, radial ring, azimuthal, filament, site remediation)")
     args = parser.parse_args()
 
     if args.validate:
@@ -622,7 +622,7 @@ def _run_stage05_body(args) -> None:
     if args.no_speckle_filter:
         log("  GridRad artifact filter: OFF")
     else:
-        log("  GridRad artifact filter: ON (isolated + radial ring + azimuthal + filament)")
+        log("  GridRad artifact filter: ON (isolated + radial ring + azimuthal + filament + site remediation)")
     init_artifact_grids(speckle_filter=not args.no_speckle_filter)
 
     log("\n[Phase B] Applying corrections to all rasters")

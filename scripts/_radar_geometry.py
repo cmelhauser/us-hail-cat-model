@@ -495,6 +495,31 @@ FILAMENT_BG_SIZE = 21  # ~1° at 0.05° grid — wider than typical ring width
 FILAMENT_MARGIN_MM = 20.0
 FILAMENT_QUIET_BG_MM = 15.0
 
+# Site-specific remediation (visual QA on GridRad−MYRORSS diff map, 2026-07-07).
+# Murillo et al. (2021) manually excluded failed radar volumes; Cintineo et al. (2012)
+# cropped radial fragments by hand. These nine sites retained spoke/ring streaks after the
+# global four-pass filter; Stage 05 applies a fifth pass with stricter thresholds and a
+# polar (range × azimuth) spoke test only under their nearest-radar domains.
+SITE_REMEDIATION_IDS: tuple[str, ...] = (
+    "KLRX",  # northern Nevada (Elko)
+    "KEMX",  # southern Arizona (Tucson)
+    "KBLX",  # south-central Montana (Billings)
+    "KGRR",  # west-central Michigan (Grand Rapids)
+    "KGWX",  # northwest Alabama (Columbus AFB / west AL)
+    "KTLX",  # east-central Oklahoma (Oklahoma City)
+    "KILN",  # southwest Ohio (Wilmington)
+    "KHPX",  # southwest Kentucky (Fort Campbell)
+    "KDOX",  # central Delaware (Dover)
+)
+SITE_SPECKLE_THRESH = 2.0
+SITE_AZIMUTH_ANNULUS_FACTOR = 1.6
+SITE_RADIAL_RING_FACTOR = 1.05
+SITE_RADIAL_RING_FAR_FACTOR = 1.10
+SITE_FILAMENT_MARGIN_MM = 12.0
+SITE_SPOKE_AZIMUTH_BIN_DEG = 15.0
+SITE_SPOKE_FACTOR = 1.5
+SITE_SPOKE_MIN_CELLS = 4
+
 
 def remove_radial_range_rings(
     data: np.ndarray,
@@ -657,19 +682,170 @@ def remove_background_filament_artifacts(
     return out, n
 
 
+def site_remediation_indices(site_ids: tuple[str, ...] | None = None) -> np.ndarray:
+    """Integer site indices for ``SITE_REMEDIATION_IDS`` (or override list)."""
+    _, _, all_ids = nexrad_sites_conus()
+    id_to_idx = {sid: i for i, sid in enumerate(all_ids)}
+    want = site_ids if site_ids is not None else SITE_REMEDIATION_IDS
+    return np.array([id_to_idx[s] for s in want if s in id_to_idx], dtype=np.int16)
+
+
+def remediation_site_mask(site_idx_grid: np.ndarray, site_ids: tuple[str, ...] | None = None) -> np.ndarray:
+    """True where the nearest WSR-88D is in the remediation list."""
+    return np.isin(site_idx_grid, site_remediation_indices(site_ids))
+
+
+def _restrict_removals_to_sites(
+    before: np.ndarray,
+    after: np.ndarray,
+    site_mask: np.ndarray,
+) -> tuple[np.ndarray, int]:
+    """Apply zeros from ``after`` only on cells flagged by ``site_mask``."""
+    out = before.astype(np.float32, copy=True)
+    removed = site_mask & (before != after)
+    n = int(removed.sum())
+    if n:
+        out[removed] = 0.0
+    return out, n
+
+
+def cell_azimuth_deg_from_site(
+    site_lat: float,
+    site_lon: float,
+    cell_lat: np.ndarray,
+    cell_lon: np.ndarray,
+) -> np.ndarray:
+    """Azimuth (degrees, 0–360) from radar site to each cell."""
+    dlon = np.radians(cell_lon - site_lon)
+    dlat = np.radians(cell_lat - site_lat)
+    return np.degrees(np.arctan2(dlon * np.cos(np.radians(site_lat)), dlat)) % 360.0
+
+
+def remove_site_polar_spokes(
+    data: np.ndarray,
+    site_idx_grid: np.ndarray,
+    range_km_grid: np.ndarray,
+    *,
+    site_ids: tuple[str, ...] | None = None,
+    azimuth_bin_deg: float = SITE_SPOKE_AZIMUTH_BIN_DEG,
+    edges: np.ndarray | None = None,
+    active_mm: float = SPECKLE_ACTIVE_MM,
+    spoke_factor: float = SITE_SPOKE_FACTOR,
+    min_cells: int = SITE_SPOKE_MIN_CELLS,
+) -> tuple[np.ndarray, int]:
+    """
+    Polar spoke filter for flagged sites: per (site, range bin, azimuth sector),
+    zero active cells above ``spoke_factor`` × sector median.
+
+    WSR-88D clutter algorithms apply median filters in range and azimuth after
+    identifying anomalous gates; this is the Cartesian-grid analogue for residual
+    radial streaks that survive the global azimuthal annulus pass.
+    """
+    edges = np.asarray(edges if edges is not None else RADIAL_RING_BIN_EDGES_KM, dtype=np.float32)
+    _, _, all_ids = nexrad_sites_conus()
+    nrows, ncols = data.shape
+    lats = LAT_MAX - (np.arange(nrows, dtype=np.float64) + 0.5) * DX
+    lons = LON_MIN + (np.arange(ncols, dtype=np.float64) + 0.5) * DX
+    lat_grid = np.broadcast_to(lats[:, None], (nrows, ncols))
+    lon_grid = np.broadcast_to(lons[None, :], (nrows, ncols))
+    out = data.astype(np.float32, copy=True)
+    active = out >= active_mm
+    if not np.any(active):
+        return out, 0
+    range_bin = _bin_index(range_km_grid, edges)
+    n_az_bins = int(np.ceil(360.0 / azimuth_bin_deg))
+    remove = np.zeros(data.shape, dtype=bool)
+    remediation = site_remediation_indices(site_ids)
+    for si in remediation:
+        site_mask = site_idx_grid == si
+        if not site_mask.any():
+            continue
+        sid = all_ids[int(si)]
+        site_lat, site_lon = _NEXRAD_CONUS[sid]
+        az = cell_azimuth_deg_from_site(site_lat, site_lon, lat_grid, lon_grid)
+        az_bin = np.clip((az / azimuth_bin_deg).astype(np.int16), 0, n_az_bins - 1)
+        n_bins = len(edges) - 1
+        for bi in range(n_bins):
+            for ai in range(n_az_bins):
+                mask = active & site_mask & (range_bin == bi) & (az_bin == ai)
+                n = int(mask.sum())
+                if n < min_cells:
+                    continue
+                med = float(np.median(out[mask]))
+                thresh = spoke_factor * max(med, 1.0)
+                remove |= mask & (out > thresh)
+    n_removed = int(remove.sum())
+    if n_removed:
+        out[remove] = 0.0
+    return out, n_removed
+
+
+def remove_flagged_site_artifacts(
+    data: np.ndarray,
+    site_idx_grid: np.ndarray,
+    range_km_grid: np.ndarray,
+    *,
+    site_ids: tuple[str, ...] | None = None,
+) -> tuple[np.ndarray, dict[str, int]]:
+    """
+    Fifth pass: stricter artifact removal under nine QA-flagged WSR-88D domains.
+
+    Re-runs speckle, radial-ring, azimuthal, and filament tests with tighter
+    thresholds, then applies a polar spoke filter. Only cells whose nearest radar
+    is in ``SITE_REMEDIATION_IDS`` are modified.
+    """
+    site_mask = remediation_site_mask(site_idx_grid, site_ids)
+    if not site_mask.any():
+        return data.astype(np.float32, copy=True), {}
+    out = data.astype(np.float32, copy=True)
+    counts: dict[str, int] = {}
+
+    tmp, _ = remove_speckle_spikes(out, speckle_thresh=SITE_SPECKLE_THRESH)
+    out, counts["site_isolated"] = _restrict_removals_to_sites(out, tmp, site_mask)
+
+    tmp, _ = remove_radial_range_rings(
+        out,
+        site_idx_grid,
+        range_km_grid,
+        ring_factor=SITE_RADIAL_RING_FACTOR,
+        far_ring_factor=SITE_RADIAL_RING_FAR_FACTOR,
+    )
+    out, counts["site_radial_ring"] = _restrict_removals_to_sites(out, tmp, site_mask)
+
+    tmp, _ = remove_azimuthal_ring_artifacts(
+        out, site_idx_grid, range_km_grid, annulus_factor=SITE_AZIMUTH_ANNULUS_FACTOR,
+    )
+    out, counts["site_azimuthal"] = _restrict_removals_to_sites(out, tmp, site_mask)
+
+    tmp, _ = remove_background_filament_artifacts(out, margin_mm=SITE_FILAMENT_MARGIN_MM)
+    out, counts["site_filament"] = _restrict_removals_to_sites(out, tmp, site_mask)
+
+    out, n_spoke = remove_site_polar_spokes(
+        out, site_idx_grid, range_km_grid, site_ids=site_ids,
+    )
+    counts["site_polar_spoke"] = n_spoke
+    return out, counts
+
+
 def remove_gridrad_artifacts(
     data: np.ndarray,
     range_km_grid: np.ndarray,
     site_idx_grid: np.ndarray,
+    *,
+    site_remediation: bool = True,
 ) -> tuple[np.ndarray, dict[str, int]]:
-    """Full GridRad artifact pass: speckle, radial rings, azimuthal spokes, filaments."""
+    """Full GridRad artifact pass: global four passes + optional site remediation."""
     out, n_iso = remove_speckle_spikes(data)
     out, n_rad = remove_radial_range_rings(out, site_idx_grid, range_km_grid)
     out, n_az = remove_azimuthal_ring_artifacts(out, site_idx_grid, range_km_grid)
     out, n_fil = remove_background_filament_artifacts(out)
-    return out, {
+    counts = {
         "isolated": n_iso,
         "radial_ring": n_rad,
         "azimuthal": n_az,
         "filament": n_fil,
     }
+    if site_remediation:
+        out, site_counts = remove_flagged_site_artifacts(out, site_idx_grid, range_km_grid)
+        counts.update(site_counts)
+    return out, counts

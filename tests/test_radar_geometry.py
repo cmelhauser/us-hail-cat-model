@@ -14,12 +14,16 @@ from scripts._radar_geometry import (
     load_range_debias,
     nearest_radar_distance_km,
     nexrad_sites_conus,
+    remediation_site_mask,
     remove_azimuthal_ring_artifacts,
     remove_background_filament_artifacts,
+    remove_flagged_site_artifacts,
     remove_gridrad_artifacts,
     remove_radial_range_rings,
+    remove_site_polar_spokes,
     remove_speckle_spikes,
     save_range_debias,
+    SITE_REMEDIATION_IDS,
 )
 
 
@@ -157,7 +161,43 @@ def test_remove_gridrad_artifacts_chain():
     data[2, 2] = 50.0
     data[5, 5] = 50.0
     data[5, 4:7] = 10.0
-    out, counts = remove_gridrad_artifacts(data, range_km, site_idx)
+    out, counts = remove_gridrad_artifacts(data, range_km, site_idx, site_remediation=False)
     assert counts["isolated"] >= 1
     assert "radial_ring" in counts
     assert out[2, 2] == 0.0
+
+
+def test_site_remediation_ids_count():
+    assert len(SITE_REMEDIATION_IDS) == 9
+    assert "KTLX" in SITE_REMEDIATION_IDS
+    assert "KDOX" in SITE_REMEDIATION_IDS
+
+
+def test_remove_site_polar_spokes():
+    """Thin spoke on one azimuth sector at a flagged site."""
+    _, _, ids = nexrad_sites_conus()
+    tlx = ids.index("KTLX")
+    site_idx = np.full((20, 20), tlx, dtype=np.int16)
+    range_km = np.full((20, 20), 55.0, dtype=np.float32)
+    data = np.full((20, 20), 10.0, dtype=np.float32)
+    data[10, 10] = 80.0
+    out, n = remove_site_polar_spokes(data, site_idx, range_km, site_ids=("KTLX",))
+    assert n == 1
+    assert out[10, 10] == 0.0
+
+
+def test_remove_flagged_site_artifacts_only_on_remediation_domain():
+    _, _, ids = nexrad_sites_conus()
+    tlx = ids.index("KTLX")
+    other = ids.index("KAMA") if ids.index("KAMA") != tlx else 0
+    site_idx = np.zeros((12, 12), dtype=np.int16)
+    site_idx[:, :6] = tlx
+    site_idx[:, 6:] = other
+    range_km = np.full((12, 12), 50.0, dtype=np.float32)
+    data = np.zeros((12, 12), dtype=np.float32)
+    data[6, 2] = 50.0  # remediation site — isolated speckle
+    data[6, 8] = 50.0  # other site — should not be touched by site pass alone
+    out, counts = remove_flagged_site_artifacts(data, site_idx, range_km, site_ids=("KTLX",))
+    assert out[6, 2] == 0.0
+    assert out[6, 8] == 50.0
+    assert sum(counts.values()) >= 1

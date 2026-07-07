@@ -18,6 +18,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now use these helpers instead of ad hoc plate-carée `imshow` plots.
 - **`tests/test_mapping.py`:** projection, extent, raster plotting, and save-map smoke tests.
 
+### Added
+
+- **Site-specific WSR-88D remediation (pass 5)** — nine radars flagged on the GridRad−MYRORSS
+  diff map (KBLX, KDOX, KEMX, KGRR, KGWX, KHPX, KILN, KLRX, KTLX) receive stricter
+  artifact filtering and a polar spoke test in `remove_flagged_site_artifacts()`.
+
 ### Changed
 
 - **Radial range-ring pass (inner-range baseline)** — `remove_radial_range_rings()` now

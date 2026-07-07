@@ -341,6 +341,20 @@ GridRad-era MESH can exhibit **NEXRAD range-dependent bias**, **isolated speckle
    - **Radial range ring** — per (nearest radar site, **10 km** range bin), compare annulus median to ±1/±2 neighbor bins **and** the inner-range (≤ **75 km**) baseline for all bins ≥ **50 km**; zero cells above reference + margin when the annulus exceeds **>1.12×** reference (**>1.18×** for range **> 100 km**). The inner baseline catches wide mid-range plateaus (several adjacent bins jointly elevated) that neighbor-only comparison misses—common in Oklahoma / Plains overlap.
    - **Azimuthal annulus** — per (nearest radar site, range bin), zero cells > **2.5×** annulus median; targets radial spokes and hot pixels on range rings (WSR-88D azimuth-median analogue in Cartesian space).
    - **Background filament** — **21×21** background median; zero active cells > background + **20 mm** when background < **15 mm**; targets thin rings in quiet areas.
+   - **Site-specific remediation (pass 5)** — nine WSR-88D domains flagged by visual QA on the GridRad−MYRORSS mean-annual-max diff map (`map_gridrad_minus_myrorss_mean_annual_max.png`, 2026-07-07). Murillo et al. (2021) manually excluded failed radar volumes; Cintineo et al. (2012) cropped radial fragments by hand. For cells whose nearest radar is one of the sites below, Stage 05 re-applies passes 1–4 with **stricter** thresholds (speckle **2.0×**, radial ring **1.05× / 1.10×**, azimuth **1.6×**, filament **+12 mm**) and a **polar spoke** test: per (site, 10 km range bin, **15°** azimuth sector), zero cells > **1.5×** the sector median (WSR-88D range–azimuth median-filter analogue).
+
+| Region (diff-map QA) | WSR-88D ID | Location |
+|----------------------|------------|----------|
+| Northern Nevada | **KLRX** | Elko, NV |
+| Southern Arizona | **KEMX** | Tucson, AZ |
+| South-central Montana | **KBLX** | Billings, MT |
+| West-central Michigan | **KGRR** | Grand Rapids, MI |
+| Northwest Alabama | **KGWX** | Columbus AFB, MS (west AL domain) |
+| East-central Oklahoma | **KTLX** | Oklahoma City, OK |
+| Southwest Ohio | **KILN** | Wilmington, OH |
+| Southwest Kentucky | **KHPX** | Fort Campbell, KY |
+| Central Delaware | **KDOX** | Dover, DE |
+
 4. **Environmental filter** and `sanitize_hail_values` — applied after artifact removal.
 
 **Upstream gap (Stage 04c):** NCAR GridRad provides `GRIDRAD_REMOVE_CLUTTER` / `GRIDRAD_FILTER` on native reflectivity; Murillo et al. (2021) additionally exclude failed radar volumes manually. Stage **04c** does not yet apply equivalent reflectivity QC before SHI integration—future work for stronger ring suppression.

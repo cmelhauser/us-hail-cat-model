@@ -401,12 +401,14 @@ Deterministic environmental filters (v2.2.2):
 noise floor: 5 mm
 subtropical winter (Nov–Feb, lat < 30°N): require >= EVENT_ACTIVE_THRESH_MM (29.0 mm)
 range debias: multiply by per-era factor(range_km) when range_debias.npz exists
-GridRad artifact filter (four passes on GridRad days only):
+GridRad artifact filter (five passes on GridRad days only):
   1. Isolated speckle — zero cells > 2.5 × local 3×3 median (>= 5 mm)
   2. Radial range ring — per (site, 10 km bin) vs ±1/±2 neighbors AND inner-range
      baseline (<= 75 km) for bins >= 50 km; thresholds 1.12× / 1.18× (far range)
   3. Azimuthal annulus — zero cells > 2.5 × annulus median (spokes)
   4. Background filament — 21×21 background; quiet-area thin rings
+  5. Site remediation — nine QA-flagged WSR-88D (KBLX, KDOX, KEMX, KGRR, KGWX,
+     KHPX, KILN, KLRX, KTLX): stricter re-pass + polar spoke filter (methodology §5.5)
 ```
 
 Optional ML path (when artifacts exist and `--skip-ml` is false):
