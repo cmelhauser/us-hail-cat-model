@@ -7,6 +7,7 @@ from datetime import date
 import pytest
 import numpy as np
 
+from scripts._config import NCOLS, NROWS
 from scripts.diagnostics.hail_day_climatology import (
     DEFAULT_THRESHOLDS,
     ThresholdSpec,
@@ -60,4 +61,22 @@ def test_national_annual_dataframe_shape():
     df = national_annual_dataframe(annual)
     assert len(df) == 2
     assert "skill_29mm" in df.columns
+
+
+@pytest.mark.skipif(
+    __import__("scripts._mapping", fromlist=["has_cartopy"]).has_cartopy() is False,
+    reason="cartopy not installed",
+)
+def test_plot_maps_writes_lambert_png(tmp_path):
+    from scripts.diagnostics.hail_day_climatology import ThresholdSpec, plot_maps
+
+    rates = {
+        "skill_29mm": np.zeros((NROWS, NCOLS), dtype=np.float32),
+    }
+    rates["skill_29mm"][100:110, 200:210] = 3.0
+    specs = (ThresholdSpec("skill_29mm", 29.0, "29 mm skill", "Wendt"),)
+    paths = plot_maps(rates, specs, tmp_path)
+    assert len(paths) == 1
+    assert paths[0].exists()
+    assert paths[0].stat().st_size > 1000
 

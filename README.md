@@ -82,7 +82,7 @@ Stage 06 cross-validates the corrected MESH record against SPC storm reports (va
 Stage 09 fits a Generalized Pareto Distribution (GPD) to the tail of each grid cell's MESH distribution using L-moments, with K-means regional pooling (k = 6) and automated threshold diagnostics. Stage 10 applies spatial smoothing (150 km radius, 75 km exponential decay) to stabilize tail estimates. Stage 11 maps exceedance probabilities at eight MESH thresholds.
 
 **Phase 4 — Hazard Output (Stages 12–14)**
-Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correction factor (bounded 1.0–1.25). Stage 13 generates a 50,000-year stochastic catalog by resampling the historical event library with calibrated intensity perturbation and ±3-cell spatial translation — all operations remain sparse throughout. Stage 14 renders diagnostic figures and compares analytical (CDF-derived) against empirical (stochastic) return-period maps; divergence between the two flags GPD misspecification.
+Stage 12 applies a CONUS land mask and a freezing-level-aware topographic correction factor (bounded 1.0–1.25). Stage 13 generates a 50,000-year stochastic catalog by resampling the historical event library with calibrated intensity perturbation and ±3-cell spatial translation — all operations remain sparse throughout. Stage 14 renders diagnostic figures on Lambert Conformal CONUS maps (`scripts/_mapping.py`: country and state boundaries) and compares analytical (CDF-derived) against empirical (stochastic) return-period maps; divergence between the two flags GPD misspecification.
 
 ---
 

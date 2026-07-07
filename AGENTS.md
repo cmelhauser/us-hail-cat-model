@@ -41,14 +41,15 @@ bump.
 | 7 | Update tests and docs whenever methodology, output schemas, or stage behavior changes. |
 | 8 | Grid constants come from `scripts/_config.py`. Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, or `LON_MIN` in stage scripts. |
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
-| 10 | Use `scripts/_logging.py` for stage loggers and `scripts/_io.py` for shared raster/geospatial helpers. |
+| 10 | Use `scripts/_logging.py` for stage loggers, `scripts/_io.py` for shared raster/geospatial helpers, and `scripts/_mapping.py` for CONUS map PNGs (Lambert Conformal + admin boundaries). |
 | 12 | **Git:** commit and push only to **`origin`** (`cmelhauser/us-hail-cat-model`). Never `git push upstream`. PRs: `gh pr create --repo cmelhauser/us-hail-cat-model --base main`. See `docs/GIT_REMOTES.md`. |
 
 ## Known Issues / Discrepancies
 
 No active constant-drift issues are known. `MAX_CENTROID_KM_DAY` was resolved on
 2026-05-03, and the `_config.py`, `_logging.py`, and `_io.py` refactors are now
-wired into all stage scripts where needed.
+wired into all stage scripts where needed. Map PNGs (Stage 14 and diagnostics) use
+`scripts/_mapping.py` for Lambert Conformal projection and admin boundaries.
 
 Stages 05-14 were previously run against a May-2011 smoke slice before Stage 01
 finished. Those outputs are placeholders, not production outputs.
@@ -73,6 +74,7 @@ us-hail-cat-model/
 |   |-- _config.py              <- grid constants, paths, EVT defaults
 |   |-- _logging.py             <- shared logger factory
 |   |-- _io.py                  <- write_geotiff, haversine_km, latlon_to_grid
+|   |-- _mapping.py             <- Lambert Conformal maps, admin_0/admin_1 boundaries
 |   |-- _radar_geometry.py      <- NEXRAD sites, range debias, four-pass artifact filter
 |   |-- _pipeline_cleanup.py    <- delete Stage N+ outputs (used by rerun / --clean-from)
 |   |-- rerun_stage05.py        <- wait, clean 05+, blocking Stage 05 rebuild

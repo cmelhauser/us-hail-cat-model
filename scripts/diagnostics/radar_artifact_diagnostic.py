@@ -33,8 +33,13 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts._config import DX, LAT_MAX, LON_MIN, NCOLS, NROWS  # noqa: E402
+from scripts._config import NCOLS, NROWS  # noqa: E402
 from scripts._io import write_geotiff  # noqa: E402
+from scripts._mapping import (  # noqa: E402
+    create_conus_axes,
+    plot_raster_on_axis,
+    save_conus_raster_map,
+)
 from scripts._radar_geometry import (  # noqa: E402
     CALIB_DIR,
     DEFAULT_RANGE_BIN_EDGES_KM,
@@ -237,47 +242,26 @@ def spc_bias_by_range(pairs_csv: Path, edges: np.ndarray) -> pd.DataFrame:
 
 
 def plot_range_distance_map(range_km: np.ndarray, out_dir: Path) -> Path:
-    lons = LON_MIN + (np.arange(NCOLS) + 0.5) * DX
-    lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    im = ax.imshow(
+    return save_conus_raster_map(
         range_km,
-        origin="upper",
-        extent=[lons.min(), lons.max(), lats.min(), lats.max()],
+        out_dir / "map_nearest_radar_distance_km.png",
+        title="Distance to nearest CONUS NEXRAD (km)",
+        cbar_label="km",
+        cmap="viridis",
         vmin=0,
         vmax=250,
-        cmap="viridis",
-        aspect="auto",
     )
-    ax.set_title("Distance to nearest CONUS NEXRAD (km)")
-    ax.set_xlabel("Longitude")
-    ax.set_ylabel("Latitude")
-    plt.colorbar(im, ax=ax, label="km", shrink=0.8)
-    fig.tight_layout()
-    path = out_dir / "map_nearest_radar_distance_km.png"
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return path
 
 
 def plot_mean_annual_by_source(mean_maps: dict[str, np.ndarray], out_dir: Path) -> Path:
-    lons = LON_MIN + (np.arange(NCOLS) + 0.5) * DX
-    lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5), sharex=True, sharey=True)
+    fig, axes = create_conus_axes(1, 3, figsize=(14, 4.5), sharex=True, sharey=True)
+    ax_list = np.atleast_1d(axes).ravel()
     vmax = 80.0
-    for ax, src in zip(axes, ("MYRORSS", "GridRad", "MRMS")):
-        data = mean_maps[src]
-        im = ax.imshow(
-            data,
-            origin="upper",
-            extent=[lons.min(), lons.max(), lats.min(), lats.max()],
-            vmin=0,
-            vmax=vmax,
-            cmap="YlOrRd",
-            aspect="auto",
-        )
+    mappable = None
+    for ax, src in zip(ax_list, ("MYRORSS", "GridRad", "MRMS")):
+        mappable = plot_raster_on_axis(ax, mean_maps[src], cmap="YlOrRd", vmin=0, vmax=vmax)
         ax.set_title(f"Mean annual max MESH75 — {src}")
-    plt.colorbar(im, ax=axes, label="mm", shrink=0.7)
+    fig.colorbar(mappable, ax=list(ax_list), label="mm", shrink=0.7)
     fig.tight_layout()
     path = out_dir / "map_mean_annual_max_by_source.png"
     fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -286,22 +270,15 @@ def plot_mean_annual_by_source(mean_maps: dict[str, np.ndarray], out_dir: Path) 
 
 
 def plot_speckle_by_source(speckle: dict[str, np.ndarray], out_dir: Path) -> Path:
-    lons = LON_MIN + (np.arange(NCOLS) + 0.5) * DX
-    lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5), sharex=True, sharey=True)
-    for ax, src in zip(axes, ("MYRORSS", "GridRad", "MRMS")):
-        data = speckle[src]
-        im = ax.imshow(
-            data,
-            origin="upper",
-            extent=[lons.min(), lons.max(), lats.min(), lats.max()],
-            vmin=0,
-            vmax=0.5,
-            cmap="magma",
-            aspect="auto",
+    fig, axes = create_conus_axes(1, 3, figsize=(14, 4.5), sharex=True, sharey=True)
+    ax_list = np.atleast_1d(axes).ravel()
+    mappable = None
+    for ax, src in zip(ax_list, ("MYRORSS", "GridRad", "MRMS")):
+        mappable = plot_raster_on_axis(
+            ax, speckle[src], cmap="magma", vmin=0, vmax=0.5,
         )
         ax.set_title(f"Speckle fraction — {src}")
-    plt.colorbar(im, ax=axes, label="fraction of hail days", shrink=0.7)
+    fig.colorbar(mappable, ax=list(ax_list), label="fraction of hail days", shrink=0.7)
     fig.tight_layout()
     path = out_dir / "map_speckle_fraction_by_source.png"
     fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -464,24 +441,14 @@ def main() -> None:
     diff = stats["mean_annual_max"]["GridRad"] - stats["mean_annual_max"]["MYRORSS"]
     if not args.skip_geotiff:
         write_geotiff(diff.astype(np.float32), out_dir / "gridrad_minus_myrorss_mean_annual_max.tif")
-    lons = LON_MIN + (np.arange(NCOLS) + 0.5) * DX
-    lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    vmax = float(np.percentile(np.abs(diff[diff != 0]), 99)) if np.any(diff != 0) else 10
-    im = ax.imshow(
+    save_conus_raster_map(
         diff,
-        origin="upper",
-        extent=[lons.min(), lons.max(), lats.min(), lats.max()],
-        vmin=-vmax,
-        vmax=vmax,
+        out_dir / "map_gridrad_minus_myrorss_mean_annual_max.png",
+        title="GridRad − MYRORSS mean annual max MESH75 (mm)",
+        cbar_label="mm",
         cmap="RdBu_r",
-        aspect="auto",
+        symmetric=True,
     )
-    ax.set_title("GridRad − MYRORSS mean annual max MESH75 (mm)")
-    plt.colorbar(im, ax=ax, label="mm", shrink=0.8)
-    fig.tight_layout()
-    fig.savefig(out_dir / "map_gridrad_minus_myrorss_mean_annual_max.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
 
     if not spc_df.empty:
         plot_spc_ratio_vs_range(spc_df, out_dir)

@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from scripts.diagnostics.radar_artifact_diagnostic import local_median_8, range_binned_cell_stats
+from scripts._config import NROWS, NCOLS
+from scripts.diagnostics.radar_artifact_diagnostic import (
+    local_median_8,
+    plot_range_distance_map,
+    range_binned_cell_stats,
+)
 
 
 def test_local_median_8_peak_isolated():
@@ -22,3 +28,15 @@ def test_range_binned_cell_stats_bins():
     df = range_binned_cell_stats(mean_annual, range_km, edges)
     assert len(df) == 3
     assert df.loc[1, "mean_annual_max_mm"] == 50.0
+
+
+@pytest.mark.skipif(
+    __import__("scripts._mapping", fromlist=["has_cartopy"]).has_cartopy() is False,
+    reason="cartopy not installed",
+)
+def test_plot_range_distance_map_writes_png(tmp_path):
+    range_km = np.linspace(0, 300, NROWS * NCOLS, dtype=np.float32).reshape(NROWS, NCOLS)
+    path = plot_range_distance_map(range_km, tmp_path)
+    assert path.exists()
+    assert path.name == "map_nearest_radar_distance_km.png"
+    assert path.stat().st_size > 1000

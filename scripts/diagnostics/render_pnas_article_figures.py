@@ -28,7 +28,8 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts._config import LAT_MAX, LON_MIN, MODEL_VERSION, NCOLS, NROWS, DX  # noqa: E402
+from scripts._config import MODEL_VERSION  # noqa: E402
+from scripts._mapping import save_conus_raster_map  # noqa: E402
 
 MESH_DIR = REPO / "data" / "historical" / "mesh_0.05deg"
 CORRECTED_DIR = REPO / "data" / "historical" / "mesh_0.05deg_corrected"
@@ -252,26 +253,16 @@ def fig_hail_days_map(out: Path) -> None:
     tif = HAIL_CLIM_DIR / "hail_days_per_year_skill_29mm.tif"
     with rasterio.open(tif) as src_r:
         data = src_r.read(1).astype(np.float32)
-    lons = LON_MIN + (np.arange(NCOLS) + 0.5) * DX
-    lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
     vmax = min(15.0, float(np.percentile(data[data > 0], 99)) if np.any(data > 0) else 5)
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    im = ax.imshow(
+    save_conus_raster_map(
         data,
-        origin="upper",
-        extent=[lons.min(), lons.max(), lats.min(), lats.max()],
+        out,
+        title="Mean annual hail days — 29 mm skill threshold",
+        cbar_label="days / year",
+        cmap="YlOrRd",
         vmin=0,
         vmax=max(vmax, 1),
-        cmap="YlOrRd",
-        aspect="auto",
     )
-    ax.set_title("Mean annual hail days — 29 mm skill threshold")
-    ax.set_xlabel("Longitude")
-    ax.set_ylabel("Latitude")
-    plt.colorbar(im, ax=ax, label="days / year", shrink=0.8)
-    fig.tight_layout()
-    fig.savefig(out)
-    plt.close(fig)
 
 
 def fig_validation_by_bin(out: Path) -> dict:

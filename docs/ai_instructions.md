@@ -125,7 +125,7 @@ Must not reconstruct all event templates into dense grids.
 
 ### Stage 14 — Figures
 
-Must render diagnostics that expose model risk, including analytical vs stochastic comparison.
+Must render diagnostics that expose model risk, including analytical vs stochastic comparison. CONUS raster map PNGs must use `scripts/_mapping.py` (Lambert Conformal projection, admin_0 country and admin_1 US state boundaries).
 
 ---
 
@@ -146,7 +146,7 @@ Tests should cover:
 - RP monotonicity;
 - topographic correction bounds;
 - sparse stochastic translation and scaling;
-- figure smoke tests;
+- figure smoke tests (including `tests/test_mapping.py` when cartopy is installed);
 - run_pipeline stage selection and dry run;
 - **no duplicated grid constants across stage scripts**;
 - **integration smoke: full pipeline on synthetic tiny-grid fixtures**.
@@ -209,7 +209,7 @@ Current repository state:
 
 - Active branch: **`v2.2.2`** (model **2.2.2** on `origin`; **2.2.1** on `main` until merge).
 - GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing.
-- Stage helper refactor complete: `_config.py`, `_logging.py`, and `_io.py` are wired into stage scripts where required.
+- Stage helper refactor complete: `_config.py`, `_logging.py`, `_io.py`, and `_mapping.py` are wired into stage and diagnostic scripts where required.
 - **Stage 01 complete** (5,023 convective-day MYRORSS rasters through 2011-12-31).
 - **Stage 02 complete** (2026-06-08; 2,060 MRMS rasters 2020-10-14 → 2026-06-04; validation passed).
 - **Stage 03 complete**; **Stage 04a complete** (ERA5 isotherms on disk).

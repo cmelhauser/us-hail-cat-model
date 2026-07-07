@@ -824,9 +824,21 @@ Resume after failure: `python run_pipeline.py --from 13 --skip-ml`. Ensure **~12
 
 ## 19. Stage 14 - Figures
 
-**Script:** `scripts/14_render_figures.py`
+**Script:** `scripts/14_render_figures.py`  
+**Map helpers:** `scripts/_mapping.py` — Lambert Conformal CONUS; Natural Earth **admin_0** country outlines and **admin_1** US state lines. Shared with radar/hail-day/PNAS diagnostic map PNGs.
 
-### 19.1 Output directories
+### 19.1 Projection and boundaries
+
+All CONUS raster map PNGs use `scripts/_mapping.py`:
+
+- **Projection:** Lambert Conformal Conic (`central_longitude=-96`, `central_latitude=39`, `standard_parallels=(33, 45)`).
+- **Raster georeferencing:** cell edges from `_config` grid constants, plotted in EPSG:4326 on the projected axes.
+- **Boundaries:** Natural Earth 10 m `admin_0_boundary_lines_land` (countries) and `cartopy.feature.STATES` at 10 m (US states).
+- **Extent:** `CONUS_EXTENT_PC = (-125, -66, 24, 50)` degrees (west, east, south, north).
+
+Helpers: `create_conus_axes()`, `plot_raster_on_axis()`, `save_conus_raster_map()`, `add_admin_boundaries()`. Tests: `tests/test_mapping.py` plus cartopy smoke tests in Stage 14 and diagnostic test modules.
+
+### 19.2 Output directories
 
 ```text
 docs/figures/historical/
@@ -834,7 +846,7 @@ docs/figures/stochastic/
 docs/figures/analysis/
 ```
 
-### 19.2 Required categories
+### 19.3 Required categories
 
 - analytical return-period maps;
 - stochastic return-period maps;
@@ -844,7 +856,7 @@ docs/figures/analysis/
 - event summaries;
 - GPD and tail diagnostics.
 
-### 19.3 Figure QA
+### 19.4 Figure QA
 
 Figures are scientific diagnostics, not decoration. Review for:
 
@@ -854,6 +866,7 @@ Figures are scientific diagnostics, not decoration. Review for:
 - over-smoothed hail corridors;
 - analytical-vs-stochastic divergence;
 - unreadable labels, legends, or colorbars;
+- inconsistent projection or missing state/country boundaries on map PNGs;
 - generated files that should remain untracked.
 
 ---

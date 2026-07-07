@@ -267,7 +267,7 @@ In order:
 3. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
 4. **Regenerate mesh-era diagnostic** if ingest changes (`scripts/diagnostics/summarize_mesh_daily_peaks.py`).
 5. **Regenerate hail-day climatology** after Stage 05 (`scripts/diagnostics/hail_day_climatology.py`).
-5. **Review Stage 14 figures** once production outputs exist.
+5. **Review Stage 14 figures** once production outputs exist (Lambert Conformal maps via `_mapping.py`).
 6. **Regression tests** — freeze golden outputs after first production run.
 7. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist.
 8. **Rebuild `.venv` to Python 3.10+** — current run venv is Python 3.9.6 (EOL Oct 2025).

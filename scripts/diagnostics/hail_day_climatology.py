@@ -36,6 +36,7 @@ if str(REPO) not in sys.path:
 
 from scripts._config import LAT_MAX, LON_MIN, NCOLS, NROWS, DX  # noqa: E402
 from scripts._io import write_geotiff  # noqa: E402
+from scripts._mapping import save_conus_raster_map  # noqa: E402
 
 CORRECTED_DIR = REPO / "data" / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR = REPO / "data" / "analysis" / "hail_day_climatology"
@@ -240,30 +241,20 @@ def plot_maps(
     """Write quick-look hail-days-per-year maps for key thresholds."""
     keys = [s.key for s in specs if s.key in ("conv_25p4mm", "skill_29mm", "mesh75_41p9mm", "sig_50p8mm")]
     paths: list[Path] = []
-    lons = LON_MIN + (np.arange(NCOLS) + 0.5) * DX
-    lats = LAT_MAX - (np.arange(NROWS) + 0.5) * DX
     for key in keys:
         spec = next(s for s in specs if s.key == key)
         data = rates[key]
         vmax = min(20.0, float(np.percentile(data[data > 0], 99)) if np.any(data > 0) else 1.0)
-        fig, ax = plt.subplots(figsize=(10, 4.5))
-        im = ax.imshow(
+        path = out_dir / f"map_hail_days_per_year_{key}.png"
+        save_conus_raster_map(
             data,
-            origin="upper",
-            extent=[lons.min(), lons.max(), lats.min(), lats.max()],
+            path,
+            title=f"Mean annual hail days — {spec.label} ({spec.mm} mm)",
+            cbar_label="days / year",
+            cmap="YlOrRd",
             vmin=0,
             vmax=max(vmax, 1.0),
-            cmap="YlOrRd",
-            aspect="auto",
         )
-        ax.set_title(f"Mean annual hail days — {spec.label} ({spec.mm} mm)")
-        ax.set_xlabel("Longitude")
-        ax.set_ylabel("Latitude")
-        plt.colorbar(im, ax=ax, label="days / year", shrink=0.8)
-        fig.tight_layout()
-        path = out_dir / f"map_hail_days_per_year_{key}.png"
-        fig.savefig(path, dpi=150, bbox_inches="tight")
-        plt.close(fig)
         paths.append(path)
     return paths
 

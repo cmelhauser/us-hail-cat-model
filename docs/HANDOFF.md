@@ -1,7 +1,7 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.2
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-07-06 (**inner-range radial ring pass**; Stages 05–07 rebuild in progress).
+> Last updated: 2026-07-07 (**Lambert Conformal map standardization** via `scripts/_mapping.py`; Stages 05–07 rebuild in progress).
 
 ---
 
@@ -60,6 +60,7 @@ scripts/rerun_stage05.py                         ← blocking Stage 05 rebuild (
 scripts/_config.py   ← all grid constants, paths, EVT defaults (wired into all stage scripts)
 scripts/_logging.py  ← get_logger() factory (wired into all stage scripts)
 scripts/_io.py       ← shared write_geotiff (optional GDAL tags), haversine_km, latlon_to_grid
+scripts/_mapping.py  ← Lambert Conformal CONUS maps, admin_0/admin_1 boundaries (Stage 14 + diagnostics)
 ```
 
 Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--skip-calibration] [--clean-from N] [--retrain-models]`

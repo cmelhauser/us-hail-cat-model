@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`scripts/_mapping.py`:** shared Lambert Conformal CONUS map helpers (central lon
+  −96°, lat 39°, standard parallels 33°/45°); Natural Earth **admin_0** country
+  outlines and **admin_1** US state lines. Stage 14 and diagnostic map PNGs
+  (`radar_artifact_diagnostic`, `hail_day_climatology`, `render_pnas_article_figures`)
+  now use these helpers instead of ad hoc plate-carée `imshow` plots.
+- **`tests/test_mapping.py`:** projection, extent, raster plotting, and save-map smoke tests.
+
 ### Changed
 
 - **Radial range-ring pass (inner-range baseline)** — `remove_radial_range_rings()` now

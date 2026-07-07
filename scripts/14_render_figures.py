@@ -91,19 +91,14 @@ def setup_matplotlib():
 def render_rp_map(tif_path, out_path, title, vmax=None):
     """Render a return period or occurrence probability map with CONUS outline."""
     import rasterio
-    plt = setup_matplotlib()
-
     try:
-        import cartopy.crs as ccrs
-        import cartopy.feature as cfeature
-        has_cartopy = True
+        from _mapping import plot_raster_on_axis, create_conus_axes, has_cartopy
     except ImportError:
-        has_cartopy = False
+        from scripts._mapping import plot_raster_on_axis, create_conus_axes, has_cartopy
+    plt = setup_matplotlib()
 
     with rasterio.open(tif_path) as src:
         data = src.read(1)
-        extent = [src.bounds.left, src.bounds.right,
-                  src.bounds.bottom, src.bounds.top]
 
     mask_path = MASK_DIR / "conus_mask.tif"
     if mask_path.exists():
@@ -112,33 +107,19 @@ def render_rp_map(tif_path, out_path, title, vmax=None):
         if mask.shape == data.shape:
             data = np.where(mask, data, 0.0)
 
-    data_inches = data / 25.4  # convert mm to inches for display
+    data_inches = data.astype(np.float32) / 25.4
     data_inches[data_inches <= 0] = np.nan
 
-    if has_cartopy:
-        fig, ax = plt.subplots(figsize=(14, 8),
-                                subplot_kw={"projection": ccrs.LambertConformal()})
-        ax.set_extent([-125, -66, 24, 50], crs=ccrs.PlateCarree())
-        ax.add_feature(cfeature.STATES, linewidth=0.3, edgecolor="gray")
-        ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
-        im = ax.pcolormesh(
-            np.linspace(extent[0], extent[1], data.shape[1]),
-            np.linspace(extent[3], extent[2], data.shape[0]),
-            data_inches,
-            transform=ccrs.PlateCarree(),
-            cmap="YlOrRd",
-            vmin=0,
-            vmax=vmax or float(np.nanpercentile(data_inches, 99)),
-            shading="auto",
-        )
-    else:
-        fig, ax = plt.subplots(figsize=(14, 8))
-        im = ax.imshow(data_inches, extent=extent, origin="upper",
-                        cmap="YlOrRd", vmin=0,
-                        vmax=vmax or float(np.nanpercentile(data_inches, 99)))
+    vhi = vmax or float(np.nanpercentile(data_inches, 99))
 
-    plt.colorbar(im, ax=ax, label="Hail Size (inches)", shrink=0.6)
-    ax.set_title(title)
+    fig, ax = create_conus_axes(figsize=(14, 8))
+    geo_ax = ax if not hasattr(ax, "ravel") else ax.ravel()[0]
+    im = plot_raster_on_axis(geo_ax, data_inches, cmap="YlOrRd", vmin=0, vmax=vhi)
+    if not has_cartopy():
+        geo_ax.set_xlabel("Longitude")
+        geo_ax.set_ylabel("Latitude")
+    plt.colorbar(im, ax=geo_ax, label="Hail Size (inches)", shrink=0.6)
+    geo_ax.set_title(title)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path)
