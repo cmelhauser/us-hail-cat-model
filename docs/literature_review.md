@@ -142,7 +142,7 @@ Published hail climatologies remove radar rings, speckle, and range-dependent er
 
 **Model implication:** Run `scripts/diagnostics/literature_validation_suite.py` after Stages 05–13 to aggregate literature benchmarks (source transitions, SPC detection and rural–urban bias, seasonality, Mann–Kendall stationarity, Poisson and negative-binomial dispersion, GPD thresholds, bootstrap RP CIs, RP monotonicity, analytical vs stochastic divergence, pilot tail dependence, GridRad manifest QC, Murillo/Cintineo hail-day rates, optional ML filter Brier). Missing inputs warn-and-skip via `scripts/diagnostics/_diagnostic_io.py`. See `docs/technical_documentation.md` §12.7.
 
-**Model implication (Stage 05):** Stage **05** applies a five-pass GridRad artifact filter (`remove_gridrad_artifacts`: isolated speckle, inner-range radial ring, azimuthal annulus, quiet-background filament, **spatiotemporal range-ring persistence** from a 21-day trailing window) plus optional SPC-collocated range debias. Persistence discriminates stationary NEXRAD annuli from episodic hail using daily time series at fixed (site, range)—the daily-grid analogue of multi-scan ring detection (Chilson et al. 2018). Optional site-specific remediation on nine WSR-88D radars remains in code but is off by default. **Stage 01 (v2.2.2):** MYRORSS `pixel_x`/`pixel_y` sparse-grid axes were corrected per WDSS-II; prior MYRORSS ingest truncated eastern CONUS.
+**Model implication (Stage 05):** Stage **05** applies a five-pass GridRad artifact filter (`remove_gridrad_artifacts`: isolated speckle, inner-range radial ring, azimuthal annulus, quiet-background filament, **spatiotemporal range-ring persistence** from a 21-day trailing window) plus optional SPC-collocated range debias. Persistence discriminates stationary NEXRAD annuli from episodic hail using daily time series at fixed (site, range)—the daily-grid analogue of multi-scan ring detection (Chilson et al. 2019). Optional site-specific remediation on nine WSR-88D radars remains in code but is off by default. **Stage 01 (v2.2.2):** MYRORSS `pixel_x`/`pixel_y` sparse-grid axes were corrected per WDSS-II; full re-ingest completed **2026-07-08** (eastern CONUS restored). Stages 05–14 rebuild on that archive for final hazard maps.
 
 ---
 
@@ -379,6 +379,8 @@ Boiko, D.A., R. MacKnight, B. Kline, and G. Gomes, 2023: Autonomous chemical res
 Bowman, K.P., and C.R. Homeyer, 2017: GridRad: Three-dimensional gridded NEXRAD WSR-88D radar data and derived hail metrics. See http://gridrad.org and references in Murillo et al. (2021).
 
 Brown, T.M., et al., 2015: Evaluating hail damage using property insurance claims data. *Weather, Climate, and Society*, 7(3), 197–210.
+
+Chilson, C., K. Avery, A. McGovern, E. Bridge, D. Sheldon, and J. Kelly, 2019: Automated detection of bird roosts using NEXRAD radar data and convolutional neural networks. *Remote Sensing in Ecology and Conservation*, 5(1), 20–32.
 
 Coles, S., 2001: *An Introduction to Statistical Modeling of Extreme Values.* Springer.
 

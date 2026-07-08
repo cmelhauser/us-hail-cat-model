@@ -20,32 +20,35 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-07-07 ~16:17 EDT** — **Stage 01 MYRORSS re-ingest** after
-sparse-grid coordinate fix (`pixel_x` = row/lat, `pixel_y` = col/lon per WDSS-II).
-Deleted 5,023 buggy-era TIFFs; re-ingest running with `--workers 8`:
-
-```bash
-.venv/bin/python scripts/01_download_myrorss.py --workers 8
-```
-
-Monitor `logs/01_myrorss_reingest.run.log`.
+Snapshot taken **2026-07-08 ~09:21 EDT** — **Stages 05–14 rebuild** after Stage 01
+MYRORSS sparse-grid coordinate fix completed and passed eastern-CONUS / geotransform QA.
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 01 | ⏳ In progress | Full MYRORSS re-ingest (1998–2011); eastern CONUS fix |
-| Stage 05 | ⏸ Queued | Five-pass filter incl. 21-day persistence; after 01 completes |
-| Stage 06 | ⏸ Queued | SPC validation + debias refit |
-| Stage 07 | ⏸ Queued | 366-day climatology |
-| Stages 08–14 | ⏸ Cleared | Restart after artifact QA |
-
-After Stage 01 completes:
+| Stage 01 | ✅ Complete | Full MYRORSS re-ingest (1998–2011); 5,023/5,023; validation passed 2026-07-08 |
+| Stages 02–04c | ✅ Complete | Unchanged (MRMS, SPC, ERA5, GridRad) |
+| Stages 05–14 | ⏳ In progress | `screen hail_from05`: `run_pipeline.py --from 05 --skip-ml` |
 
 ```bash
-python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
-python scripts/diagnostics/radar_artifact_diagnostic.py
+tail -f logs/pipeline_from05.run.log
+tail -f logs/05_apply_mesh_bias_correction.log
+screen -r hail_from05
 ```
 
-Review `map_gridrad_minus_myrorss_mean_annual_max.png` before Stages 08–14.
+Pre-Stage 05 QA (2026-07-08): geotransform OK; no plains-hail-without-east-of-−96°W samples;
+must-pass eastern outbreak days (1998-04-26 … 2011-05-22) PASS. Stage 05+ outputs cleaned
+via `clean_from_stage("05")` (corrected mesh, events, CDF, occurrence, mask, stochastic,
+radar_artifacts). Preserve `mesh_0.05deg` and SPC.
+
+After Stage 06:
+
+```bash
+.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
+```
+
+Review `map_gridrad_minus_myrorss_mean_annual_max.png` before trusting final RP figures.
+
+Previous snapshot **2026-07-07 ~16:17 EDT** — Stage 01 re-ingest in progress (superseded).
 
 Previous snapshot **2026-07-06 ~23:24 EDT** — inner-range radial ring pass (1.12× /
 1.18× vs ≤75 km baseline); superseded by persistence pass 5 + MYRORSS re-ingest.
@@ -55,7 +58,8 @@ mean (**9.1%** P95) vs **6.1%** (**33%**) three-pass.
 
 Previous snapshot **2026-07-05** — three-pass filter (no radial ring); superseded.
 
-Previous snapshot **2026-06-30** — **v2.2.1 production run complete**:
+Previous snapshot **2026-06-30** — **v2.2.1 production run complete** (pre–eastern fix;
+superseded for final v2.2.2 hazard products):
 
 | Stage | Status | Notes |
 |-------|--------|-------|
@@ -72,11 +76,12 @@ Previous snapshot **2026-06-30** — **v2.2.1 production run complete**:
 | Stage 13 | ✅ Complete | **50,000** yr; **15.17M** synthetic events; **~5.4 h** (memmap fix 2026-06-30). |
 | Stage 14 | ✅ Complete | Figures and validation report (`14_render_figures.py`) |
 
-**v2.2.2 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled GridRad QM; see `docs/methodology.md` §2.7.
+**v2.2.2 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled GridRad QM; five-pass
+artifact filter; see `docs/methodology.md` §2.7 and §5.5.
 
 **Mesh archive totals:** **9,797** `mesh_*.tif` under `data/historical/mesh_0.05deg/` (5,023 + 2,714 + 2,060).
 
-**Logs:** `logs/pipeline_from05_v221_rerun.run.log`, `logs/pipeline_from13_rerun.run.log`
+**Logs:** `logs/pipeline_from05.run.log`, `logs/01_myrorss_reingest.run.log`
 
 ### Stage 04c commands
 

@@ -4,7 +4,7 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-07-06 (inner-range radial ring pass; Stages 05–07 rebuild in progress).
+Last updated: 2026-07-08 (MYRORSS Stage 01 coordinate fix complete; Stages 05–14 rebuild in progress).
 
 ## What This Project Is
 
@@ -255,63 +255,72 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-06-30:
+As of 2026-07-08:
 
 | Area | Status |
 |---|---|
 | Active branch | **`v2.2.2`** (dev); model **2.2.1** on `main` until merge |
 | All stage scripts (01–14) | Written, tested, production-validated |
 | Tests | 37 pytest modules (199 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
-| **First full v2.2.1 production run** | **Complete** (2026-06-30) — Stages 01–14, `--skip-ml` |
-| Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + **2,714** GridRad + 2,060 MRMS) |
-| Corrected archive | **rebuilding** (2026-07-06) — inner-range radial ring pass + range debias + era-pooled QM |
-| Event catalog | **8,798** events at **29 mm** (~303 yr⁻¹) |
-| Stochastic catalog | **50,000** yr; **15.17M** synthetic events; validation passed |
-| Hail-day climatology | `data/analysis/hail_day_climatology/` (regenerate locally or load from external store) |
+| **First full v2.2.1 production run** | Complete (2026-06-30) — superseded for manuscripts after MYRORSS fix |
+| Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 fixed MYRORSS + 2,714 GridRad + 2,060 MRMS) |
+| Stage 01 MYRORSS re-ingest | **Complete** (2026-07-08) — eastern CONUS restored; geo QA passed |
+| Corrected archive + Stages 05–14 | **Rebuilding** (`hail_from05`; `--from 05 --skip-ml`) |
+| Prior event / stochastic numbers | Provisional until Stages 08 and 13 finish |
+| Hail-day climatology | Regenerate after Stage 05 completes |
 | Regression / golden tests | Pending frozen checksums |
 | Bootstrap CIs on RP maps | Pending |
 
-## Production Run Summary (v2.2.1, 2026-06-30)
+## Production Run Summary (v2.2.1, 2026-06-30 — superseded)
 
-| Stage | Key result |
+Prior full run (pre–Stage 01 eastern-CONUS fix). Keep numbers for historical comparison only;
+do not cite as final v2.2.2 hazard results.
+
+| Stage | Key result (superseded) |
 |-------|------------|
-| 05 | 9,797 corrected days (0 skipped); era-pooled QM |
+| 05 | 9,797 corrected days; era-pooled QM |
 | 06 | 173,766 SPC validation pairs |
 | 08 | 8,798 events; λ ≈ 303 yr⁻¹ at 29 mm |
 | 09–12 | Analytical RP maps through 50,000 yr |
-| 13 | 50k-yr stochastic catalog (~5.4 h); memmap-backed annual maxima |
+| 13 | 50k-yr stochastic catalog (~5.4 h) |
 | 14 | Figures + validation report |
 
 ## Current Run Watch
 
-**Stage 01 MYRORSS re-ingest (2026-07-07)** — sparse-grid `pixel_x`/`pixel_y` fix
-(restores eastern CONUS hail). Deleted 5,023 buggy-era TIFFs; running:
+**Stages 05–14 rebuild (2026-07-08)** after Stage 01 MYRORSS coordinate-fix re-ingest.
+Pre-run QA: 5,023/5,023 MYRORSS days; geotransform OK; eastern CONUS (≥−96°W) restored on
+sampled 1998–2011 hail days. Cleaned Stage 05+ outputs; running:
 
 ```bash
-.venv/bin/python scripts/01_download_myrorss.py --workers 8
+screen -r hail_from05
+# or:
+tail -f logs/pipeline_from05.run.log
+tail -f logs/05_apply_mesh_bias_correction.log
 ```
 
-Monitor `logs/01_myrorss_reingest.run.log`. After completion:
+Command:
 
 ```bash
-python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
-python scripts/diagnostics/radar_artifact_diagnostic.py
+.venv/bin/python run_pipeline.py --from 05 --skip-ml
 ```
 
-Stage 05 now applies a **five-pass** GridRad artifact filter (speckle → radial ring →
-azimuthal → filament → **21-day spatiotemporal persistence**). Review
-`map_gridrad_minus_myrorss_mean_annual_max.png` after Stage 06 before Stages 08–14.
+Stage 05 applies a **five-pass** GridRad artifact filter (speckle → radial ring →
+azimuthal → filament → **21-day spatiotemporal persistence**) plus range debias when
+`range_debias.npz` exists. After Stage 06, regenerate:
 
-Prior production run finished **2026-06-30 ~18:42 EDT** (pre-debias stochastic catalog).
-Prior four-pass Stage 05 rebuild finished **2026-07-06 ~19:56 EDT** (GridRad speckle
-**1.8%** mean); inner-range radial and persistence passes followed.
+```bash
+.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
+```
 
-Optional follow-ups after rerun completes:
+and review `map_gridrad_minus_myrorss_mean_annual_max.png` before trusting RP figures.
+
+After the rebuild completes:
 
 1. `python run_pipeline.py --validate`
-2. Compare `docs/figures/stochastic/` RP maps before/after debias rerun
-3. Freeze regression/golden outputs; bootstrap CIs on Stage 09
-4. Merge debias code/docs to `main` when ready
+2. `.venv/bin/python scripts/diagnostics/render_pnas_article_figures.py`
+3. Refresh `docs/pnas_article_ai_hail_model.md` Results from `data/analysis/pnas_article_metrics.json`
+4. Freeze regression/golden outputs; bootstrap CIs on Stage 09 when ready
+5. Merge to `main` when debias + fixed MYRORSS hazard results are accepted
 
 ## Documentation Quick Reference
 

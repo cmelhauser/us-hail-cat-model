@@ -29,6 +29,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **GridRad artifact filter** — five passes: speckle → radial ring → azimuthal → filament →
   **spatiotemporal persistence** (site-specific remediation remains optional, off by default).
 
+### Operations (2026-07-08)
+
+- Stage 01 MYRORSS re-ingest **complete** (5,023/5,023; validation passed).
+- Pre-Stage 05 geotransform / eastern-CONUS QA passed.
+- Stages **05–14** rebuild launched (`run_pipeline.py --from 05 --skip-ml`, screen
+  `hail_from05`) after `clean_from_stage("05")`. Prior hazard products superseded.
+
 - **`scripts/_mapping.py`:** shared Lambert Conformal CONUS map helpers (central lon
   −96°, lat 39°, standard parallels 33°/45°); Natural Earth **admin_0** country
   outlines and **admin_1** US state lines. Stage 14 and diagnostic map PNGs

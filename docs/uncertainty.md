@@ -56,11 +56,12 @@ footprints and stochastic return-period maps if uncorrected.
 **Current treatment:** Stage 05 applies SPC-collocated **range debias**
 (`range_debias.npz`) and a **five-pass GridRad artifact filter** (isolated speckle,
 inner-range radial ring, azimuthal annulus, background filament, spatiotemporal
-persistence; `methodology.md` §5.5). **Stage 01 MYRORSS re-ingest** and **Stages 05–07
-rebuild** underway **2026-07-07**; review `radar_artifact_diagnostic.py` diff maps
-after Stage 06 before Stages 08–14.
-Residual broad GridRad−MYRORSS climatological offsets remain in era-comparison
-diagnostics. Re-run Stages 06–14 after debias changes.
+persistence; `methodology.md` §5.5). **Stage 01 MYRORSS re-ingest completed 2026-07-08**;
+**Stages 05–14** rebuilding **2026-07-08**. Refresh `radar_artifact_diagnostic.py`
+diff maps after Stage 06 before trusting RP figures. Prior GridRad speckle numbers
+(1.8% mean) apply to the pre–eastern-fix corrected archive.
+Residual broad GridRad−MYRORSS climatological offsets may remain in era-comparison
+diagnostics. Re-run Stages 06–14 after debias / MYRORSS fixes.
 
 ### 1.2 MESH75 formula residuals
 

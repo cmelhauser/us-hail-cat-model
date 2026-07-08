@@ -1,7 +1,7 @@
 # Hail Catastrophe Model — Executive Summary
 
 **Version:** 2.2.2 (model); **`2.2.1`** on `main` until v2.2.2 merge  
-**Status:** Full v2.2.1 production run complete (2026-06-30); Stages 01–14 validated  
+**Status:** Stage 01 MYRORSS coordinate-fix re-ingest **complete** (2026-07-08); Stages **05–14** rebuilding for final v2.2.2 hazard products (`hail_from05`)  
 **Primary use:** CONUS hail hazard modeling, stochastic event simulation, validation, and model-risk diagnostics
 
 ---
@@ -141,4 +141,4 @@ For underwriting or regulatory use, the model should be accompanied by:
 
 ## 8. Bottom Line
 
-v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. The **v2.2.1** production hazard layer is complete on **9,797** convective days: **8,798** historical events at **29 mm** (~**303 yr⁻¹**), analytical and **50,000-year** stochastic return-period maps, and **15.17 million** synthetic catalog events. It is a strong transparent **hazard-only** modeling framework; exposure and vulnerability are documented as future work (methodology §14).
+v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. The raw convective-day archive holds **9,797** MESH days after the **2026-07-08** MYRORSS coordinate-fix re-ingest. Final v2.2.2 hazard products (corrected archive, event catalog, analytical/stochastic RP maps) are rebuilding in Stages **05–14**; the prior **v2.2.1** snapshot (**8,798** events at **29 mm**, **50,000-year** catalog) is superseded pending that rebuild. It is a strong transparent **hazard-only** modeling framework; exposure and vulnerability are documented as future work (methodology §14).

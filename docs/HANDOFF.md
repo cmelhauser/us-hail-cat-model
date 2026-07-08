@@ -1,7 +1,8 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.2
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-07-07 (**Lambert Conformal map standardization** via `scripts/_mapping.py`; Stages 05–07 rebuild in progress).
+> Last updated: 2026-07-08 (**MYRORSS Stage 01 complete**; Stages **05–14** rebuild in
+> `hail_from05`; pre-run eastern-CONUS / geotransform QA passed).
 
 ---
 
@@ -152,32 +153,42 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ---
 
-## Pipeline Run Status (as of 2026-07-07)
+## Pipeline Run Status (as of 2026-07-08)
 
-**Stage 01 MYRORSS re-ingest in progress** after sparse-grid coordinate fix
-(`logs/01_myrorss_reingest.run.log`):
+**Stage 01 MYRORSS re-ingest complete** (5,023/5,023; eastern CONUS + geotransform QA
+passed). **Stages 05–14 rebuilding** in `screen hail_from05`:
 
 ```bash
-.venv/bin/python scripts/01_download_myrorss.py --workers 8
+screen -r hail_from05
+# or:
+.venv/bin/python run_pipeline.py --from 05 --skip-ml
+# logs: logs/pipeline_from05.run.log
 ```
 
-After completion:
+After Stage 06:
 
 ```bash
-python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
-python scripts/diagnostics/radar_artifact_diagnostic.py
+.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
+```
+
+After Stages 05–14 complete:
+
+```bash
+.venv/bin/python run_pipeline.py --validate
+.venv/bin/python scripts/14_render_figures.py
+.venv/bin/python scripts/diagnostics/render_pnas_article_figures.py
+# then freeze Results / Abstract from data/analysis/pnas_article_metrics.json
 ```
 
 | Stage | Status |
 |-------|--------|
-| 01 | ⏳ MYRORSS re-ingest (5,023 days) |
-| 05 | ⏸ Queued — five-pass filter incl. 21-day persistence |
-| 06 | ⏸ Queued — SPC validation pairs + debias refit |
-| 07 | ⏸ Queued — 366-day climatology |
-| 08–14 | ⏸ Cleared — restart after artifact QA |
+| 01 | ✅ MYRORSS re-ingest complete (2026-07-08) |
+| 05–14 | 🔄 Rebuild in progress (`hail_from05`; five-pass filter) |
+| Prior 06-30 hazard / 8,798 events | Superseded — do not cite as final v2.2.2 |
 
 **2026-07-07:** Added spatiotemporal persistence pass 5 and Stage 01 MYRORSS axis fix.
-Prior four-pass diagnostic (2026-07-06): GridRad speckle **1.8%** mean (**9.1%** P95).
+Prior four-pass diagnostic (2026-07-06): GridRad speckle **1.8%** mean (**9.1%** P95)
+on the pre–eastern-fix corrected archive.
 
 ---
 

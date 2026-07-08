@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-06 (`v2.2.2`; inner-range radial ring pass + Stages 05–07 rebuild — see `docs/RUN_NOTES.md`)**
+**Last updated: 2026-07-08 (`v2.2.2`; MYRORSS Stage 01 complete; Stages 05–14 rebuild — see `docs/RUN_NOTES.md`)**
 
 ---
 
@@ -267,7 +267,13 @@ Current repository state:
 - Regression / golden-output tests
 - Bootstrap CIs on Stage 09 RP estimates
 
-**Immediate run priorities (2026-07-06):**
+**Immediate run priorities (2026-07-08):**
+- Monitor Stages 05–14 rebuild (`screen -r hail_from05`; `logs/pipeline_from05.run.log`).
+- After Stage 06: `scripts/diagnostics/radar_artifact_diagnostic.py` (refit debias; verify speckle / eastern CONUS).
+- After full run: `--validate`; regenerate Stage 14 + `render_pnas_article_figures.py`; freeze manuscript Results/Abstract from `pnas_article_metrics.json`.
+- Do not cite pre–eastern-fix (2026-06-30) hazard numbers as final v2.2.2.
+
+**Prior priorities (2026-07-06):**
 - Monitor Stages 05–07 rebuild (`logs/pipeline_05_07.run.log`).
 - Run `scripts/diagnostics/radar_artifact_diagnostic.py` after Stage 06 to refit debias and verify speckle / diff-map rings.
 - Compare stochastic RP maps before/after inner-range radial pass before Stages 08–14.

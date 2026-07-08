@@ -216,7 +216,7 @@ Re-run Stage 05 after v2.2.1+ calibration or artifact-filter changes requires de
 
 MYRORSS provides the early radar backbone from April 1998 through December 2011. The archive contains sparse radar-derived NetCDF objects at high temporal frequency and supports a spatially continuous historical hail field. Stage 01 reads both plain `.netcdf` and gzipped `.netcdf.gz` archive objects, accumulates native convective-day maximum MESH (12 UTC → 12 UTC; §2.6), subsets CONUS, aggregates by block maximum, applies finite-value and physical-bound QA, and writes daily GeoTIFFs.
 
-**Sparse-grid coordinates (v2.2.2 fix):** MYRORSS NetCDF uses WDSS-II `SparseLatLonGrid` storage where `pixel_x` indexes the latitude (row) direction and `pixel_y` indexes longitude (columns), with origin at (`Longitude`, `Latitude`) = (−130.005°, 55.005°) and 0.01° spacing. An earlier Stage 01 release swapped these axes, which mis-mapped eastern CONUS hail and produced an apparent vertical cutoff near ~97°W on era maps. The fix requires a full MYRORSS re-ingest.
+**Sparse-grid coordinates (v2.2.2 fix):** MYRORSS NetCDF uses WDSS-II `SparseLatLonGrid` storage where `pixel_x` indexes the latitude (row) direction and `pixel_y` indexes longitude (columns), with origin at (`Longitude`, `Latitude`) = (−130.005°, 55.005°) and 0.01° spacing. An earlier Stage 01 release swapped these axes, which mis-mapped eastern CONUS hail and produced an apparent vertical cutoff near ~97°W on era maps. The full MYRORSS re-ingest completed **2026-07-08** (5,023/5,023 days; geotransform and eastern-CONUS QA passed). Stages 05–14 must be rebuilt on that archive before final hazard products are cited.
 
 Stage 01 also writes:
 

@@ -1,7 +1,7 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-07 (`v2.2.2` — MYRORSS re-ingest + five-pass persistence filter)**
+**Last updated: 2026-07-08 (`v2.2.2` — MYRORSS re-ingest complete; Stages 05–14 rebuild)**
 
 ---
 
@@ -20,21 +20,20 @@
 
 ---
 
-## 2. Current State (as of 2026-07-07)
+## 2. Current State (as of 2026-07-08)
 
-**Stage 01 MYRORSS re-ingest in progress** (`logs/01_myrorss_reingest.run.log`) after
-sparse-grid `pixel_x`/`pixel_y` fix. Stages 05–07 queued after re-ingest completes.
-
-**Prior v2.2.1 production run (2026-06-30):** full pipeline Stages 01–14 validated with
-`--skip-ml` (pre-debias stochastic catalog superseded after rerun).
+**Stage 01 MYRORSS re-ingest complete** (2026-07-08): 5,023/5,023 days; WDSS-II
+`pixel_x`/`pixel_y` axes corrected; eastern CONUS and geotransform QA passed.
+**Stages 05–14 rebuilding** in `screen hail_from05`
+(`run_pipeline.py --from 05 --skip-ml`). Prior v2.2.1 hazard products (events,
+RP maps, stochastic catalog) are **provisional / superseded** until this rebuild finishes.
 
 | Metric | Value |
 |--------|------:|
-| Convective-day archive | 9,797 target (MYRORSS re-ingesting; 2,714 GridRad + 2,060 MRMS on disk) |
-| Corrected MESH75 | queued — five-pass filter + range debias + era-pooled QM |
-| Radar artifact QA | five-pass filter (persistence pass 5, 2026-07-07); prior GridRad speckle 1.8% (2026-07-06) |
-| Historical events | 8,798 at 29 mm (~303 yr⁻¹) — **pending rerun** after Stage 08 |
-| Stochastic catalog | 50,000 yr; 15.17M events — **pending rerun** after Stage 13 |
+| Convective-day archive | **9,797** (5,023 fixed MYRORSS + 2,714 GridRad + 2,060 MRMS) |
+| Corrected MESH75 | rebuilding — five-pass filter + range debias + era-pooled QM |
+| Radar artifact QA | five-pass filter code in place; regenerate diagnostics after Stage 05/06 |
+| Historical events / stochastic | **pending** Stages 08 / 13 |
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -295,8 +294,9 @@ Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
-Active branch: v2.2.2. Model 2.2.2. Full production run complete 2026-06-30 (Stages 01–14).
-9,797 mesh TIFFs; 8,798 events at 29 mm; 50k-yr stochastic catalog validated.
+Active branch: v2.2.2. Model 2.2.2. Stage 01 MYRORSS fix complete 2026-07-08;
+Stages 05–14 rebuild in progress for final hazard products.
+9,797 raw mesh TIFFs; prior 8,798 events / 50k-yr catalog superseded pending rebuild.
 Stage 01/02 manifests distinguish missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.
 Hail-day climatology: scripts/diagnostics/hail_day_climatology.py.
