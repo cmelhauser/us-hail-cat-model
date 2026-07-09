@@ -51,10 +51,10 @@ from pathlib import Path
 import numpy as np
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, DOCS_FIG, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS
+    from _config import REPO_ROOT, DATA_ROOT, DOCS_FIG, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_MAP_CBAR_VMAX_IN, RP_YEARS
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, DOCS_FIG, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS
+    from scripts._config import REPO_ROOT, DATA_ROOT, DOCS_FIG, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_MAP_CBAR_VMAX_IN, RP_YEARS
     from scripts._logging import get_logger
 
 CDF_DIR   = DATA_ROOT / "analysis" / "cdf"
@@ -88,7 +88,7 @@ def setup_matplotlib():
     })
     return plt
 
-def render_rp_map(tif_path, out_path, title, vmax=None):
+def render_rp_map(tif_path, out_path, title, vmax=None, *, hail_size_map: bool = True):
     """Render a return period or occurrence probability map with CONUS outline."""
     try:
         from _mapping import load_conus_raster_for_map, save_conus_map_from_tif
@@ -97,14 +97,19 @@ def render_rp_map(tif_path, out_path, title, vmax=None):
 
     mask_path = MASK_DIR / "conus_mask.tif"
     mask_arg = mask_path if mask_path.exists() else None
-    preview = load_conus_raster_for_map(
-        tif_path,
-        mask_path=mask_arg,
-        scale=1.0 / 25.4,
-        zero_to_nan=True,
-    )
-    finite = preview[np.isfinite(preview)]
-    vhi = vmax or (float(np.nanpercentile(finite, 99)) if finite.size else 1.0)
+    if hail_size_map:
+        vhi = RP_MAP_CBAR_VMAX_IN if vmax is None else vmax
+        cbar_label = "Hail Size (inches)"
+    else:
+        preview = load_conus_raster_for_map(
+            tif_path,
+            mask_path=mask_arg,
+            scale=1.0 / 25.4,
+            zero_to_nan=False,
+        )
+        finite = preview[np.isfinite(preview)]
+        vhi = vmax or (float(np.nanpercentile(np.abs(finite), 99)) if finite.size else 1.0)
+        cbar_label = "Hail delta (inches)"
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,13 +117,14 @@ def render_rp_map(tif_path, out_path, title, vmax=None):
         tif_path,
         out_path,
         title=title,
-        cbar_label="Hail Size (inches)",
+        cbar_label=cbar_label,
         cmap="YlOrRd",
-        vmin=0,
+        vmin=0 if hail_size_map else None,
         vmax=vhi,
         mask_path=mask_arg,
         scale=1.0 / 25.4,
-        zero_to_nan=True,
+        zero_to_nan=hail_size_map,
+        symmetric=not hail_size_map,
         figsize=(14, 8),
     )
     log(f"    {out_path.name}")
@@ -236,8 +242,12 @@ def render_delta_maps():
         with rasterio.open(out_tif, "w", **profile) as dst:
             dst.write(delta, 1)
         try:
-            render_rp_map(out_tif, FIG_ANAL / f"analytical_stochastic_delta_{rp:05d}yr.png",
-                          f"Stochastic − Analytical {rp:,}-Year Hail Delta")
+            render_rp_map(
+                out_tif,
+                FIG_ANAL / f"analytical_stochastic_delta_{rp:05d}yr.png",
+                f"Stochastic − Analytical {rp:,}-Year Hail Delta",
+                hail_size_map=False,
+            )
         except Exception as e:
             log(f"    WARN: could not render delta {rp}: {e}")
 

@@ -1,4 +1,4 @@
-# AGENTS.md - CONUS Hail Catastrophe Model v2.2.2
+# AGENTS.md - CONUS Hail Catastrophe Model v2.2.3
 
 For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
@@ -13,7 +13,7 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: **2.2.2** (convective days 12 UTC → 12 UTC; literature-aligned thresholds)
+- Version: **2.2.3** (GridRad native QC in 04c; site remediation on; 10 km azimuth bins)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
@@ -21,7 +21,7 @@ stochastic event catalog.
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
-Current operating branch: **`v2.2.2`** (development; push/PR to `origin` only). Model release **`2.2.2`** on **`v2.2.2`**; **`2.2.1`** on `main` until merged.
+Current operating branch: **`v2.2.3`** (development; push/PR to `origin` only). Model release **`2.2.3`** on **`v2.2.3`**; **`2.2.2`** prior rebuild.
 The old `v2.1` branch has been merged and is no longer the active development branch.
 
 ## Non-Negotiable Rules
@@ -171,7 +171,7 @@ auto-**skip** standalone **04b** and run **04c** with **`--with-04b-download --w
   **d841001** for Apr–Aug 2018+). With **`--workers > 1`**, each worker
   process uses its own HTTP session (04b is loaded once per worker via a pool
   initializer; mind **`workers × --04b-download-workers`** vs NCAR throttling).
-- **04c reflectivity:** use sparse **`Reflectivity(Index)` + `index`** (not **`Nradecho`**, which is not dBZ). Gap-fill GeoTIFFs include GDAL tags `MAX_MESH75_MM`, `ACTIVE_CELLS`, etc., and per-day log lines with peak hail.
+- **04c reflectivity:** use sparse **`Reflectivity(Index)` + `index`** (not **`Nradecho`**, which is not dBZ). **v2.2.3+** applies native echo-frequency filter + clutter removal (`_gridrad_qc.py`) before SHI unless `--no-gridrad-native-qc`.
 - **04c disk / workers:** `run_pipeline.py` passes **`--workers 4`** by default. With **`--with-04b-download`**, up to four concurrent day trees under `gridrad_severe/` can use ~8–12 GB each. On constrained disks, run **`scripts/04c_fill_gridrad_gap.py --with-04b-download --workers 2`** (or `1`) directly instead of `run_pipeline.py --only 04c`.
 - **04c resume / backfill:** **`--missing-only`** processes only convective days without an output GeoTIFF (skips existing `mesh_*.tif`). **`--from-date`** / **`--until-date`** bound the window. Manifest rebuild: **`--manifest-only`**.
 

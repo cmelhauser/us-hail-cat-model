@@ -427,7 +427,7 @@ def check_analytical_vs_stochastic() -> CheckResult:
     }
     status = "pass"
     msg = f"{rp}-yr median stochastic/analytical = {metrics['median_ratio_stoch_over_analytical']}"
-    if metrics["fraction_stoch_gt_1.5x_analytical"] > 0.25:
+    if metrics["fraction_stoch_gt_1p5x_analytical"] > 0.25:
         status = "warn"
         msg += " — review GPD tail / perturbation σ"
     return CheckResult("analytical_vs_stochastic", status, lit, msg, metrics)

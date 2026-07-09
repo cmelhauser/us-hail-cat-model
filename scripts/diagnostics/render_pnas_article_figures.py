@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts._config import MODEL_VERSION
+from scripts._config import MODEL_VERSION, RP_MAP_CBAR_VMAX_IN
 from scripts._mapping import (
     create_conus_axes,
     load_conus_raster_for_map,
@@ -269,7 +269,7 @@ def _render_rp_map_png(
     )
     finite = preview[np.isfinite(preview)]
     if inches:
-        vmax = float(np.nanpercentile(finite, 99)) if finite.size else 1.0
+        vmax = RP_MAP_CBAR_VMAX_IN
         cbar_label = "Hail size (inches)"
     else:
         vmax = min(80.0, float(np.percentile(finite[finite > 0], 99)) if np.any(finite > 0) else 20.0)
@@ -420,8 +420,7 @@ def fig_analytical_vs_stochastic(out: Path) -> None:
         )
         for tif, _ in panels
     ]
-    finite = np.concatenate([p[np.isfinite(p)] for p in preview if np.any(np.isfinite(p))])
-    vmax = float(np.nanpercentile(finite, 99)) if finite.size else 1.0
+    vmax = RP_MAP_CBAR_VMAX_IN
 
     fig, axes = create_conus_axes(1, 2, figsize=(14, 5.5))
     ax_list = np.atleast_1d(axes).ravel()

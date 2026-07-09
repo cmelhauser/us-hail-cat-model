@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 # ── Model version ─────────────────────────────────────────────────────────────
-MODEL_VERSION: str = "2.2.2"
+MODEL_VERSION: str = "2.2.3"
 
 # Daily hail rasters use a 12 UTC → 12 UTC convective day (see scripts/_io.py).
 CONVECTIVE_DAY_START_HOUR_UTC: int = 12
@@ -88,6 +88,7 @@ WITT_RATIO_EXP: float = 0.412
 
 # ── EVT / return-period defaults ──────────────────────────────────────────────
 RP_YEARS: tuple[int, ...] = (10, 25, 50, 100, 200, 250, 500, 1000, 5000, 10000, 50000)
+RP_MAP_CBAR_VMAX_IN: float = 10.0  # fixed hail-size color bar for all RP map PNGs
 
 # Stage 10 spatial smoothing defaults
 POOL_RADIUS_KM: float = 150.0   # radius of pooling kernel
@@ -144,7 +145,7 @@ __all__ = [
     "MESH75_A", "MESH75_B",
     "WITT_INCH_TO_CM", "WITT_RATIO_EXP",
     # EVT / RP
-    "RP_YEARS", "POOL_RADIUS_KM", "DECAY_KM",
+    "RP_YEARS", "RP_MAP_CBAR_VMAX_IN", "POOL_RADIUS_KM", "DECAY_KM",
     "N_REGIONS_DEFAULT", "GPD_THRESH_MM_DEFAULT",
     # Stochastic
     "RNG_SEED", "N_SIM_YEARS", "TRANSLATE_CELLS",

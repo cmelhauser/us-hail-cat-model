@@ -142,6 +142,7 @@ log = get_logger("04c_fill_gridrad_gap", LOG_ROOT).info
 
 # Populated in ProcessPool worker processes when using --with-04b-download with --workers > 1.
 _worker_04b_mod = None
+_NATIVE_QC_ENABLED = True
 
 
 def load_era5_isotherms():
@@ -356,7 +357,17 @@ def _load_reflectivity_3d(ds) -> np.ndarray | None:
     return grid
 
 
-def process_gridrad_file(nc_path, daily_max, month):
+def _load_dense_3d(ds, name: str) -> np.ndarray | None:
+    """Load a dense (altitude, lat, lon) variable when present."""
+    if name not in ds.variables:
+        return None
+    dense = _read_var_array(ds, name)
+    if dense.ndim != 3:
+        return None
+    return dense.astype(np.float32)
+
+
+def process_gridrad_file(nc_path, daily_max, month, *, native_qc: bool = True):
     """Process a single GridRad NetCDF: compute SHI → MESH75, update daily_max."""
     import netCDF4
 
@@ -390,8 +401,17 @@ def process_gridrad_file(nc_path, daily_max, month):
         if refl is None:
             ds.close()
             return 0
+        nradobs = _load_dense_3d(ds, "Nradobs")
+        nradecho = _load_dense_3d(ds, "Nradecho")
     finally:
         ds.close()
+
+    if native_qc:
+        try:
+            from _gridrad_qc import apply_gridrad_native_qc
+        except ImportError:
+            from scripts._gridrad_qc import apply_gridrad_native_qc
+        refl = apply_gridrad_native_qc(refl, nradobs, nradecho)
 
     max_refl = np.nanmax(refl, axis=0)
     active = np.argwhere(max_refl >= Z_THRESHOLD)
@@ -472,8 +492,9 @@ def manifest_row_for_day(
     )
 
 
-def process_day(convective_day: date):
+def process_day(convective_day: date, *, native_qc: bool | None = None):
     load_era5_isotherms()
+    use_native_qc = _NATIVE_QC_ENABLED if native_qc is None else native_qc
 
     out_path = mesh_path_for_convective_day(OUT_DIR, convective_day)
     nc_files, _source = find_gridrad_files(convective_day)
@@ -511,7 +532,9 @@ def process_day(convective_day: date):
 
     for nc_path in nc_files:
         try:
-            n = process_gridrad_file(nc_path, daily_max, convective_day.month)
+            n = process_gridrad_file(
+                nc_path, daily_max, convective_day.month, native_qc=use_native_qc,
+            )
             total_cols += n
         except Exception as e:
             errors += 1
@@ -683,6 +706,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Process only days without an output GeoTIFF (backfill retries).",
     )
+    parser.add_argument(
+        "--no-gridrad-native-qc",
+        action="store_true",
+        help="Skip GridRad native echo-frequency filter and clutter removal before SHI.",
+    )
     return parser
 
 
@@ -707,10 +735,17 @@ def _process_day_worker(day: date) -> tuple[str, dict]:
         return day.strftime("%Y%m%d"), {"files": 0, "error": str(e)}
 
 
+def _04c_pool_init(native_qc: bool, load_04b: bool) -> None:
+    """ProcessPool initializer: native QC flag and optional Stage 04b module."""
+    global _NATIVE_QC_ENABLED, _worker_04b_mod
+    _NATIVE_QC_ENABLED = native_qc
+    if load_04b:
+        _worker_04b_mod = _load_04b_module()
+
+
 def _04c_pool_init_load_04b() -> None:
-    """ProcessPool initializer: load Stage 04b once per worker process."""
-    global _worker_04b_mod
-    _worker_04b_mod = _load_04b_module()
+    """Backward-compatible initializer (native QC on)."""
+    _04c_pool_init(True, True)
 
 
 def _run_one_day_download_then_process(
@@ -831,6 +866,9 @@ def main(argv: list[str] | None = None) -> None:
     log(f"  With 04b: {args.with_04b_download}")
     log(f"  Missing only: {args.missing_only}")
     log(f"  Delete GridRad inputs after each day: {not args.keep_gridrad_inputs}")
+    global _NATIVE_QC_ENABLED
+    _NATIVE_QC_ENABLED = not args.no_gridrad_native_qc
+    log(f"  Native GridRad QC: {_NATIVE_QC_ENABLED}")
 
     if args.check_data:
         log("\n  Checking data availability ...")
@@ -973,14 +1011,19 @@ def main(argv: list[str] | None = None) -> None:
             if args.with_04b_download:
                 pool = ProcessPoolExecutor(
                     max_workers=w,
-                    initializer=_04c_pool_init_load_04b,
+                    initializer=_04c_pool_init,
+                    initargs=(_NATIVE_QC_ENABLED, True),
                 )
                 specs = [
                     (day, True, int(args.download_workers)) for day in all_days
                 ]
                 pairs = pool.map(_run_one_day_download_then_process, specs)
             else:
-                pool = ProcessPoolExecutor(max_workers=w)
+                pool = ProcessPoolExecutor(
+                    max_workers=w,
+                    initializer=_04c_pool_init,
+                    initargs=(_NATIVE_QC_ENABLED, False),
+                )
                 pairs = pool.map(_process_day_worker, all_days)
             try:
                 for day, (ymd, result) in zip(all_days, pairs):

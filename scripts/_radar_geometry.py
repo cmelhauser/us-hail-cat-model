@@ -940,12 +940,17 @@ def remove_gridrad_artifacts(
     site_idx_grid: np.ndarray,
     *,
     history: np.ndarray | None = None,
-    site_remediation: bool = False,
+    site_remediation: bool = True,
 ) -> tuple[np.ndarray, dict[str, int]]:
     """Full GridRad artifact pass: spatial four passes + spatiotemporal persistence."""
     out, n_iso = remove_speckle_spikes(data)
     out, n_rad = remove_radial_range_rings(out, site_idx_grid, range_km_grid)
-    out, n_az = remove_azimuthal_ring_artifacts(out, site_idx_grid, range_km_grid)
+    out, n_az = remove_azimuthal_ring_artifacts(
+        out,
+        site_idx_grid,
+        range_km_grid,
+        edges=RADIAL_RING_BIN_EDGES_KM,
+    )
     out, n_fil = remove_background_filament_artifacts(out)
     out, n_persist = remove_persistent_range_artifacts(
         out, site_idx_grid, range_km_grid, history,

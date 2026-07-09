@@ -9,6 +9,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.3] — 2026-07-09
+
+### Added
+
+- **`scripts/_gridrad_qc.py`** — GridRad-native echo-frequency filter (`Necho/Nobs < 0.6`)
+  and 4-step clutter removal analogue applied in Stage **04c** before SHI (disable with
+  `--no-gridrad-native-qc`).
+
+### Changed
+
+- **Stage 05** — site-specific WSR-88D remediation **on by default** (`site_remediation=True`).
+- **Azimuthal ring pass** — uses **10 km** range bins (`RADIAL_RING_BIN_EDGES_KM`) matching
+  radial and persistence passes (was coarser `DEFAULT_RANGE_BIN_EDGES_KM`).
+- **`MODEL_VERSION`** → **2.2.3** (requires Stage **04c** re-run for GridRad QC + Stage **05+**
+  rebuild for remediation/azimuth fixes).
+
+---
+
+## [2.2.2] — 2026-07-08
+
 ### Added
 
 - **Stage 01 MYRORSS sparse-grid coordinate fix** — `pixel_x`/`pixel_y` were swapped vs
