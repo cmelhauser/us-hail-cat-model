@@ -1,14 +1,14 @@
 # Project Memory
 
-**CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-08 (`v2.2.2` — MYRORSS re-ingest complete; Stages 05–14 rebuild)**
+**CONUS Hail Catastrophe Model v2.3**
+**Last updated: 2026-07-09 (`v2.3.0` — Tier 0+1 radar artifact ML; full rebuild from 04c)**
 
 ---
 
 ## 1. Canonical Project Identity
 
 - **Name:** CONUS Hail Catastrophe Model
-- **Current version:** v2.2.2 (dev branch); v2.2.1 on `main` until merge
+- **Current version:** v2.3.0 (dev branch); v2.2.3 = Tier 0 patch; v2.2.1 on `main` until merge
 - **Model type:** hail hazard model
 - **Domain:** continental United States
 - **Primary hazard input:** radar-derived MESH / MESH75
@@ -20,20 +20,19 @@
 
 ---
 
-## 2. Current State (as of 2026-07-08)
+## 2. Current State (as of 2026-07-09)
 
-**Stage 01 MYRORSS re-ingest complete** (2026-07-08): 5,023/5,023 days; WDSS-II
-`pixel_x`/`pixel_y` axes corrected; eastern CONUS and geotransform QA passed.
-**Stages 05–14 rebuilding** in `screen hail_from05`
-(`run_pipeline.py --from 05 --skip-ml`). Prior v2.2.1 hazard products (events,
-RP maps, stochastic catalog) are **provisional / superseded** until this rebuild finishes.
+**v2.3.0 Tier 0+1** committed on branches **`v2.2.3`** (04c native QC, site remediation,
+10 km azimuth bins) and **`v2.3.0`** (geometry artifact classifier). **Full rebuild**
+`--from 04c --clean-from 04c` with `artifact_classifier.pkl` (ROC-AUC ~0.90). Prior
+v2.2.2 run (7,792 events; SPC POD 0.48 @ ≥1″) superseded.
 
 | Metric | Value |
 |--------|------:|
-| Convective-day archive | **9,797** (5,023 fixed MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Corrected MESH75 | rebuilding — five-pass filter + range debias + era-pooled QM |
-| Radar artifact QA | five-pass filter code in place; regenerate diagnostics after Stage 05/06 |
-| Historical events / stochastic | **pending** Stages 08 / 13 |
+| Convective-day archive | **9,797** (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
+| GridRad 04c | re-running with native echo-frequency + clutter QC |
+| Stage 05 | six rule passes + site remediation + optional classifier |
+| Historical events / stochastic | **pending** v2.3.0 Stages 08 / 13 |
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 

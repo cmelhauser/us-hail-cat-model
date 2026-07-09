@@ -3,7 +3,7 @@
 ## Run Context
 
 - Date started: 2026-05-01 14:47 EDT
-- Active branch: **`v2.2.2`** (development on `origin` only). Model **2.2.2** on **`v2.2.2`**; **2.2.1** on `main`.
+- Active branch: **`v2.3.0`** (development on `origin` only). **`v2.2.3`** = Tier 0 patch; **`main`** has **2.2.1**.
 - Prior production mesh archived under `data/historical/mesh_0.05deg_archive_calendar_utc_00z/` (gitignored)
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active
@@ -20,35 +20,35 @@
 
 ## Current Run Status
 
-Snapshot taken **2026-07-08 ~09:21 EDT** — **Stages 05–14 rebuild** after Stage 01
-MYRORSS sparse-grid coordinate fix completed and passed eastern-CONUS / geotransform QA.
+Snapshot taken **2026-07-09** — **v2.3.0 full rebuild** (Tier 0 + Tier 1) after
+`v2.2.3`/`v2.3.0` branches committed. Prior v2.2.2 run (7,792 events; SPC POD 0.48)
+superseded.
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| Stage 01 | ✅ Complete | Full MYRORSS re-ingest (1998–2011); 5,023/5,023; validation passed 2026-07-08 |
-| Stages 02–04c | ✅ Complete | Unchanged (MRMS, SPC, ERA5, GridRad) |
-| Stages 05–14 | ⏳ In progress | `screen hail_from05`: `run_pipeline.py --from 05 --skip-ml` |
+| Stage 01 | ✅ Complete | MYRORSS re-ingest (5,023 days); unchanged |
+| Stages 02–04a, 03 | ✅ Complete | Unchanged |
+| Stage 04c | ⏳ Re-run | Native GridRad QC (`_gridrad_qc.py`); ~2,714 GridRad days |
+| Stages 05–14 | ⏳ Pending | Classifier enabled (no `--skip-ml`); site remediation on |
 
 ```bash
-tail -f logs/pipeline_from05.run.log
-tail -f logs/05_apply_mesh_bias_correction.log
-screen -r hail_from05
+screen -r hail_v230
+tail -f logs/pipeline_v230.run.log
+tail -f logs/04c_fill_gridrad_gap.log
 ```
 
-Pre-Stage 05 QA (2026-07-08): geotransform OK; no plains-hail-without-east-of-−96°W samples;
-must-pass eastern outbreak days (1998-04-26 … 2011-05-22) PASS. Stage 05+ outputs cleaned
-via `clean_from_stage("05")` (corrected mesh, events, CDF, occurrence, mask, stochastic,
-radar_artifacts). Preserve `mesh_0.05deg` and SPC.
-
-After Stage 06:
+Pre-run (2026-07-09):
 
 ```bash
-.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
+.venv/bin/python scripts/train_artifact_classifier.py   # ROC-AUC ~0.90; 382k samples
+.venv/bin/python run_pipeline.py --from 04c --clean-from 04c
 ```
 
-Review `map_gridrad_minus_myrorss_mean_annual_max.png` before trusting final RP figures.
+After Stage 06: `radar_artifact_diagnostic.py`, `literature_validation_suite.py`
+(check `rp_ring_energy`).
 
-Previous snapshot **2026-07-07 ~16:17 EDT** — Stage 01 re-ingest in progress (superseded).
+Previous snapshot **2026-07-08** — v2.2.2 Stages 05–14 complete (`--skip-ml`);
+7,792 events; analytical 100-yr 123 mm; stochastic OEP 231.7 mm.
 
 Previous snapshot **2026-07-06 ~23:24 EDT** — inner-range radial ring pass (1.12× /
 1.18× vs ≤75 km baseline); superseded by persistence pass 5 + MYRORSS re-ingest.

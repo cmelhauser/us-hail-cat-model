@@ -284,6 +284,28 @@ def nearest_nexrad_site_index(
     return idx_min.reshape(NROWS, NCOLS)
 
 
+def azimuth_to_nearest_site_deg(
+    lat_grid: np.ndarray | None = None,
+    lon_grid: np.ndarray | None = None,
+    site_idx_grid: np.ndarray | None = None,
+) -> np.ndarray:
+    """Per-cell azimuth (degrees, 0–360) from nearest WSR-88D site to cell center."""
+    if lat_grid is None or lon_grid is None:
+        lat_grid, lon_grid = cell_center_latlon()
+    site_lats, site_lons, _ = nexrad_sites_conus()
+    if site_idx_grid is None:
+        site_idx_grid = nearest_nexrad_site_index(lat_grid, lon_grid)
+    site_lat = site_lats[site_idx_grid.astype(np.int64)]
+    site_lon = site_lons[site_idx_grid.astype(np.int64)]
+    dlon = np.radians(lon_grid - site_lon)
+    lat1 = np.radians(lat_grid)
+    lat2 = np.radians(site_lat)
+    x = np.sin(dlon) * np.cos(lat2)
+    y = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(dlon)
+    az = (np.degrees(np.arctan2(x, y)) + 360.0) % 360.0
+    return az.astype(np.float32)
+
+
 def ensure_nearest_site_index_grid(cache_path: Path | None = None) -> np.ndarray:
     """Load or compute per-cell nearest-radar site index."""
     path = Path(cache_path or NEAREST_SITE_NPY)

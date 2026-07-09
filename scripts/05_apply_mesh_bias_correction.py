@@ -91,6 +91,7 @@ LOG_FILE  = LOG_DIR / "05_mesh_bias_correction.log"
 QQ_FILE   = CAL_DIR / "gridrad_quantile_map.npz"
 CQM_FILE  = CAL_DIR / "gridrad_cqm_model.pkl"
 FILTER_FILE = CAL_DIR / "hail_filter_model.pkl"
+ARTIFACT_CLASSIFIER_FILE = CAL_DIR / "artifact_classifier.pkl"
 DIAG_FILE = CAL_DIR / "calibration_diagnostics.csv"
 FILTER_DIAG_FILE = CAL_DIR / "hail_filter_diagnostics.csv"
 
@@ -122,9 +123,11 @@ _qq_myrorss   = None
 _qq_type      = None
 _cqm_model    = None
 _filter_model = None
+_artifact_classifier_model = None
 _range_debias = None
 _range_km_grid = None
 _site_idx_grid = None
+_azimuth_grid = None
 _gridrad_history: deque = deque()
 
 log = get_logger("05_apply_mesh_bias_correction", LOG_ROOT).info
@@ -154,18 +157,34 @@ def init_range_debias(*, enable: bool = True) -> bool:
     return True
 
 
-def init_artifact_grids(*, speckle_filter: bool = True) -> None:
-    """Load cached NEXRAD distance and nearest-site grids for GridRad artifact removal."""
-    global _range_km_grid, _site_idx_grid
-    if not speckle_filter:
-        return
+def ensure_geometry_grids() -> None:
+    """Load per-cell range, site index, and azimuth grids (cached)."""
+    global _range_km_grid, _site_idx_grid, _azimuth_grid
     try:
-        from _radar_geometry import ensure_nearest_site_index_grid, ensure_range_km_grid
+        from _radar_geometry import (
+            azimuth_to_nearest_site_deg,
+            ensure_nearest_site_index_grid,
+            ensure_range_km_grid,
+        )
     except ImportError:  # pragma: no cover
-        from scripts._radar_geometry import ensure_nearest_site_index_grid, ensure_range_km_grid
+        from scripts._radar_geometry import (
+            azimuth_to_nearest_site_deg,
+            ensure_nearest_site_index_grid,
+            ensure_range_km_grid,
+        )
     if _range_km_grid is None:
         _range_km_grid = ensure_range_km_grid()
-    _site_idx_grid = ensure_nearest_site_index_grid()
+    if _site_idx_grid is None:
+        _site_idx_grid = ensure_nearest_site_index_grid()
+    if _azimuth_grid is None:
+        _azimuth_grid = azimuth_to_nearest_site_deg()
+
+
+def init_artifact_grids(*, speckle_filter: bool = True) -> None:
+    """Load geometry grids for GridRad artifact removal."""
+    if not speckle_filter:
+        return
+    ensure_geometry_grids()
 
 def load_gridrad_days() -> set:
     global _gridrad_days
@@ -449,6 +468,54 @@ def apply_probabilistic_environmental_filter(data: np.ndarray, lat_grid: np.ndar
     """Compatibility wrapper for the v2.1 optional environmental filter API."""
     return apply_probabilistic_filter(data, day_of_year, lat_grid, skip_ml=skip_ml)
 
+
+def apply_artifact_classifier(
+    data: np.ndarray,
+    day_of_year: int,
+    source: str,
+    *,
+    skip_ml: bool = False,
+) -> np.ndarray:
+    """Optional geometry-aware artifact down-weighting (deterministic fallback)."""
+    global _artifact_classifier_model
+    if skip_ml:
+        return data
+    ensure_geometry_grids()
+    if _range_km_grid is None or _azimuth_grid is None:
+        return data
+    if _artifact_classifier_model is None:
+        payload = _load_pickle_model(ARTIFACT_CLASSIFIER_FILE)
+        if isinstance(payload, dict) and "model" in payload:
+            _artifact_classifier_model = payload["model"]
+        else:
+            _artifact_classifier_model = payload
+    if _artifact_classifier_model is None:
+        return data
+    try:
+        from _artifact_features import apply_classifier_weights, build_feature_matrix
+    except ImportError:  # pragma: no cover
+        from scripts._artifact_features import apply_classifier_weights, build_feature_matrix
+    feats, active = build_feature_matrix(
+        data,
+        range_km=_range_km_grid,
+        azimuth_deg=_azimuth_grid,
+        day_of_year=day_of_year,
+        source=source,
+        active_mm=MIN_MESH75_MM,
+    )
+    if feats.size == 0:
+        return data
+    if hasattr(_artifact_classifier_model, "predict_proba"):
+        prob = _artifact_classifier_model.predict_proba(feats)[:, 1]
+    else:
+        prob = _artifact_classifier_model.predict(feats)
+    prob = np.clip(np.asarray(prob, dtype=np.float32), 0.0, 1.0)
+    out = apply_classifier_weights(data, prob, active)
+    out[out < MIN_MESH75_MM] = 0.0
+    repaired, _ = sanitize_hail_values(out, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
+    return repaired
+
+
 def build_lat_grid() -> np.ndarray:
     lats = LAT_MAX - (np.arange(OUT_NROWS) + 0.5) * OUT_DX
     return np.broadcast_to(lats[:, np.newaxis], (OUT_NROWS, OUT_NCOLS))
@@ -522,6 +589,10 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debia
             )
             _gridrad_history.append(pre_filter)
             n_speckle = sum(artifact_counts.values())
+
+    corrected = apply_artifact_classifier(
+        corrected, doy, source, skip_ml=skip_ml,
+    )
 
     filtered = apply_probabilistic_filter(corrected, doy, lat_grid, skip_ml=skip_ml)
     filtered, n_repaired = sanitize_hail_values(filtered, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
@@ -610,7 +681,13 @@ def main():
         sys.exit(0 if validate_outputs() else 1)
 
     if args.retrain_models:
-        log("  NOTE: --retrain-models accepted; train artifacts externally, then rerun Stage 05")
+        train_script = REPO_ROOT / "scripts" / "train_artifact_classifier.py"
+        if train_script.is_file():
+            import subprocess
+            log(f"  Training artifact classifier → {ARTIFACT_CLASSIFIER_FILE.name}")
+            subprocess.run([sys.executable, str(train_script)], check=False)
+        else:
+            log("  WARN: train_artifact_classifier.py not found")
 
     LOG_ROOT.mkdir(parents=True, exist_ok=True)
     STAGE05_PID.write_text(str(os.getpid()))

@@ -280,6 +280,18 @@ Optional conditional calibration model.
 
 Optional probabilistic hail-realness model.
 
+### `artifact_classifier.pkl`
+
+Optional geometry-aware GridRad artifact classifier (v2.3.0+). Path:
+
+```text
+data/analysis/calibration/artifact_classifier.pkl
+```
+
+Trained by `scripts/train_artifact_classifier.py` from Stage **06** SPC–MESH pairs.
+Stage **05** zeros cells with artifact probability ≥ **0.65** after rule passes.
+Bypass with `--skip-ml`; missing file → rules-only deterministic path.
+
 ### `data/analysis/calibration/range_debias.npz`
 
 Range-dependent multiplicative debias table from SPC–MESH pairs (via `radar_artifact_diagnostic.py`).

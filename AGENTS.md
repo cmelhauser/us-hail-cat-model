@@ -1,4 +1,4 @@
-# AGENTS.md - CONUS Hail Catastrophe Model v2.2.3
+# AGENTS.md - CONUS Hail Catastrophe Model v2.3.0
 
 For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
@@ -13,7 +13,7 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: **2.2.3** (GridRad native QC in 04c; site remediation on; 10 km azimuth bins)
+- Version: **2.3.0** (Tier 0 radar QC + geometry-aware artifact classifier)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
@@ -21,7 +21,7 @@ stochastic event catalog.
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
-Current operating branch: **`v2.2.3`** (development; push/PR to `origin` only). Model release **`2.2.3`** on **`v2.2.3`**; **`2.2.2`** prior rebuild.
+Current operating branch: **`v2.3.0`** (development; push/PR to `origin` only).
 The old `v2.1` branch has been merged and is no longer the active development branch.
 
 ## Non-Negotiable Rules
@@ -255,20 +255,20 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-07-08:
+As of 2026-07-09:
 
 | Area | Status |
 |---|---|
-| Active branch | **`v2.2.2`** (dev); model **2.2.1** on `main` until merge |
+| Active branch | **`v2.3.0`** (dev); **`v2.2.3`** (Tier 0 patch) and **2.2.1** on `main` until merge |
 | All stage scripts (01–14) | Written, tested, production-validated |
-| Tests | 37 pytest modules (199 tests); GitHub Actions green on Python 3.10/3.11/3.12 |
-| **First full v2.2.1 production run** | Complete (2026-06-30) — superseded for manuscripts after MYRORSS fix |
-| Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 fixed MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Stage 01 MYRORSS re-ingest | **Complete** (2026-07-08) — eastern CONUS restored; geo QA passed |
-| Corrected archive + Stages 05–14 | **Rebuilding** (`hail_from05`; `--from 05 --skip-ml`) |
-| Prior event / stochastic numbers | Provisional until Stages 08 and 13 finish |
-| Hail-day climatology | Regenerate after Stage 05 completes |
-| Regression / golden tests | Pending frozen checksums |
+| Tests | 38+ pytest modules; artifact + GridRad QC tests green locally |
+| **v2.2.2 production run** | Complete (2026-07-08) — superseded by v2.3.0 Tier 0+1 rebuild |
+| Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
+| Tier 0 (v2.2.3) | 04c native QC, site remediation, 10 km azimuth bins — branch **`v2.2.3`** pushed |
+| Tier 1 (v2.3.0) | Geometry artifact classifier + `train_artifact_classifier.py` — branch **`v2.3.0`** |
+| **v2.3.0 full rebuild** | **Queued / in progress** — `--from 04c --clean-from 04c` (04c QC + classifier) |
+| `artifact_classifier.pkl` | Trained from Stage 06 pairs (ROC-AUC ~0.90); gitignored |
+| Regression / golden tests | Pending frozen checksums after v2.3.0 run |
 | Bootstrap CIs on RP maps | Pending |
 
 ## Production Run Summary (v2.2.1, 2026-06-30 — superseded)
@@ -287,40 +287,44 @@ do not cite as final v2.2.2 hazard results.
 
 ## Current Run Watch
 
-**Stages 05–14 rebuild (2026-07-08)** after Stage 01 MYRORSS coordinate-fix re-ingest.
-Pre-run QA: 5,023/5,023 MYRORSS days; geotransform OK; eastern CONUS (≥−96°W) restored on
-sampled 1998–2011 hail days. Cleaned Stage 05+ outputs; running:
+**v2.3.0 full rebuild (2026-07-09)** — Tier 0 (04c native QC, site remediation, 10 km
+azimuth bins) + Tier 1 (optional `artifact_classifier.pkl`). Requires **04c** re-run for
+GridRad days, then **05–14**.
 
 ```bash
-screen -r hail_from05
+screen -r hail_v230
 # or:
-tail -f logs/pipeline_from05.run.log
+tail -f logs/pipeline_v230.run.log
+tail -f logs/04c_fill_gridrad_gap.log
 tail -f logs/05_apply_mesh_bias_correction.log
 ```
 
 Command:
 
 ```bash
-.venv/bin/python run_pipeline.py --from 05 --skip-ml
+.venv/bin/python scripts/train_artifact_classifier.py   # once, after Stage 06 exists
+.venv/bin/python run_pipeline.py --from 04c --clean-from 04c
 ```
 
-Stage 05 applies a **five-pass** GridRad artifact filter (speckle → radial ring →
-azimuthal → filament → **21-day spatiotemporal persistence**) plus range debias when
-`range_debias.npz` exists. After Stage 06, regenerate:
+Stage 05: six rule passes + site remediation + optional classifier (no `--skip-ml` when
+classifier should apply). After Stage 06:
 
 ```bash
 .venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
+.venv/bin/python scripts/diagnostics/literature_validation_suite.py
 ```
 
-and review `map_gridrad_minus_myrorss_mean_annual_max.png` before trusting RP figures.
+Success metrics: `map_gridrad_minus_myrorss_mean_annual_max.png` ring visibility ↓;
+GridRad speckle P95 < **5%**; SPC POD @ ≥1″ not degraded > **3%** absolute;
+`rp_ring_energy` ↓; analytical vs stochastic 100-yr median ratio ~**1.1**.
 
 After the rebuild completes:
 
 1. `python run_pipeline.py --validate`
 2. `.venv/bin/python scripts/diagnostics/render_pnas_article_figures.py`
-3. Refresh `docs/pnas_article_ai_hail_model.md` Results from `data/analysis/pnas_article_metrics.json`
-4. Freeze regression/golden outputs; bootstrap CIs on Stage 09 when ready
-5. Merge to `main` when debias + fixed MYRORSS hazard results are accepted
+3. Refresh manuscript Results from `data/analysis/pnas_article_metrics.json`
+4. Ablation: rules-only (`--skip-ml`) vs rules+ML vs upstream 04c QC — see `docs/radar_artifact_ml_plan.md`
+5. Merge **`v2.3.0`** to `main` when RP maps pass artifact QA
 
 ## Documentation Quick Reference
 

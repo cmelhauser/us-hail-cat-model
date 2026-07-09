@@ -1,15 +1,14 @@
-# Session Handoff — CONUS Hail Catastrophe Model v2.2
+# Session Handoff — CONUS Hail Catastrophe Model v2.3
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-07-08 (**MYRORSS Stage 01 complete**; Stages **05–14** rebuild in
-> `hail_from05`; pre-run eastern-CONUS / geotransform QA passed).
+> Last updated: 2026-07-09 (**v2.3.0** Tier 0+1; full rebuild `--from 04c`).
 
 ---
 
 ## Repository
 
 - **Local:** `/Users/melhauserc/GitHub/us-hail-cat-model`
-- **Branch:** **`v2.2.2`** — active development (`origin` only). **`main`** has model **2.2.1** until v2.2.2 merges.
+- **Branch:** **`v2.3.0`** — active development (`origin` only). **`v2.2.3`** = Tier 0 patch branch. **`main`** has model **2.2.1** until v2.3.0 merges.
 - **Working tree:** should be kept clean except for intentional documentation or
   code edits in the current session
 - **Historical note:** `v2.1` has been merged and is no longer the active

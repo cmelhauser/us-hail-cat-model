@@ -1,4 +1,4 @@
-# Documentation Index — CONUS Hail Catastrophe Model v2.2
+# Documentation Index — CONUS Hail Catastrophe Model v2.3
 
 This directory contains the complete documentation for the v2.2 hail hazard model.
 Use the reading paths below to orient yourself quickly.
@@ -35,7 +35,9 @@ Use the reading paths below to orient yourself quickly.
 6. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
 7. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
 8. [`../scripts/diagnostics/radar_artifact_diagnostic.py`](../scripts/diagnostics/radar_artifact_diagnostic.py) — speckle/range debias QA (`data/analysis/radar_artifacts/`)
-9. [`../scripts/rerun_stage05.py`](../scripts/rerun_stage05.py) — blocking Stage 05 rebuild after filter/debias changes
+9. [`radar_artifact_ml_plan.md`](radar_artifact_ml_plan.md) — Tier 0–2 radar artifact roadmap and success metrics
+10. [`../scripts/train_artifact_classifier.py`](../scripts/train_artifact_classifier.py) — optional geometry-aware artifact classifier (v2.3.0)
+11. [`../scripts/rerun_stage05.py`](../scripts/rerun_stage05.py) — blocking Stage 05 rebuild after filter/debias changes
 
 **AI agent or future developer:**
 1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation

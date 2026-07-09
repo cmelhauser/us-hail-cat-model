@@ -433,6 +433,37 @@ def check_analytical_vs_stochastic() -> CheckResult:
     return CheckResult("analytical_vs_stochastic", status, lit, msg, metrics)
 
 
+def check_rp_ring_energy() -> CheckResult:
+    """Range-bin CV on 100-yr analytical RP map — lower suggests less range-ring structure."""
+    lit = "methodology.md §5.5; docs/radar_artifact_ml_plan.md"
+    rp = 100
+    tif = CDF_DIR / f"rp_{rp:05d}yr_hail_smooth.tif"
+    if not tif.exists():
+        return CheckResult("rp_ring_energy", "skip", lit, f"Missing analytical {rp}-yr map", {})
+    try:
+        import rasterio
+        from scripts._radar_geometry import DEFAULT_RANGE_BIN_EDGES_KM, ensure_range_km_grid
+    except ImportError:
+        return CheckResult("rp_ring_energy", "skip", lit, "rasterio unavailable", {})
+    with rasterio.open(tif) as src:
+        data = src.read(1).astype(np.float32)
+    range_km = ensure_range_km_grid()
+    edges = DEFAULT_RANGE_BIN_EDGES_KM
+    profile = []
+    for bi in range(len(edges) - 1):
+        mask = (range_km >= edges[bi]) & (range_km < edges[bi + 1]) & (data > 0)
+        if mask.any():
+            profile.append(float(np.mean(data[mask])))
+    if len(profile) < 4:
+        return CheckResult("rp_ring_energy", "skip", lit, "Insufficient range bins", {})
+    prof = np.array(profile, dtype=np.float64)
+    cv = float(np.std(prof) / max(np.mean(prof), 1e-3))
+    metrics = {"rp_years": rp, "range_profile_cv": round(cv, 4), "n_bins": len(profile)}
+    status = "pass" if cv < 0.45 else "warn"
+    msg = f"100-yr RP range-profile CV = {cv:.3f} (lower → less ring structure)"
+    return CheckResult("rp_ring_energy", status, lit, msg, metrics)
+
+
 def check_literature_hail_day_benchmarks() -> CheckResult:
     """Murillo/Cintineo per-cell hail-day rate benchmarks (hail_day_climatology outputs)."""
     lit = "Murillo et al. (2021); Cintineo et al. (2012); hail_day_climatology.py"
@@ -869,6 +900,7 @@ CHECKS = {
     "bootstrap_rp_ci": lambda _peaks: check_bootstrap_rp_ci(),
     "rp_monotonicity": lambda _peaks: check_rp_monotonicity(),
     "analytical_vs_stochastic": lambda _peaks: check_analytical_vs_stochastic(),
+    "rp_ring_energy": lambda _peaks: check_rp_ring_energy(),
     "tail_dependence_pilot": lambda _peaks: check_tail_dependence_pilot(),
     "gridrad_upstream_qc": lambda _peaks: check_gridrad_upstream_qc(),
     "literature_hail_day_benchmarks": lambda _peaks: check_literature_hail_day_benchmarks(),

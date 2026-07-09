@@ -9,6 +9,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-07-09
+
+### Added
+
+- **`scripts/_artifact_features.py`** — geometry-aware feature builder (range, azimuth,
+  local texture, era) for optional artifact ML.
+- **`scripts/train_artifact_classifier.py`** — trains `artifact_classifier.pkl` from
+  Stage **06** SPC pairs (severe = positive; high-MESH no-report = negative).
+- **`docs/radar_artifact_ml_plan.md`** — Tier 0–2 roadmap and ablation metrics.
+- **Literature check `rp_ring_energy`** — range-profile CV on 100-yr analytical RP map.
+
+### Changed
+
+- **Stage 05** — optional `artifact_classifier.pkl` down-weights residual artifact cells
+  after rule passes (`--skip-ml` bypasses; deterministic fallback when missing).
+- **`--retrain-models`** on Stage **05** invokes `train_artifact_classifier.py`.
+- **`MODEL_VERSION`** → **2.3.0** (full rebuild: **04c** → **14** after Tier 0 + train).
+
+---
+
 ## [2.2.3] — 2026-07-09
 
 ### Added
