@@ -243,7 +243,7 @@ def main():
     parser.add_argument("--skip-calibration", dest="skip_calibration", action="store_true",
                         help="Stage 05: skip Phase A cross-calibration rebuild (--skip-calibration)")
     parser.add_argument("--clean-from", dest="clean_from", type=str, default=None,
-                        help="Delete generated outputs from this stage onward before running (e.g. 05)")
+                        help="Delete generated outputs from this stage onward before running (e.g. 04c or 05)")
     args = parser.parse_args()
 
     if not args.dry_run and args.clean_from:
@@ -253,7 +253,7 @@ def main():
             print(f"{RED}Unknown stage for --clean-from: {args.clean_from!r}{RESET}")
             print(f"Available: {', '.join(STAGE_ORDER)}")
             sys.exit(1)
-        removed = clean_from_stage(args.clean_from, dry_run=False, include_diagnostics=args.clean_from == "05")
+        removed = clean_from_stage(args.clean_from, dry_run=False, include_diagnostics=args.clean_from in ("04c", "05"))
         if removed:
             print(f"  {YELLOW}Cleaned {len(removed)} path(s) from stage {args.clean_from} onward{RESET}")
             for p in removed:
