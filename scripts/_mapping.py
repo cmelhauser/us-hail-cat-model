@@ -157,15 +157,16 @@ def plot_raster_on_axis(
     cartopy is available; otherwise plain ``imshow`` with geographic extent.
     """
     arr = np.asarray(data, dtype=np.float32)
+    finite = arr[np.isfinite(arr)]
     if symmetric:
-        lim = float(np.nanpercentile(np.abs(arr[np.isfinite(arr)]), 99)) if np.any(np.isfinite(arr)) else 1.0
+        lim = float(np.nanpercentile(np.abs(finite), 99)) if finite.size else 1.0
         vmin = -lim if vmin is None else vmin
         vmax = lim if vmax is None else vmax
     else:
         if vmin is None:
             vmin = 0.0
-        if vmax is None and np.any(np.isfinite(arr)):
-            pos = arr[arr > 0] if np.nanmin(arr) >= 0 else arr[np.isfinite(arr)]
+        if vmax is None and finite.size:
+            pos = finite[finite > 0] if float(np.nanmin(finite)) >= 0 else finite
             vmax = float(np.nanpercentile(pos, 99)) if pos.size else 1.0
         elif vmax is None:
             vmax = 1.0
@@ -241,3 +242,94 @@ def save_conus_raster_map(
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     return out_path
+
+
+def default_conus_mask_path() -> Path:
+    """Default Stage 12 CONUS land mask GeoTIFF."""
+    try:
+        from _config import DATA_ROOT
+    except ImportError:  # pragma: no cover
+        from scripts._config import DATA_ROOT
+
+    return DATA_ROOT / "analysis" / "conus_mask" / "conus_mask.tif"
+
+
+def apply_conus_mask_to_raster(
+    data: np.ndarray,
+    mask_path: Path | str | None = None,
+) -> np.ndarray:
+    """Zero cells outside the CONUS land mask when the mask GeoTIFF exists."""
+    import rasterio
+
+    arr = np.asarray(data, dtype=np.float32)
+    mask_file = Path(mask_path) if mask_path is not None else default_conus_mask_path()
+    if not mask_file.is_file():
+        return arr
+    with rasterio.open(mask_file) as msrc:
+        mask = msrc.read(1) > 0
+    if mask.shape != arr.shape:
+        return arr
+    return np.where(mask, arr, 0.0).astype(np.float32)
+
+
+def load_conus_raster_for_map(
+    tif_path: Path | str,
+    *,
+    mask_path: Path | str | None = None,
+    scale: float = 1.0,
+    zero_to_nan: bool = False,
+) -> np.ndarray:
+    """Load a model-grid GeoTIFF and optionally apply the CONUS mask."""
+    import rasterio
+
+    tif_path = Path(tif_path)
+    with rasterio.open(tif_path) as src:
+        data = src.read(1).astype(np.float32)
+
+    data = apply_conus_mask_to_raster(data, mask_path)
+
+    if scale != 1.0:
+        data = data * np.float32(scale)
+
+    if zero_to_nan:
+        data = data.astype(np.float32, copy=False)
+        data[data <= 0] = np.nan
+
+    return data
+
+
+def save_conus_map_from_tif(
+    tif_path: Path | str,
+    out_path: Path | str,
+    *,
+    title: str = "",
+    cbar_label: str = "",
+    cmap: str = "YlOrRd",
+    vmin: float | None = None,
+    vmax: float | None = None,
+    symmetric: bool = False,
+    mask_path: Path | str | None = None,
+    scale: float = 1.0,
+    zero_to_nan: bool = False,
+    figsize: tuple[float, float] = (10.0, 5.5),
+    dpi: int = 150,
+) -> Path:
+    """Render a model-grid GeoTIFF to a Lambert Conformal CONUS map PNG."""
+    data = load_conus_raster_for_map(
+        tif_path,
+        mask_path=mask_path,
+        scale=scale,
+        zero_to_nan=zero_to_nan,
+    )
+    return save_conus_raster_map(
+        data,
+        out_path,
+        title=title,
+        cbar_label=cbar_label,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        symmetric=symmetric,
+        figsize=figsize,
+        dpi=dpi,
+    )

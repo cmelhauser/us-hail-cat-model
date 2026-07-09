@@ -90,40 +90,37 @@ def setup_matplotlib():
 
 def render_rp_map(tif_path, out_path, title, vmax=None):
     """Render a return period or occurrence probability map with CONUS outline."""
-    import rasterio
     try:
-        from _mapping import plot_raster_on_axis, create_conus_axes, has_cartopy
+        from _mapping import load_conus_raster_for_map, save_conus_map_from_tif
     except ImportError:
-        from scripts._mapping import plot_raster_on_axis, create_conus_axes, has_cartopy
-    plt = setup_matplotlib()
-
-    with rasterio.open(tif_path) as src:
-        data = src.read(1)
+        from scripts._mapping import load_conus_raster_for_map, save_conus_map_from_tif
 
     mask_path = MASK_DIR / "conus_mask.tif"
-    if mask_path.exists():
-        with rasterio.open(mask_path) as msrc:
-            mask = msrc.read(1) > 0
-        if mask.shape == data.shape:
-            data = np.where(mask, data, 0.0)
+    mask_arg = mask_path if mask_path.exists() else None
+    preview = load_conus_raster_for_map(
+        tif_path,
+        mask_path=mask_arg,
+        scale=1.0 / 25.4,
+        zero_to_nan=True,
+    )
+    finite = preview[np.isfinite(preview)]
+    vhi = vmax or (float(np.nanpercentile(finite, 99)) if finite.size else 1.0)
 
-    data_inches = data.astype(np.float32) / 25.4
-    data_inches[data_inches <= 0] = np.nan
-
-    vhi = vmax or float(np.nanpercentile(data_inches, 99))
-
-    fig, ax = create_conus_axes(figsize=(14, 8))
-    geo_ax = ax if not hasattr(ax, "ravel") else ax.ravel()[0]
-    im = plot_raster_on_axis(geo_ax, data_inches, cmap="YlOrRd", vmin=0, vmax=vhi)
-    if not has_cartopy():
-        geo_ax.set_xlabel("Longitude")
-        geo_ax.set_ylabel("Latitude")
-    plt.colorbar(im, ax=geo_ax, label="Hail Size (inches)", shrink=0.6)
-    geo_ax.set_title(title)
-
+    out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path)
-    plt.close()
+    save_conus_map_from_tif(
+        tif_path,
+        out_path,
+        title=title,
+        cbar_label="Hail Size (inches)",
+        cmap="YlOrRd",
+        vmin=0,
+        vmax=vhi,
+        mask_path=mask_arg,
+        scale=1.0 / 25.4,
+        zero_to_nan=True,
+        figsize=(14, 8),
+    )
     log(f"    {out_path.name}")
 
 def render_historical_maps():

@@ -1,8 +1,8 @@
-# The Age of AI: Building a US Catastrophe Hail Model
+# Scientific Infrastructure at Agent Speed: An Open Source US Hail Hazard Model
 
 **Draft manuscript for PNAS-style submission**
 
-**Working title:** The Age of AI: Building a US Catastrophe Hail Model  
+**Working title:** Scientific Infrastructure at Agent Speed: An Open Source US Hail Hazard Model  
 **Article type:** Perspective-informed research article / computational science case study  
 **Status:** Draft ready for final figures/discussion — Stage 01 MYRORSS coordinate-fix re-ingest **complete** (2026-07-08); Stages **05–14** rebuilding (`hail_from05`). Prior v2.2.1 hazard numbers below are **provisional placeholders** until the rebuild finishes.  
 **Figures:** Regenerate with `scripts/diagnostics/render_pnas_article_figures.py` and Stage 14 after pipeline completion → `docs/figures/pnas/`  
@@ -52,7 +52,7 @@ At the same time, scientific software development is entering a new phase. Front
 
 This paper presents a concrete case study: the construction of a US hail catastrophe hazard model using AI-assisted development. The work has two linked contributions. First, it describes a radar-first hail model that converts public atmospheric data into gridded hazard, return-period maps, and stochastic event catalogs. Second, it documents the process by which AI agents were used to accelerate literature review, pipeline implementation, debugging, testing, documentation, data-quality review, and run monitoring.
 
-The title phrase "The Age of AI" is used deliberately. The study does not claim that AI replaces scientific judgment. Rather, it examines a practical collaboration pattern: a human model owner sets goals, evaluates outputs, makes methodological decisions, and directs priorities, while AI systems perform high-volume implementation, synthesis, audit, and operational monitoring tasks. The resulting artifact is not merely a manuscript or a prototype, but a runnable repository with explicit assumptions, tests, validation commands, source-provenance records, and documentation.
+The title *Scientific Infrastructure at Agent Speed* foregrounds a practical question: can frontier AI agents compress the calendar time required to build auditable hazard-model infrastructure, when a human scientist retains direction and accountability? The open-source US hail model is the demonstration artifact—not a black-box output, but a runnable repository with explicit assumptions, tests, validation commands, source-provenance records, and documentation.
 
 ### Relationship to prior work
 

@@ -1,6 +1,6 @@
 # PNAS Publication Readiness Memo
 
-**Working manuscript:** *The Age of AI: Building a US Catastrophe Hail Model*  
+**Working manuscript:** *Scientific Infrastructure at Agent Speed: An Open Source US Hail Hazard Model*  
 **Status:** Promising, but contingent on final model results and reproducibility evidence  
 **Last reviewed:** 2026-05-02
 
@@ -46,13 +46,15 @@ That combination is the novelty argument.
 
 ## Recommended PNAS Framing
 
-### Preferred title
+### Title
 
-The current title is memorable, but for PNAS it may benefit from a more precise subtitle:
+Adopted working title:
 
 ```text
-The Age of AI: Building a Transparent US Hail Catastrophe Model with Human-Directed Scientific Agents
+Scientific Infrastructure at Agent Speed: An Open Source US Hail Hazard Model
 ```
+
+The title foregrounds infrastructure-building velocity and open reproducibility; the hail model is the scientific demonstration.
 
 ### Central question
 

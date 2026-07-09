@@ -69,8 +69,36 @@ def test_plot_raster_on_axis_symmetric():
 
 
 @pytest.mark.skipif(not mp.has_cartopy(), reason="cartopy not installed")
+def test_save_conus_map_from_tif(tmp_path):
+    import rasterio
+    from rasterio.transform import from_origin
+
+    from scripts._config import DX, LAT_MAX, LON_MIN, NCOLS, NROWS
+
+    data = np.zeros((NROWS, NCOLS), dtype=np.float32)
+    data[100:120, 200:220] = 50.0
+    tif = tmp_path / "input.tif"
+    with rasterio.open(
+        tif,
+        "w",
+        driver="GTiff",
+        height=NROWS,
+        width=NCOLS,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(LON_MIN, LAT_MAX, DX, DX),
+    ) as dst:
+        dst.write(data, 1)
+
+    out = tmp_path / "lambert_map.png"
+    mp.save_conus_map_from_tif(tif, out, title="From TIF", cbar_label="mm")
+    assert out.exists()
+    assert out.stat().st_size > 1000
+
+
+@pytest.mark.skipif(not mp.has_cartopy(), reason="cartopy not installed")
 def test_plot_raster_uses_plate_carree_edge_extent():
-    """Cartopy path must use cell-edge Plate Carrée extent (imshow, not index space)."""
     import matplotlib.pyplot as plt
     from matplotlib.image import AxesImage
 

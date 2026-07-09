@@ -21,8 +21,10 @@ Use the reading paths below to orient yourself quickly.
 7. [`benchmarks.md`](benchmarks.md) — published RP comparison framework; post-run validation targets
 8. [`methodology.md`](methodology.md) §14 — future work: exposure, vulnerability, loss
 9. [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) — draft PNAS-style article on AI-assisted model construction
-10. [`pnas_publication_readiness.md`](pnas_publication_readiness.md) — novelty assessment, evidence gaps, and submission-readiness checklist
-11. [`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md) — Zenodo/ORCID archival plan, tarball layout, DOI placeholders
+10. [`pnas_article_publication.md`](pnas_article_publication.md) — **publication build** with embedded figures and frozen v2.2.2 metrics
+11. [`pnas_article_review.docx`](pnas_article_review.docx) — **review draft** (double-spaced, line-numbered Word with figures)
+12. [`pnas_publication_readiness.md`](pnas_publication_readiness.md) — novelty assessment, evidence gaps, and submission-readiness checklist
+13. [`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md) — Zenodo/ORCID archival plan, tarball layout, DOI placeholders
 
 **Engineer / developer running the pipeline:**
 1. [`RUN_NOTES.md`](RUN_NOTES.md) — live run status, restart commands, disk/workers notes
@@ -61,6 +63,8 @@ Use the reading paths below to orient yourself quickly.
 | [`sensitivity.md`](sensitivity.md) | Scientific | Hyperparameter sensitivity sweep plan: stages 08, 09, 10, 12, 13 |
 | [`benchmarks.md`](benchmarks.md) | Scientific | Published RP comparison framework; post-run validation targets |
 | [`pnas_article_ai_hail_model.md`](pnas_article_ai_hail_model.md) | Manuscript | Draft PNAS-style article on AI-assisted catastrophe model development |
+| [`pnas_article_publication.md`](pnas_article_publication.md) | Manuscript | Publication build with embedded figures and frozen metrics |
+| [`pnas_article_review.docx`](pnas_article_review.docx) | Manuscript | Double-spaced, line-numbered Word review draft with figures |
 | [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) | Diagnostic | Per-cell hail-day climatology vs Cintineo/Murillo thresholds |
 | [`pnas_publication_readiness.md`](pnas_publication_readiness.md) | Manuscript | PNAS novelty assessment, reviewer risks, evidence plan, go/no-go criteria |
 | [`technical_documentation.md`](technical_documentation.md) | Engineering | Per-stage implementation: inputs, outputs, algorithms, CLI |

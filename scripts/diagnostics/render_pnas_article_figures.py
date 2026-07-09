@@ -29,13 +29,21 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from scripts._config import MODEL_VERSION
-from scripts._mapping import save_conus_raster_map
+from scripts._mapping import (
+    create_conus_axes,
+    load_conus_raster_for_map,
+    plot_raster_on_axis,
+    save_conus_map_from_tif,
+    save_conus_raster_map,
+)
 from scripts.diagnostics._diagnostic_io import warn_skip
 
 MESH_DIR = REPO / "data" / "historical" / "mesh_0.05deg"
 CORRECTED_DIR = REPO / "data" / "historical" / "mesh_0.05deg_corrected"
 OUT_FIG = REPO / "docs" / "figures" / "pnas"
 OUT_METRICS = REPO / "data" / "analysis" / "pnas_article_metrics.json"
+MASK_TIF = REPO / "data" / "analysis" / "conus_mask" / "conus_mask.tif"
+STOCH_MAP_DIR = REPO / "data" / "stochastic" / "maps"
 
 MANIFESTS = {
     "MYRORSS": MESH_DIR / "manifest_stage01_myrorss.csv",
@@ -239,13 +247,52 @@ def fig_calibration_ecdf(out: Path) -> dict:
     return stats
 
 
+def _mask_path() -> Path | None:
+    return MASK_TIF if MASK_TIF.is_file() else None
+
+
+def _render_rp_map_png(
+    tif: Path,
+    out: Path,
+    *,
+    title: str,
+    inches: bool = True,
+) -> bool:
+    """Render a Lambert CONUS map from a model-grid GeoTIFF."""
+    if not tif.is_file():
+        return False
+    preview = load_conus_raster_for_map(
+        tif,
+        mask_path=_mask_path(),
+        scale=(1.0 / 25.4) if inches else 1.0,
+        zero_to_nan=inches,
+    )
+    finite = preview[np.isfinite(preview)]
+    if inches:
+        vmax = float(np.nanpercentile(finite, 99)) if finite.size else 1.0
+        cbar_label = "Hail size (inches)"
+    else:
+        vmax = min(80.0, float(np.percentile(finite[finite > 0], 99)) if np.any(finite > 0) else 20.0)
+        vmax = max(vmax, 1.0)
+        cbar_label = "mm"
+    save_conus_map_from_tif(
+        tif,
+        out,
+        title=title,
+        cbar_label=cbar_label,
+        cmap="YlOrRd",
+        vmin=0,
+        vmax=vmax,
+        mask_path=_mask_path(),
+        scale=(1.0 / 25.4) if inches else 1.0,
+        zero_to_nan=inches,
+        figsize=(12, 6.5),
+    )
+    return True
+
+
 def fig_seasonal_thresholds(out: Path) -> None:
     """Figure 5: national seasonal cycle by literature threshold (Cintineo/Wendt benchmark)."""
-    src = HAIL_CLIM_DIR / "seasonal_national_hail_days_by_threshold.png"
-    if src.exists():
-        import shutil
-        shutil.copy2(src, out)
-        return
     monthly_path = HAIL_CLIM_DIR / "monthly_national_hail_days.csv"
     if not monthly_path.is_file():
         warn_skip("fig05_seasonal_thresholds", f"required file not found: {monthly_path}")
@@ -269,18 +316,12 @@ def fig_seasonal_thresholds(out: Path) -> None:
 
 
 def fig_hail_days_map(out: Path) -> None:
-    """Figure 6: per-cell mean annual hail days at 29 mm skill threshold."""
-    src = HAIL_CLIM_DIR / "map_hail_days_per_year_skill_29mm.png"
-    if src.exists():
-        import shutil
-        shutil.copy2(src, out)
-        return
+    """Figure 6: per-cell mean annual hail days at 29 mm skill threshold (Lambert)."""
     tif = HAIL_CLIM_DIR / "hail_days_per_year_skill_29mm.tif"
     if not tif.is_file():
         warn_skip("fig06_hail_days_map", f"required file not found: {tif}")
         return
-    with rasterio.open(tif) as src_r:
-        data = src_r.read(1).astype(np.float32)
+    data = load_conus_raster_for_map(tif, mask_path=_mask_path())
     vmax = min(15.0, float(np.percentile(data[data > 0], 99)) if np.any(data > 0) else 5)
     save_conus_raster_map(
         data,
@@ -322,16 +363,15 @@ def fig_validation_by_bin(out: Path) -> dict:
 
 
 def fig_rp_maps(out_100: Path, out_1000: Path) -> dict:
-    """Figures 8–9: analytical return-period maps."""
-    import shutil
-    hist = REPO / "docs" / "figures" / "historical"
+    """Figures 8–9: analytical return-period maps (Lambert Conformal)."""
     stats = {}
     for rp, out in ((100, out_100), (1000, out_1000)):
-        src_png = hist / f"rp_{rp:05d}yr_analytical.png"
-        if src_png.exists():
-            shutil.copy2(src_png, out)
         tif = CDF_DIR / f"rp_{rp:05d}yr_hail_smooth.tif"
-        if tif.exists():
+        if _render_rp_map_png(
+            tif,
+            out,
+            title=f"Analytical {rp:,}-year return period hail (MESH75)",
+        ):
             with rasterio.open(tif) as s:
                 d = s.read(1)
             pos = d[d > 0]
@@ -340,7 +380,62 @@ def fig_rp_maps(out_100: Path, out_1000: Path) -> dict:
                 "p99_mm": round(float(np.percentile(pos, 99)), 1),
                 "cells_ge_25mm": int((d >= 25.4).sum()),
             }
+        else:
+            warn_skip(f"fig_rp_{rp}", f"required file not found: {tif}")
     return stats
+
+
+def fig_stochastic_rp(out: Path) -> None:
+    """Figure 12: stochastic 100-year empirical return-period map (Lambert)."""
+    tif = STOCH_MAP_DIR / "rp_00100yr_stochastic.tif"
+    if not _render_rp_map_png(
+        tif,
+        out,
+        title="Stochastic 100-year return period hail (50k-yr catalog)",
+    ):
+        warn_skip("fig12_stochastic_rp", f"required file not found: {tif}")
+
+
+def fig_analytical_vs_stochastic(out: Path) -> None:
+    """Figure 13: side-by-side 100-yr analytical vs stochastic Lambert maps."""
+    anal_tif = CDF_DIR / "rp_00100yr_hail_smooth.tif"
+    stoch_tif = STOCH_MAP_DIR / "rp_00100yr_stochastic.tif"
+    if not anal_tif.is_file() or not stoch_tif.is_file():
+        warn_skip(
+            "fig13_analytical_vs_stochastic",
+            f"missing RP GeoTIFFs ({anal_tif.name} / {stoch_tif.name})",
+        )
+        return
+
+    panels = [
+        (anal_tif, "Analytical 100-year RP"),
+        (stoch_tif, "Stochastic 100-year RP"),
+    ]
+    preview = [
+        load_conus_raster_for_map(
+            tif,
+            mask_path=_mask_path(),
+            scale=1.0 / 25.4,
+            zero_to_nan=True,
+        )
+        for tif, _ in panels
+    ]
+    finite = np.concatenate([p[np.isfinite(p)] for p in preview if np.any(np.isfinite(p))])
+    vmax = float(np.nanpercentile(finite, 99)) if finite.size else 1.0
+
+    fig, axes = create_conus_axes(1, 2, figsize=(14, 5.5))
+    ax_list = np.atleast_1d(axes).ravel()
+    mappable = None
+    for ax, (tif, title), data in zip(ax_list, panels, preview):
+        mappable = plot_raster_on_axis(ax, data, cmap="YlOrRd", vmin=0, vmax=vmax)
+        ax.set_title(title)
+    if mappable is not None:
+        fig.colorbar(mappable, ax=list(ax_list), label="Hail size (inches)", shrink=0.75)
+    fig.suptitle("Analytical vs stochastic return period comparison", y=1.02)
+    fig.tight_layout()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out)
+    plt.close(fig)
 
 
 def fig_event_dispersion(out: Path) -> dict:
@@ -483,8 +578,14 @@ def main() -> None:
         default={},
     )
     run_figure("fig11_ai_workflow", fig_ai_workflow, OUT_FIG / "fig11_ai_development_workflow.png")
+    run_figure("fig12_stochastic_rp", fig_stochastic_rp, OUT_FIG / "fig12_rp_100yr_stochastic.png")
+    run_figure(
+        "fig13_analytical_vs_stochastic",
+        fig_analytical_vs_stochastic,
+        OUT_FIG / "fig13_analytical_vs_stochastic.png",
+    )
 
-    # Copy existing stage-06 scatter if present
+    # Stage 06 scatter (non-geographic; copy if present)
     scatter_src = REPO / "docs" / "figures" / "analysis" / "mesh_vs_spc_scatter.png"
     if scatter_src.exists():
         import shutil
@@ -504,6 +605,13 @@ def main() -> None:
     OUT_METRICS.write_text(json.dumps(metrics, indent=2))
     print(f"Wrote {len(list(OUT_FIG.glob('*.png')))} figures in {time.time()-t0:.1f}s")
     print("Metrics →", OUT_METRICS)
+
+    try:
+        from scripts.diagnostics.render_pnas_publication_md import main as render_publication_md
+
+        render_publication_md()
+    except Exception as exc:
+        warn_skip("render_pnas_publication_md", str(exc))
 
 
 if __name__ == "__main__":

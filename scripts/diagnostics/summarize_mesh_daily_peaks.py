@@ -24,9 +24,12 @@ import numpy as np
 import pandas as pd
 import rasterio
 
+REPO = Path(__file__).resolve().parents[2]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
 from scripts.diagnostics._diagnostic_io import require_mesh_tifs
 
-REPO = Path(__file__).resolve().parents[2]
 MESH_DIR = REPO / "data" / "historical" / "mesh_0.05deg"
 CORRECTED_DIR = REPO / "data" / "historical" / "mesh_0.05deg_corrected"
 OUT_DIR = REPO / "data" / "analysis" / "mesh_daily_peaks"

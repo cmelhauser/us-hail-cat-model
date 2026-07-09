@@ -36,7 +36,7 @@ if str(REPO) not in sys.path:
 
 from scripts._config import LAT_MAX, LON_MIN, NCOLS, NROWS, DX
 from scripts._io import write_geotiff
-from scripts._mapping import save_conus_raster_map
+from scripts._mapping import apply_conus_mask_to_raster, save_conus_raster_map
 from scripts.diagnostics._diagnostic_io import exit_if_missing, require_mesh_tifs
 
 CORRECTED_DIR = REPO / "data" / "historical" / "mesh_0.05deg_corrected"
@@ -244,7 +244,7 @@ def plot_maps(
     paths: list[Path] = []
     for key in keys:
         spec = next(s for s in specs if s.key == key)
-        data = rates[key]
+        data = apply_conus_mask_to_raster(rates[key])
         vmax = min(20.0, float(np.percentile(data[data > 0], 99)) if np.any(data > 0) else 1.0)
         path = out_dir / f"map_hail_days_per_year_{key}.png"
         save_conus_raster_map(
