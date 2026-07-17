@@ -448,3 +448,72 @@ long-term access, archive externally following
 - **Code DOI:** publish GitHub Release `v2.2.2` with Zenodo–GitHub integration enabled
 - **Figures + diagnostics DOI:** upload the generated-outputs tarball described in `DATA_AVAILABILITY.md`
 - **Local machine transfer:** copy `data/` and `docs/figures/` via external drive (see `DATA_AVAILABILITY.md` §3)
+
+---
+
+## 14. AWS Fargate (optional cloud runner)
+
+The `aws/` package runs the **same** stage scripts on ECS Fargate without modifying
+them. A local CLI orchestrates tasks; shared state lives on EFS.
+
+### Architecture
+
+1. **Parallel downloads** — three Fargate tasks: Stage **01** (MYRORSS), **02** (MRMS),
+   **04c** (GridRad with embedded 04b download).
+2. **Finalize** — one Fargate task: Stages **03**, **04a**, **05–14** (`--from 03 --skip 04b`).
+3. **Storage** — EFS mounted at `/app/data`, `/app/logs`, `/app/docs/figures`.
+4. **Image** — root `Dockerfile`, pushed to the stack’s ECR repository.
+
+Sizing, commands, and workflow order come from **`aws/config/pipeline.yaml`** (CDK and
+runtime share this file). Defaults are sized from production logs (GridRad is the
+critical path; ~8–12 GiB scratch per concurrent 04c day).
+
+### Install and dry-run
+
+```bash
+pip install -e ".[aws]"
+python aws/run_pipeline_aws.py --dry-run
+```
+
+### Deploy (CDK)
+
+Requires Node.js (aws-cdk jsii) and AWS credentials.
+
+```bash
+cd aws/cdk
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cdk bootstrap    # once per account/region
+cdk deploy
+```
+
+Build and push the repo `Dockerfile` to the ECR URI from stack outputs, tagging with
+`image.tag` from `pipeline.yaml`. Store CDS / NCAR credentials in Secrets Manager and
+set the ARNs in `pipeline.yaml` (`secrets.*`) before production runs.
+
+### Run modes
+
+```bash
+python aws/run_pipeline_aws.py --mode full            # parallel downloads, then finalize
+python aws/run_pipeline_aws.py --mode downloads-only
+python aws/run_pipeline_aws.py --mode finalize
+python aws/run_pipeline_aws.py --endpoint-url http://localhost:4566   # LocalStack
+```
+
+The laptop process must stay up for long runs (local orchestrator; not Step Functions).
+
+### Tests
+
+```bash
+PYTHONPATH=aws OPENBLAS_NUM_THREADS=1 \
+  pytest -q aws/tests -m 'not localstack' \
+  --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
+
+# Optional: LocalStack Community 4.14.0 (not latest/Pro)
+docker compose -f aws/docker-compose.localstack.yml up -d
+AWS_ENDPOINT_URL=http://localhost:4566 PYTHONPATH=aws pytest -q aws/tests -m localstack
+```
+
+CDK synth tests need Node.js; they skip cleanly when `node` is absent. See
+[`../aws/README.md`](../aws/README.md) and
+[`superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`](superpowers/specs/2026-07-17-aws-fargate-adapter-design.md).

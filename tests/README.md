@@ -2,6 +2,10 @@
 
 This directory contains pytest coverage for all 15 pipeline stages plus the pipeline runner.
 
+AWS Fargate adapter tests live under **`aws/tests/`** (separate package; 100% coverage
+gate on `hail_aws` + `run_pipeline_aws.py`). See `aws/README.md` and
+`docs/reproduce.md` §14.
+
 ## Run
 
 From the repository root:
@@ -9,6 +13,15 @@ From the repository root:
 ```bash
 pip install -e ".[dev]"
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
+```
+
+AWS adapter (optional):
+
+```bash
+pip install -e ".[aws]"
+PYTHONPATH=aws OPENBLAS_NUM_THREADS=1 \
+  pytest -q aws/tests -m 'not localstack' \
+  --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
 ```
 
 If the scripts live outside `scripts/`, set:

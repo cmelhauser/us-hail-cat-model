@@ -64,6 +64,12 @@ dev = [
     "pre-commit>=3.0",
     "pip-tools>=7.0",
 ]
+aws = [
+    "PyYAML>=6.0",
+    "boto3>=1.26",
+    "aws-cdk-lib>=2.140.0,<3",
+    "constructs>=10.0.0,<11",
+]
 
 [project.urls]
 Repository = "https://github.com/melhauserc/us-hail-cat-model"
@@ -124,34 +130,38 @@ warn_redundant_casts = true
 # module = "scripts._config"
 # strict = true
 
-# ── Pytest ───────────────────────────────────────────────────────────────────
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts   = "-q --strict-markers"
-markers   = [
-    "slow: marks tests as slow (deselect with '-m not slow')",
-    "integration: marks integration tests requiring synthetic pipeline run",
-    "regression: marks regression tests requiring golden outputs",
-]
-filterwarnings = [
-    # Some Matplotlib dependency combinations can emit pyparsing
-    # deprecation warnings during font/mathtext parser setup. They are
-    # third-party compatibility noise, not model-code warnings.
-    "ignore::pyparsing.exceptions.PyparsingDeprecationWarning:matplotlib\\..*",
-]
-
 # ── Coverage ─────────────────────────────────────────────────────────────────
 [tool.coverage.run]
-source = ["scripts"]
-omit   = ["scripts/archive/*"]
+source = ["scripts", "aws/hail_aws", "aws/run_pipeline_aws"]
+omit   = ["scripts/archive/*", "aws/cdk/*"]
+branch = false
 
 [tool.coverage.report]
-# Full pipeline scripts are I/O-heavy; CI uses --cov-fail-under=0 on unit tests only.
-# This floor guards against coverage regressions on the shared library surface.
+# Full pipeline scripts are I/O-heavy; CI uses a modest floor on unit tests.
+# The aws/hail_aws adapter is gated separately at 100% in aws/tests.
 fail_under = 35
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
     "raise NotImplementedError",
+]
+
+[tool.coverage.paths]
+source = ["scripts", "aws/hail_aws"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "aws/tests"]
+addopts   = "-q --strict-markers"
+markers   = [
+    "slow: marks tests as slow (deselect with '-m not slow')",
+    "integration: marks integration tests requiring synthetic pipeline run",
+    "regression: marks regression tests requiring golden outputs",
+    "localstack: requires LocalStack 4.14 Community on localhost:4566",
+]
+filterwarnings = [
+    # Some Matplotlib dependency combinations can emit pyparsing
+    # deprecation warnings during font/mathtext parser setup. They are
+    # third-party compatibility noise, not model-code warnings.
+    "ignore::pyparsing.exceptions.PyparsingDeprecationWarning:matplotlib\\..*",
 ]

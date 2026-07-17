@@ -28,17 +28,18 @@ Use the reading paths below to orient yourself quickly.
 
 **Engineer / developer running the pipeline:**
 1. [`RUN_NOTES.md`](RUN_NOTES.md) — live run status, restart commands, disk/workers notes
-2. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands
-3. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
-4. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
-5. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
-6. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
-7. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
-8. [`../scripts/diagnostics/radar_artifact_diagnostic.py`](../scripts/diagnostics/radar_artifact_diagnostic.py) — speckle/range debias QA (`data/analysis/radar_artifacts/`)
-9. [`radar_artifact_ml_plan.md`](radar_artifact_ml_plan.md) — Tier 0–2 radar artifact roadmap and success metrics
-10. [`../scripts/train_artifact_classifier.py`](../scripts/train_artifact_classifier.py) — optional geometry-aware artifact classifier (v2.3.0)
-11. [`../scripts/rerun_stage05.py`](../scripts/rerun_stage05.py) — blocking Stage 05 rebuild after filter/debias changes
-
+2. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands (includes §14 AWS Fargate)
+3. [`../aws/README.md`](../aws/README.md) — optional ECS Fargate adapter (CDK + `run_pipeline_aws.py`)
+4. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
+5. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
+6. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
+7. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
+8. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
+9. [`../scripts/diagnostics/radar_artifact_diagnostic.py`](../scripts/diagnostics/radar_artifact_diagnostic.py) — speckle/range debias QA (`data/analysis/radar_artifacts/`)
+10. [`radar_artifact_ml_plan.md`](radar_artifact_ml_plan.md) — Tier 0–2 radar artifact roadmap and success metrics
+11. [`../scripts/train_artifact_classifier.py`](../scripts/train_artifact_classifier.py) — optional geometry-aware artifact classifier (v2.3.0)
+12. [`../scripts/rerun_stage05.py`](../scripts/rerun_stage05.py) — blocking Stage 05 rebuild after filter/debias changes
+13. [`superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`](superpowers/specs/2026-07-17-aws-fargate-adapter-design.md) — AWS adapter design (parallel downloads + finalize)
 **AI agent or future developer:**
 1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation
 2. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
@@ -71,7 +72,9 @@ Use the reading paths below to orient yourself quickly.
 | [`pnas_publication_readiness.md`](pnas_publication_readiness.md) | Manuscript | PNAS novelty assessment, reviewer risks, evidence plan, go/no-go criteria |
 | [`technical_documentation.md`](technical_documentation.md) | Engineering | Per-stage implementation: inputs, outputs, algorithms, CLI |
 | [`data_dictionary.md`](data_dictionary.md) | Engineering | All output files: paths, schemas, units, nodata conventions |
-| [`reproduce.md`](reproduce.md) | Engineering | Step-by-step instructions to reproduce the model from scratch |
+| [`reproduce.md`](reproduce.md) | Engineering | Step-by-step instructions to reproduce the model from scratch (local + §14 AWS) |
+| [`../aws/README.md`](../aws/README.md) | Engineering | Optional ECS Fargate adapter: YAML, CDK, local orchestrator, LocalStack 4.14 tests |
+| [`superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`](superpowers/specs/2026-07-17-aws-fargate-adapter-design.md) | Engineering | AWS adapter architecture, sizing, coverage policy |
 | [`RUN_NOTES.md`](RUN_NOTES.md) | Engineering | First-run context, current stage status, restart commands |
 | [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) | Audit | Checklist completed before each full pipeline execution |
 | [`AGENTS.md`](../AGENTS.md) | Governance | Canonical AI-agent and developer orientation |

@@ -903,6 +903,24 @@ Figures are scientific diagnostics, not decoration. Review for:
 
 ---
 
+## 20b. AWS Fargate adapter (optional)
+
+Cloud execution lives under **`aws/`** and does **not** change stage scripts.
+
+- **Orchestrator:** `aws/run_pipeline_aws.py` (local boto3; modes `full`,
+  `downloads-only`, `finalize`, `dry-run`)
+- **Infra:** `aws/cdk` — ECS Fargate, EFS, ECR, IAM, CloudWatch
+- **Parameters:** `aws/config/pipeline.yaml` (shared by CDK and CLI)
+- **Pattern:** parallel tasks for Stages **01**, **02**, **04c**; then one finalize
+  task for **03 / 04a / 05–14** (`--skip 04b`); EFS at `/app/data`, `/app/logs`,
+  `/app/docs/figures`
+- **Image:** root `Dockerfile` pushed to ECR
+
+See [`../aws/README.md`](../aws/README.md) and [`reproduce.md`](reproduce.md) §14.
+Design: [`superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`](superpowers/specs/2026-07-17-aws-fargate-adapter-design.md).
+
+---
+
 ## 21. Validation Commands
 
 Before a full run:

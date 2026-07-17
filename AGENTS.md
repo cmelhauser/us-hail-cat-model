@@ -4,7 +4,8 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
-Last updated: 2026-07-08 (MYRORSS Stage 01 coordinate fix complete; Stages 05–14 rebuild in progress).
+Last updated: 2026-07-17 (AWS Fargate adapter under `aws/`; MYRORSS Stage 01
+coordinate fix complete; Stages 05–14 rebuild in progress).
 
 ## What This Project Is
 
@@ -68,8 +69,15 @@ us-hail-cat-model/
 |-- CONTRIBUTING.md             <- dev workflow and PR standards
 |-- pyproject.toml              <- project metadata, ruff/mypy/pytest config
 |-- environment.yml             <- conda environment
-|-- Dockerfile                  <- reproducible container
-|-- run_pipeline.py             <- pipeline entry point
+|-- Dockerfile                  <- reproducible container (also the ECR image for aws/)
+|-- run_pipeline.py             <- local pipeline entry point
+|-- aws/                        <- optional ECS Fargate adapter (does not modify stages)
+|   |-- config/pipeline.yaml    <- CDK + orchestrator parameters
+|   |-- cdk/                    <- deployable Python CDK stack
+|   |-- hail_aws/               <- config loader, ECS client, workflow
+|   |-- run_pipeline_aws.py     <- local boto3 orchestrator CLI
+|   |-- docker-compose.localstack.yml  <- LocalStack Community 4.14.0 for tests
+|   `-- tests/                  <- aws unit/integration tests (100% hail_aws gate)
 |-- scripts/
 |   |-- _config.py              <- grid constants, paths, EVT defaults
 |   |-- _logging.py             <- shared logger factory
@@ -146,6 +154,31 @@ python run_pipeline.py --only 05 --clean-from 05 --skip-ml --skip-calibration
 # Stage 02 is often run directly (MRMS); optional throughput flag:
 # python scripts/02_download_mrms_mesh.py --workers 8
 ```
+
+## AWS Fargate adapter (optional)
+
+Parallel cloud runs without changing stage scripts. Shared EFS holds `data/` /
+`logs/` / figures; the root `Dockerfile` is the container image.
+
+```bash
+pip install -e ".[aws]"
+python aws/run_pipeline_aws.py --dry-run
+# After `cd aws/cdk && cdk deploy` and pushing the image to ECR:
+python aws/run_pipeline_aws.py --mode full          # 01|02|04c parallel, then finalize
+python aws/run_pipeline_aws.py --mode downloads-only
+python aws/run_pipeline_aws.py --mode finalize
+```
+
+Parameters: `aws/config/pipeline.yaml`. Tests (100% gate on `hail_aws` + CLI):
+
+```bash
+PYTHONPATH=aws pytest -q aws/tests -m 'not localstack' \
+  --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
+```
+
+LocalStack Community image pin: `localstack/localstack:4.14.0` (see
+`aws/docker-compose.localstack.yml`). Full details: `aws/README.md` and
+`docs/reproduce.md` §14. Design: `docs/superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`.
 
 **GridRad via `run_pipeline.py`:** full runs (and resumes starting before **04b**)
 auto-**skip** standalone **04b** and run **04c** with **`--with-04b-download --workers 4`**
@@ -335,7 +368,9 @@ After the rebuild completes:
 | Scientific methodology | `docs/methodology.md` |
 | Per-stage implementation | `docs/technical_documentation.md` |
 | Output schemas | `docs/data_dictionary.md` |
-| Reproduction guide | `docs/reproduce.md` |
+| Reproduction guide | `docs/reproduce.md` (local + §14 AWS Fargate) |
+| AWS Fargate adapter | `aws/README.md` |
+| AWS adapter design | `docs/superpowers/specs/2026-07-17-aws-fargate-adapter-design.md` |
 | Data / Zenodo archival | `docs/DATA_AVAILABILITY.md` |
 | Uncertainty disclosures | `docs/uncertainty.md` |
 | Extended AI operating rules | `docs/ai_instructions.md` |

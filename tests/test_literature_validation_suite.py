@@ -22,8 +22,8 @@ from scripts.diagnostics.literature_validation_suite import (
 )
 
 
-def test_checks_registry_has_fifteen():
-    assert len(CHECKS) == 15
+def test_checks_registry_has_expected_count():
+    assert len(CHECKS) == 16
 
 
 def test_mann_kendall_no_trend():

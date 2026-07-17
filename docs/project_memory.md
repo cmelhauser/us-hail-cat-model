@@ -1,7 +1,8 @@
 # Project Memory
 
 **CONUS Hail Catastrophe Model v2.3**
-**Last updated: 2026-07-09 (`v2.3.0` — Tier 0+1 radar artifact ML; full rebuild from 04c)**
+**Last updated: 2026-07-17 (`v2.3.0` — Tier 0+1 radar artifact ML; AWS Fargate
+adapter under `aws/`; full rebuild from 04c)**
 
 ---
 
@@ -35,6 +36,11 @@ v2.2.2 run (7,792 events; SPC POD 0.48 @ ≥1″) superseded.
 | Historical events / stochastic | **pending** v2.3.0 Stages 08 / 13 |
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
+
+**AWS Fargate adapter (2026-07-17):** optional `aws/` package (YAML + CDK + local
+`run_pipeline_aws.py`) runs Stages 01/02/04c in parallel on Fargate, then finalize
+05–14 on EFS-backed storage, without modifying stage scripts. See `aws/README.md`
+and `docs/reproduce.md` §14.
 
 **Known discrepancies:**
 

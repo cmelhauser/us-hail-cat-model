@@ -1,0 +1,83 @@
+# CONUS Hail Cat Model — AWS Fargate pipeline parameters
+# Used by CDK deploy and run_pipeline_aws.py (single source of truth).
+
+project:
+  name: us-hail-cat-model
+  version: "2.3.0"
+  environment: dev
+  region: us-east-1
+  tags:
+    Project: us-hail-cat-model
+    Component: hail-pipeline
+    Environment: dev
+
+image:
+  repository_name: hail-cat-model
+  tag: "2.3.0"
+
+network:
+  # null = CDK creates a VPC with public subnets (no NAT; lower cost).
+  # Set vpc_id + subnet_ids to import an existing VPC instead.
+  vpc_id: null
+  subnet_ids: []
+  assign_public_ip: true
+  max_azs: 2
+
+storage:
+  efs_encrypted: true
+  data_mount: /app/data
+  logs_mount: /app/logs
+  figures_mount: /app/docs/figures
+
+ecs:
+  cluster_name: hail-pipeline
+  log_group: /ecs/hail-pipeline
+  log_retention_days: 30
+  cancel_siblings_on_failure: true
+
+secrets:
+  # ARNs filled after Secrets Manager secrets exist (or leave null for dry-run).
+  cdsapi_secret_arn: null
+  ncar_rda_secret_arn: null
+
+tasks:
+  download_myrorss:
+    family: hail-download-myrorss
+    stage: "01"
+    cpu: 4096
+    memory: 16384
+    ephemeral_storage_gib: 100
+    command: ["run_pipeline.py", "--only", "01"]
+
+  download_mrms:
+    family: hail-download-mrms
+    stage: "02"
+    cpu: 4096
+    memory: 16384
+    ephemeral_storage_gib: 100
+    command: ["run_pipeline.py", "--only", "02"]
+
+  download_gridrad:
+    family: hail-download-gridrad
+    stage: "04c"
+    cpu: 8192
+    memory: 32768
+    ephemeral_storage_gib: 200
+    command: ["run_pipeline.py", "--only", "04c"]
+
+  finalize:
+    family: hail-finalize
+    cpu: 8192
+    memory: 32768
+    ephemeral_storage_gib: 200
+    # 04b skipped: GridRad download is embedded in 04c (same as local run_pipeline).
+    command: ["run_pipeline.py", "--from", "03", "--skip", "04b"]
+
+workflow:
+  parallel_downloads:
+    - download_myrorss
+    - download_mrms
+    - download_gridrad
+  finalize_task: finalize
+  poll_seconds: 60
+  stop_timeout_seconds: 120

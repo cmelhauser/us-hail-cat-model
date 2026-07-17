@@ -289,7 +289,8 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 | `docs/methodology.md` | Scientific assumptions and formulas |
 | `docs/technical_documentation.md` | Per-stage implementation notes |
 | `docs/data_dictionary.md` | All output file schemas |
-| `docs/reproduce.md` | Reproduction guide |
+| `docs/reproduce.md` | Reproduction guide (local + §14 AWS Fargate) |
+| `aws/README.md` | Optional ECS Fargate adapter (CDK + orchestrator) |
 | `docs/RUN_NOTES.md` | Live run status and restart commands |
 | `docs/uncertainty.md` | Six-category uncertainty budget |
 | `docs/ai_instructions.md` | AI operating instructions |

@@ -17,6 +17,7 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 - [Data Sources](#data-sources)
 - [Quick Start](#quick-start)
 - [Running the Pipeline](#running-the-pipeline)
+- [AWS Fargate (optional)](#aws-fargate-optional)
 - [Outputs](#outputs)
 - [Limitations](#limitations)
 - [Documentation](#documentation)
@@ -231,6 +232,29 @@ python run_pipeline.py --validate
 
 ---
 
+## AWS Fargate (optional)
+
+For cloud runs without changing stage scripts, use the **`aws/`** adapter: CDK deploys
+ECS Fargate + EFS + ECR, and a local CLI submits tasks.
+
+| Mode | Behavior |
+|------|----------|
+| Parallel downloads | Stages **01**, **02**, and **04c** as separate Fargate tasks |
+| Finalize | Stages **03**, **04a**, **05–14** on one task (skips standalone **04b**) |
+| Shared storage | EFS mounts at `/app/data`, `/app/logs`, `/app/docs/figures` |
+
+```bash
+pip install -e ".[aws]"
+python aws/run_pipeline_aws.py --dry-run
+# After CDK deploy + image push to ECR:
+python aws/run_pipeline_aws.py --mode full
+```
+
+Details: [`aws/README.md`](aws/README.md), [`docs/reproduce.md`](docs/reproduce.md) §14,
+and the design spec under `docs/superpowers/specs/`.
+
+---
+
 ## Outputs
 
 | Output | Location | Description |
@@ -277,7 +301,8 @@ Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) 
 | `docs/methodology.md` | Scientific assumptions and formulas |
 | `docs/technical_documentation.md` | Per-stage implementation notes |
 | `docs/data_dictionary.md` | All output file schemas |
-| `docs/reproduce.md` | Reproduction guide and environment setup |
+| `docs/reproduce.md` | Reproduction guide and environment setup (includes §14 AWS Fargate) |
+| `aws/README.md` | Optional ECS Fargate adapter (CDK + `run_pipeline_aws.py`) |
 | `docs/DATA_AVAILABILITY.md` | Zenodo/ORCID archival plan for code, figures, and diagnostics |
 | `scripts/diagnostics/summarize_mesh_daily_peaks.py` | Optional mesh-era peak CSV/ECDF diagnostic |
 | `scripts/diagnostics/hail_day_climatology.py` | Per-cell hail-day climatology and MESH75 threshold sensitivity |

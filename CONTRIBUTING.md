@@ -44,10 +44,13 @@ For a local venv:
 python3.10 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+# Optional cloud runner:
+# pip install -e ".[aws]"
 ```
 
 The `[dev]` extra installs `pytest`, `pytest-cov`, `ruff`, `mypy`, and
-`pre-commit`. Activate the pre-commit hooks:
+`pre-commit`. The `[aws]` extra adds PyYAML, boto3, and aws-cdk-lib for the
+Fargate adapter under `aws/`. Activate the pre-commit hooks:
 
 ```bash
 pre-commit install
@@ -113,6 +116,21 @@ The project uses `pytest`. Run the full suite from the repo root:
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
 ```
 
+AWS adapter tests (100% coverage gate on `hail_aws` + CLI):
+
+```bash
+PYTHONPATH=aws OPENBLAS_NUM_THREADS=1 \
+  pytest -q aws/tests -m 'not localstack' \
+  --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
+```
+
+Optional LocalStack Community **4.14.0** (Docker daemon required):
+
+```bash
+docker compose -f aws/docker-compose.localstack.yml up -d
+AWS_ENDPOINT_URL=http://localhost:4566 PYTHONPATH=aws pytest -q aws/tests -m localstack
+```
+
 Lint (from repo root; `scripts/archive/` is excluded in `pyproject.toml`):
 
 ```bash
@@ -126,13 +144,15 @@ pytest --cov=scripts --cov-report=term-missing tests
 ```
 
 **All PRs must pass the full test suite.** If you add a new stage feature or
-fix a bug, add a test that covers the new/changed behaviour.
+fix a bug, add a test that covers the new/changed behaviour. PRs that touch
+`aws/` must keep the `hail_aws` / CLI coverage gate at 100%.
 
 Test categories:
 
 - **Unit** — helper functions on synthetic data (`tests/test_*.py`)
 - **Integration** — end-to-end smoke on synthetic tiny grid
   (`tests/integration/`)
+- **AWS adapter** — config/orchestrator/CDK (`aws/tests/`); LocalStack optional
 - **Regression** — golden-output hashes, populated after first full run
 
 Deterministic tests: any test that imports a stage script must pass with a
@@ -150,8 +170,9 @@ When changing code, update the relevant documentation **in the same PR**:
 | Scientific assumptions | `docs/methodology.md` |
 | Per-stage implementation | `docs/technical_documentation.md` |
 | Output files or schemas | `docs/data_dictionary.md` |
-| Run commands or environment | `docs/reproduce.md` |
+| Run commands or environment | `docs/reproduce.md` (and `aws/README.md` if cloud runner changed) |
 | Run readiness | `docs/REVIEW_PRE_RUN.md` |
+| AWS adapter / CDK / orchestrator | `aws/README.md`, `docs/reproduce.md` §14, `CHANGELOG.md` |
 
 New documents should be indexed in `docs/README.md`.
 

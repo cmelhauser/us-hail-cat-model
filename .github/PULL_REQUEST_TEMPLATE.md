@@ -25,6 +25,7 @@
 ### Tests
 - [ ] Unit test added or updated for the changed behavior
 - [ ] Integration test updated if stage boundary or output schema changed
+- [ ] If `aws/` changed: `PYTHONPATH=aws pytest -q aws/tests -m 'not localstack' --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100`
 
 ### Documentation
 - [ ] `README.md` updated (if user-facing behavior changed)
@@ -32,6 +33,7 @@
 - [ ] `docs/technical_documentation.md` updated (if stage behavior changed)
 - [ ] `docs/data_dictionary.md` updated (if new/renamed outputs)
 - [ ] `docs/reproduce.md` updated (if run commands changed)
+- [ ] `aws/README.md` / `docs/reproduce.md` §14 updated (if AWS adapter changed)
 - [ ] `CHANGELOG.md` entry added
 
 ### Methodology changes only

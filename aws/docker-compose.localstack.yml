@@ -1,0 +1,11 @@
+services:
+  localstack:
+    image: localstack/localstack:4.14.0
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=ecs,ecr,efs,iam,logs,s3,sts,cloudformation,ssm,secretsmanager,ec2
+      - DEBUG=0
+      - PERSISTENCE=0
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"

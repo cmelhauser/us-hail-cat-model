@@ -1,7 +1,8 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-08 (`v2.2.2`; MYRORSS Stage 01 complete; Stages 05–14 rebuild — see `docs/RUN_NOTES.md`)**
+**Last updated: 2026-07-17 (`v2.3.0`; AWS Fargate adapter under `aws/`; see also
+`docs/RUN_NOTES.md` for live pipeline rebuild status)**
 
 ---
 
@@ -27,6 +28,8 @@ When changing the project:
 10. Clearly distinguish hazard from loss.
 11. Use the Stage 01 MYRORSS manifest to distinguish missing source days from available-source no-hail days.
 12. Import grid constants from `scripts/_config.py` rather than redefining them inline.
+13. Prefer the optional `aws/` Fargate adapter for cloud runs rather than rewriting
+    stage scripts for S3/EFS; keep stage path assumptions (`data/`, `logs/`) intact.
 
 ---
 

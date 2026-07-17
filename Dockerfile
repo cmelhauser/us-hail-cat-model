@@ -18,6 +18,11 @@
 #     hail-cat-model:2.1 \
 #     python run_pipeline.py --only 07
 #
+# AWS ECS Fargate: push this image to the ECR repo created by aws/cdk, then
+# orchestrate with aws/run_pipeline_aws.py (see aws/README.md and
+# docs/reproduce.md §14). Mounts map to EFS at /app/data, /app/logs,
+# /app/docs/figures.
+#
 # NOTE: data/, logs/, and docs/figures/ are intentionally not baked into the
 # image. Mount them as volumes so outputs persist outside the container.
 

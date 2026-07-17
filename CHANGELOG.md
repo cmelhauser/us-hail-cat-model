@@ -9,6 +9,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **AWS Fargate adapter (`aws/`)** — optional cloud runner that does **not** modify stage
+  scripts. Parallel ECS Fargate tasks for Stages **01** (MYRORSS), **02** (MRMS), and
+  **04c** (GridRad), then a finalize task for **03 / 04a / 05–14**, with shared state on
+  EFS. Includes:
+  - `aws/config/pipeline.yaml` — single parameter file for CDK deploy and runtime
+  - `aws/cdk/` — Python CDK stack (ECS, EFS, ECR, IAM, CloudWatch)
+  - `aws/run_pipeline_aws.py` — local boto3 orchestrator (`full`, `downloads-only`,
+    `finalize`, `dry-run`)
+  - `aws/hail_aws/` — typed YAML loader, ECS client, workflow planner
+  - LocalStack Community **`4.14.0`** compose file + `aws/tests` (100% coverage gate on
+    `hail_aws` + CLI)
+  - Design/plan: `docs/superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`,
+    `docs/superpowers/plans/2026-07-17-aws-fargate-adapter.md`
+  - Install extras: `pip install -e ".[aws]"` (PyYAML, boto3, aws-cdk-lib)
+
 ## [2.3.0] — 2026-07-09
 
 ### Added

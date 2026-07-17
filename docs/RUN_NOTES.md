@@ -207,6 +207,13 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
   on 2026-05-04. Do not rerun Stage 01 downloads unless the user explicitly asks
   for a clean rebuild; use `--qa-only` for repair/validation without downloading.
 
+## AWS Fargate (optional)
+
+For cloud runs that keep stage scripts unchanged, use the adapter under `aws/`:
+parallel Fargate tasks for Stages 01 / 02 / 04c, then finalize 03–14 on shared EFS.
+See `aws/README.md` and `docs/reproduce.md` §14. This does not replace the local
+`run_pipeline.py` path documented above.
+
 ## Next Actions
 
 1. **Confirm Stage 04c backfill is done** (or accept manifest `missing_source` days as NCAR gaps).
