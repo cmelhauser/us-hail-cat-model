@@ -2,7 +2,7 @@
 
 **Publication manuscript (PNAS-style)**  
 **Model version:** 2.2.2  
-**Metrics freeze:** 2026-07-08 22:48:13  
+**Metrics freeze:** 2026-07-09 11:47:13  
 **Code:** [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model)  
 **Corresponding author:** Christopher Melhauser (christopher.melhauser@gmail.com)
 
@@ -162,13 +162,13 @@ Stage **13** 50,000-year sparse resampling was **in progress** at manuscript bui
 
 ![Figure 11](figures/pnas/fig11_ai_development_workflow.png)
 
-<!-- Figure 12: fig12_rp_100yr_stochastic.png pending — regenerate after Stage 13/14 -->
+**Figure 12.** Stochastic 100-year empirical return-period map (50,000-yr catalog; Lambert Conformal).
 
-**Figure 12** — *Stochastic 100-year empirical return-period map (50,000-yr catalog; Lambert Conformal).* *(figure pending)*
+![Figure 12](figures/pnas/fig12_rp_100yr_stochastic.png)
 
-<!-- Figure 13: fig13_analytical_vs_stochastic.png pending — regenerate after Stage 13/14 -->
+**Figure 13.** Analytical vs stochastic 100-year return-period comparison (Lambert Conformal).
 
-**Figure 13** — *Analytical vs stochastic 100-year return-period comparison (Lambert Conformal).* *(figure pending)*
+![Figure 13](figures/pnas/fig13_analytical_vs_stochastic.png)
 
 
 ---
