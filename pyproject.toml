@@ -73,10 +73,10 @@ aws = [
 ]
 
 [project.urls]
-Repository = "https://github.com/melhauserc/us-hail-cat-model"
-Documentation = "https://github.com/melhauserc/us-hail-cat-model/tree/main/docs"
-Changelog = "https://github.com/melhauserc/us-hail-cat-model/blob/main/CHANGELOG.md"
-"Bug Tracker" = "https://github.com/melhauserc/us-hail-cat-model/issues"
+Repository = "https://github.com/cmelhauser/us-hail-cat-model"
+Documentation = "https://github.com/cmelhauser/us-hail-cat-model/tree/main/docs"
+Changelog = "https://github.com/cmelhauser/us-hail-cat-model/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/cmelhauser/us-hail-cat-model/issues"
 
 # ── Ruff (linter + formatter) ───────────────────────────────────────────────
 [tool.ruff]

@@ -1,6 +1,6 @@
-# Uncertainty Budget — CONUS Hail Catastrophe Model v2.2.2
+# Uncertainty Budget — CONUS Hail Catastrophe Model v2.3.0
 
-**Version:** 2.2.2  
+**Version:** 2.3.0  
 **Status:** Framework document — quantitative bounds to be populated after first full run  
 **Related:** `docs/methodology.md`, `docs/technical_documentation.md §09`
 
@@ -370,7 +370,7 @@ mandatory review before interpretation.
 
 ## 6. Loss-Side Uncertainty (Future Work)
 
-Vulnerability, exposure, and financial loss are **out of scope** for this hazard-only repository (Stage 14 removed 2026-07). Uncertainty in MDR curves, roof age, construction quality, and policy terms would dominate any loss estimate and requires claims-calibrated modules documented as future work in `docs/methodology.md` §14.
+Vulnerability, exposure, and financial loss are **out of scope** for this hazard-only repository (the former vulnerability pipeline stage was removed 2026-07; **Stage 14** is now figure rendering). Uncertainty in MDR curves, roof age, construction quality, and policy terms would dominate any loss estimate and requires claims-calibrated modules documented as future work in `docs/methodology.md` §14.
 
 Prior literature suggests un-calibrated MDR priors may differ from claims-calibrated curves by factors of 2–5× for the same hail size and construction class (Pita et al. 2013). Any future loss extension should propagate this uncertainty explicitly.
 

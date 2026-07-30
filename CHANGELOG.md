@@ -19,6 +19,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   project pseudonym for all AI collaboration (not a separate repository) in
   `LICENSE`, `README.md`, `CITATION.cff`, `.zenodo.json`, `AGENTS.md`,
   `CONTRIBUTING.md`, `docs/ai_instructions.md`, and PNAS AI disclosures.
+- **Development readiness sync (2026-07-30):** README/CITATION/Zenodo/DATA_AVAILABILITY
+  and orientation docs aligned to **v2.3.0**; public URLs corrected to
+  **cmelhauser**; CI triggers document `main` + `v*`; status tables no longer
+  claim `main` is stuck on 2.2.1.
 
 ### Added
 
@@ -401,6 +405,6 @@ adjustment. Replaced by v2.0.
 
 ---
 
-[2.1.0]: https://github.com/melhauserc/us-hail-cat-model/compare/v2.0.0...v2.1.0
-[2.0.0]: https://github.com/melhauserc/us-hail-cat-model/compare/v1.0.0...v2.0.0
-[1.0.0]: https://github.com/melhauserc/us-hail-cat-model/releases/tag/v1.0.0
+[2.1.0]: https://github.com/cmelhauser/us-hail-cat-model/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/cmelhauser/us-hail-cat-model/compare/v1.0.0...v2.0.0
+[1.0.0]: https://github.com/cmelhauser/us-hail-cat-model/releases/tag/v1.0.0

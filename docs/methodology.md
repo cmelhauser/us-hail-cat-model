@@ -1,16 +1,16 @@
 # Methodology
 
-**CONUS Hail Catastrophe Model v2.2.2**
+**CONUS Hail Catastrophe Model v2.3.0**
 
 ---
 
 ## Abstract
 
-The CONUS Hail Catastrophe Model v2.2 is a radar-first probabilistic hail hazard model for the continental United States. It estimates daily hail occurrence, hail-size severity, rare-event return levels, spatially coherent event footprints, and long synthetic event catalogs on a 0.05 degree latitude-longitude grid. The model is designed for hazard research, scenario analysis, and catastrophe-model prototyping. It is not a claims-calibrated loss model.
+The CONUS Hail Catastrophe Model v2.3 is a radar-first probabilistic hail hazard model for the continental United States. It estimates daily hail occurrence, hail-size severity, rare-event return levels, spatially coherent event footprints, and long synthetic event catalogs on a 0.05 degree latitude-longitude grid. The model is designed for hazard research, scenario analysis, and catastrophe-model prototyping. It is not a claims-calibrated loss model.
 
 The central methodological choice is to use radar-derived Maximum Expected Size of Hail (MESH) fields as the primary hazard observation, while reserving SPC hail reports for validation and calibration support. That choice reflects the well-documented non-meteorological bias in human hail reports, including population density, road density, observation practices, report-size rounding, and historical changes in severe-hail reporting thresholds (Allen and Tippett 2015; Blair et al. 2011, 2017). Radar products have their own uncertainties, but they provide spatially continuous observations over rural and urban domains and are therefore better suited to gridded hazard estimation.
 
-v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. **v2.2.2** (§2.7) adopts **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for event footprints and era-pooled GridRad calibration after per-cell hail-day diagnostics; **§5.5** adds range-dependent debias and GridRad speckle filtering after radar-artifact QA (2026-07). v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the 14 executable pipeline stages (01–13, 14 figures; loss is future work in §14).
+v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. **v2.2.2** (§2.7) adopts **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for event footprints and era-pooled GridRad calibration after per-cell hail-day diagnostics; **§5.5** adds range-dependent debias and GridRad artifact filtering after radar-artifact QA (2026-07). **v2.3.0** adds GridRad native QC in Stage **04c**, site remediation, refined azimuth bins, and an optional geometry-aware artifact classifier in Stage **05**. v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the 14 executable pipeline stages (01–13 hazard, **Stage 14 figures**; financial loss remains future work in **methodology §14**).
 
 ---
 

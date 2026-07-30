@@ -2,7 +2,7 @@
 
 **CONUS Hail Catastrophe Model**
 **Path:** v1.0 -> v2.0 -> v2.1
-**Current version:** v2.2.0 (convective-day daily MESH; see `docs/methodology.md` §2.6)
+**Current version:** v2.3.0 (inherits v2.2 convective-day daily MESH; see `docs/methodology.md` §2.6)
 
 ---
 

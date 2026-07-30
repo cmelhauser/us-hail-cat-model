@@ -1,6 +1,6 @@
 # What This Model Does — Plain-Language Explainer
 
-**CONUS Hail Catastrophe Model v2.2.2**
+**CONUS Hail Catastrophe Model v2.3.0**
 
 ---
 
@@ -87,7 +87,7 @@ v2.1 improves:
 
 ---
 
-## 4.1 Threshold and calibration (v2.2.1+, current v2.2.2)
+## 4.1 Threshold and calibration (v2.2.1+, current v2.3.0)
 
 After analyzing per-cell hail-day frequencies across six literature thresholds, the model (since v2.2.1):
 

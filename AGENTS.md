@@ -9,8 +9,8 @@ under the pseudonym **theonlymuffinbot** (not a separate GitHub repository).
 Scientific direction and accountability remain with Christopher Melhauser.
 The sole code remote is `origin` → `cmelhauser/us-hail-cat-model`.
 
-Last updated: 2026-07-17 (AWS Fargate adapter under `aws/`; MYRORSS Stage 01
-coordinate fix complete; Stages 05–14 rebuild in progress).
+Last updated: 2026-07-30 (origin-only remotes; **theonlymuffinbot** AI credit;
+CI on `main` + `v*`; readiness sync for development on **`v2.3.0`**).
 
 ## What This Project Is
 
@@ -27,8 +27,10 @@ stochastic event catalog.
 - Python: 3.10+ for project support; the active long run is still on the
   existing Python 3.9.6 `.venv` and should be upgraded only after that run
 
-Current operating branch: **`v2.3.0`** (development; push/PR to `origin` only).
-The old `v2.1` branch has been merged and is no longer the active development branch.
+Current operating branch: **`v2.3.0`** (push/PR to `origin` only; CI on `main` and
+`v*`). Model release **2.3.0**. `origin/main` already carries the 2.3.0 codebase tip
+from the 2026-07-30 fast-forward; this branch may be a few commits ahead (docs/CI).
+Retired version branches (`v2.2.2`, `v2.2.3`, `v2.1`) are not active development.
 
 ## Non-Negotiable Rules
 
@@ -48,7 +50,7 @@ bump.
 | 8 | Grid constants come from `scripts/_config.py`. Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, or `LON_MIN` in stage scripts. |
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
 | 10 | Use `scripts/_logging.py` for stage loggers, `scripts/_io.py` for shared raster/geospatial helpers, and `scripts/_mapping.py` for CONUS map PNGs (Lambert Conformal + admin boundaries). |
-| 12 | **Git:** sole remote is **`origin`** (`cmelhauser/us-hail-cat-model`). Commit and push only there. PRs: `gh pr create --repo cmelhauser/us-hail-cat-model --base main`. See `docs/GIT_REMOTES.md`. |
+| 12 | **Git:** sole remote is **`origin`** (`cmelhauser/us-hail-cat-model`). Commit and push only there. PRs: `gh pr create --repo cmelhauser/us-hail-cat-model --base main`. CI runs on `main` and `v*`. See `docs/GIT_REMOTES.md`. |
 
 ## Known Issues / Discrepancies
 
@@ -84,12 +86,16 @@ us-hail-cat-model/
 |   |-- docker-compose.localstack.yml  <- LocalStack Community 4.14.0 for tests
 |   `-- tests/                  <- aws unit/integration tests (100% hail_aws gate)
 |-- scripts/
-|   |-- _config.py              <- grid constants, paths, EVT defaults
+|   |-- _config.py              <- grid constants, paths, EVT defaults, MODEL_VERSION
 |   |-- _logging.py             <- shared logger factory
 |   |-- _io.py                  <- write_geotiff, haversine_km, latlon_to_grid
 |   |-- _mapping.py             <- Lambert Conformal maps, admin_0/admin_1 boundaries
-|   |-- _radar_geometry.py      <- NEXRAD sites, range debias, five-pass artifact filter
+|   |-- _radar_geometry.py      <- NEXRAD sites, range debias, multi-pass artifact filter
+|   |-- _gridrad_qc.py          <- GridRad native echo-frequency + clutter QC (04c)
+|   |-- _artifact_features.py   <- geometry features for optional artifact classifier
 |   |-- _pipeline_cleanup.py    <- delete Stage N+ outputs (used by rerun / --clean-from)
+|   |-- setup_git_remotes.sh    <- origin-only remote setup
+|   |-- train_artifact_classifier.py <- optional Stage 05 classifier trainer
 |   |-- rerun_stage05.py        <- wait, clean 05+, blocking Stage 05 rebuild
 |   |-- 01_download_myrorss.py
 |   |-- 02_download_mrms_mesh.py
@@ -107,13 +113,17 @@ us-hail-cat-model/
 |   |-- 11b_prepare_topography.py
 |   |-- 12_apply_conus_mask.py
 |   |-- 13_generate_stochastic_catalog.py
-|   |-- 14_render_figures.py
+|   |-- 14_render_figures.py    <- Stage 14 figures (formerly 15)
+|   |-- archive/                <- legacy v1 reference scripts (not CI-linted)
 |   `-- diagnostics/
 |       |-- _diagnostic_io.py            <- shared warn-and-skip data availability helpers
 |       |-- summarize_mesh_daily_peaks.py  <- mesh archive peak CSV/ECDF (optional)
 |       |-- hail_day_climatology.py        <- per-cell hail-day threshold sensitivity (optional)
 |       |-- radar_artifact_diagnostic.py   <- speckle/range debias QA (optional)
 |       |-- literature_validation_suite.py <- literature benchmarks across stages (optional)
+|       |-- render_pnas_article_figures.py <- manuscript figures
+|       |-- render_pnas_publication_md.py  <- publication markdown build
+|       |-- render_pnas_review_docx.py     <- Word review draft
 |-- tests/                      <- unit and synthetic integration tests
 |-- docs/                       <- full documentation
 |-- data/                       <- gitignored generated data
@@ -293,19 +303,20 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-07-09:
+As of 2026-07-30:
 
 | Area | Status |
 |---|---|
-| Active branch | **`v2.3.0`** (dev); **`v2.2.3`** (Tier 0 patch) and **2.2.1** on `main` until merge |
-| All stage scripts (01–14) | Written, tested, production-validated |
-| Tests | 38+ pytest modules; artifact + GridRad QC tests green locally |
-| **v2.2.2 production run** | Complete (2026-07-08) — superseded by v2.3.0 Tier 0+1 rebuild |
+| Active branch | **`v2.3.0`** (sole write remote: `origin`) |
+| Model version | **2.3.0** (`MODEL_VERSION` / `pyproject.toml`) |
+| `origin/main` | Carries 2.3.0 codebase; may lag this branch by docs/CI tip commits |
+| All stage scripts (01–14) | Written, tested; CI green on Python 3.10/3.11/3.12 + integration |
+| Tests | pytest modules under `tests/`; AWS adapter tests under `aws/tests/` |
 | Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Tier 0 (v2.2.3) | 04c native QC, site remediation, 10 km azimuth bins — branch **`v2.2.3`** pushed |
-| Tier 1 (v2.3.0) | Geometry artifact classifier + `train_artifact_classifier.py` — branch **`v2.3.0`** |
-| **v2.3.0 full rebuild** | **Queued / in progress** — `--from 04c --clean-from 04c` (04c QC + classifier) |
-| `artifact_classifier.pkl` | Trained from Stage 06 pairs (ROC-AUC ~0.90); gitignored |
+| Tier 0 (v2.2.3 lineage) | 04c native QC, site remediation, 10 km azimuth bins — in **2.3.0** |
+| Tier 1 (v2.3.0) | Geometry artifact classifier + `train_artifact_classifier.py` |
+| **v2.3.0 full rebuild** | From **04c** through **14** — see `docs/RUN_NOTES.md` / `docs/HANDOFF.md` |
+| `artifact_classifier.pkl` | Optional; trained from Stage 06 pairs; gitignored |
 | Regression / golden tests | Pending frozen checksums after v2.3.0 run |
 | Bootstrap CIs on RP maps | Pending |
 

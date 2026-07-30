@@ -1,6 +1,6 @@
 # Data Dictionary
 
-**CONUS Hail Catastrophe Model v2.2**
+**CONUS Hail Catastrophe Model v2.3.0**
 
 ---
 

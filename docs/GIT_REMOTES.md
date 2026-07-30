@@ -41,3 +41,4 @@ gh pr create --repo cmelhauser/us-hail-cat-model --base main --head "$(git branc
 - Merge or commit directly on GitHub outside the normal PR workflow without maintainer agreement
 
 AI agents and contributors must treat **`origin`** (`cmelhauser/us-hail-cat-model`) as the sole remote.
+CI runs on pushes and pull requests to `main` and `v*` branches.

@@ -1,6 +1,6 @@
 # Reproduction Guide
 
-**CONUS Hail Catastrophe Model v2.2**
+**CONUS Hail Catastrophe Model v2.3.0**
 
 ---
 
@@ -17,7 +17,7 @@ Recommended:
 Install:
 
 ```bash
-git clone https://github.com/YOUR_ACCOUNT/us-hail-cat-model.git
+git clone https://github.com/cmelhauser/us-hail-cat-model.git
 cd us-hail-cat-model
 
 python3.10 -m venv .venv

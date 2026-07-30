@@ -1,9 +1,9 @@
-# CONUS Hail Catastrophe Model — v2.2.2
+# CONUS Hail Catastrophe Model — v2.3.0
 
-[![Version](https://img.shields.io/badge/version-v2.2.2-blue)]()
+[![Version](https://img.shields.io/badge/version-v2.3.0-blue)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
-[![CI](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml/badge.svg)](https://github.com/melhauserc/us-hail-cat-model/actions/workflows/tests.yml)
+[![CI](https://github.com/cmelhauser/us-hail-cat-model/actions/workflows/tests.yml/badge.svg)](https://github.com/cmelhauser/us-hail-cat-model/actions/workflows/tests.yml)
 
 A radar-based probabilistic hail hazard model for the Continental United States. The model ingests 25+ years of NOAA multi-radar MESH data, fits regional extreme-value distributions, and generates a 50,000-year stochastic event catalog on a 0.05° CONUS grid.
 
@@ -28,9 +28,11 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 
 ## Overview
 
-Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**. **v2.2.1** introduced literature-aligned severe-hail thresholds and era-pooled GridRad calibration (see `docs/methodology.md` §2.7); **v2.2.2** adds range debias, GridRad artifact filtering (§5.5), and hazard-only pipeline staging (14 stages).
+**Active development branch:** `v2.3.0` on `origin` (`cmelhauser/us-hail-cat-model`). Model version **2.3.0** (`scripts/_config.py` / `pyproject.toml`). CI runs on pushes and PRs to `main` and `v*` branches.
 
-**Preferred thresholds (v2.2.2):**
+Version 2.2+ uses **12 UTC → 12 UTC convective days**. **v2.2.1** introduced literature-aligned severe-hail thresholds and era-pooled GridRad calibration (`docs/methodology.md` §2.7). **v2.2.2** added range debias and GridRad artifact filtering (§5.5). **v2.3.0** adds GridRad native QC (04c), site remediation, 10 km azimuth bins, and an optional geometry-aware artifact classifier (Stage 05 / `train_artifact_classifier.py`).
+
+**Preferred thresholds (v2.3.0):**
 
 | Constant | Value | Use |
 |----------|------:|-----|
@@ -38,7 +40,7 @@ Version 2.2 defines daily MESH rasters on **12 UTC → 12 UTC convective days**.
 | `DAMAGE_THRESH_MM` | 25.4 mm | Damage onset; occurrence products and Stage 13 severe-cell counts |
 | GridRad calibration | era-pooled QM | MYRORSS 2005–2011 vs GridRad 2012–2019 (median ratio ~1.10) |
 | Range debias | SPC-collocated | Per-era multiplicative factors vs nearest-radar distance (125 km reference) |
-| GridRad artifact filter | 5-pass (speckle + inner-ref radial ring + azimuthal + filament + 21-day persistence) | GridRad days only, Stage 05; see `methodology.md` §5.5 |
+| GridRad artifact filter | 6 rule passes + site remediation (+ optional classifier) | GridRad days, Stage 05; see `methodology.md` §5.5 and `docs/radar_artifact_ml_plan.md` |
 
 The model produces:
 
@@ -52,21 +54,15 @@ The model produces:
 
 **Scope.** Hail hazard only — gridded occurrence, intensity, return periods, and stochastic event catalogs. No exposure integration, vulnerability curves, or financial loss output. Claims-calibrated damage functions are documented as **future work** (see `docs/methodology.md` §14).
 
-### Production run (v2.2.1, completed 2026-06-30)
-
-Historical reference only — superseded by **v2.2.2** artifact-filter and debias rebuilds (2026-07).
+### Archive and run status
 
 | Metric | Value |
 |--------|------:|
-| Convective-day archive | 9,797 days (1998–2026) |
-| Corrected MESH75 (Stage 05) | 9,797 days; era-pooled GridRad QM |
-| Historical events (29 mm) | 8,798 (~303 yr⁻¹) |
-| SPC validation pairs | 173,766 |
-| Stochastic simulation | 50,000 yr; 15.17M synthetic events |
-| Stochastic 100-yr CONUS peak | 157.8 mm (6.21 in) |
-| Stochastic 50,000-yr CONUS peak | 300.0 mm (11.81 in) |
+| Convective-day archive | 9,797 days (1998–2026; Stage 01 MYRORSS coordinate fix complete) |
+| Current rebuild | **v2.3.0** from Stage **04c** (native QC) through **14** — see `docs/RUN_NOTES.md` |
+| Prior production snapshots | v2.2.1 (2026-06-30) and v2.2.2 (2026-07-08) superseded for final hazard products |
 
-Full pipeline validated with `run_pipeline.py --from 05 --skip-ml` and Stage 13 memmap-backed catalog generation. **v2.2.2** is re-ingesting MYRORSS (Stage 01 coordinate fix) and rebuilding Stages 05–07 with five-pass GridRad filtering (including spatiotemporal range-ring persistence); see `docs/RUN_NOTES.md`.
+Use `run_pipeline.py --from 04c --clean-from 04c` for the Tier 0+1 rebuild; Stage 13 remains sparse/memmap-backed. Live commands and stage status: `docs/RUN_NOTES.md` and `docs/HANDOFF.md`.
 
 ---
 
@@ -158,8 +154,10 @@ Stage 11b downloads [NOAA/NCEI ETOPO 2022](https://doi.org/10.25921/fd45-gt74) 6
 **Requirements:** Python 3.10+, and system libraries for `cartopy`, `eccodes`, and `rasterio` (GEOS, PROJ, ecCodes).
 
 ```bash
-git clone https://github.com/melhauserc/us-hail-cat-model.git
+git clone https://github.com/cmelhauser/us-hail-cat-model.git
 cd us-hail-cat-model
+git checkout v2.3.0
+./scripts/setup_git_remotes.sh   # origin-only
 python3.10 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"

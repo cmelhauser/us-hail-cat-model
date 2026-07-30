@@ -9,7 +9,8 @@ adapter under `aws/`; full rebuild from 04c)**
 ## 1. Canonical Project Identity
 
 - **Name:** CONUS Hail Catastrophe Model
-- **Current version:** v2.3.0 (dev branch); v2.2.3 = Tier 0 patch; v2.2.1 on `main` until merge
+- **Current version:** **v2.3.0** (active branch `v2.3.0`; `MODEL_VERSION` 2.3.0).
+  `origin/main` already carries the 2.3.0 codebase; tip commits may lag this branch.
 - **Model type:** hail hazard model
 - **Domain:** continental United States
 - **Primary hazard input:** radar-derived MESH / MESH75
@@ -197,7 +198,7 @@ Committed and merged to `main` at `e582d5d`.
 - `.pre-commit-config.yaml` (ruff, mypy, pre-commit-hooks, detect-secrets)
 - `environment.yml` (conda: Python 3.11 + all geo deps)
 - `Dockerfile` + `.dockerignore` (micromamba/jammy, health check)
-- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12 matrix, ruff, mypy, pytest, codecov)
+- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12 matrix — py_compile, pytest, dry-run, codecov; integration on push; ruff/mypy via pre-commit locally)
 - `.github/ISSUE_TEMPLATE/{bug,methodology,feature}.md`, `.github/PULL_REQUEST_TEMPLATE.md`
 
 **Documentation:**
@@ -293,15 +294,16 @@ In order:
 ## 10. Compact Context for AI Agents
 
 ```text
-Project: CONUS Hail Cat Model v2.2.
+Project: CONUS Hail Cat Model v2.3.0.
 Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
-14-stage Python pipeline. Run via run_pipeline.py.
+14-stage Python pipeline (01–13 hazard + 14 figures). Run via run_pipeline.py.
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
-Active branch: v2.2.2. Model 2.2.2. Stage 01 MYRORSS fix complete 2026-07-08;
-Stages 05–14 rebuild in progress for final hazard products.
-9,797 raw mesh TIFFs; prior 8,798 events / 50k-yr catalog superseded pending rebuild.
+Active branch: v2.3.0. Model 2.3.0. Sole remote: origin (cmelhauser/us-hail-cat-model).
+AI collaborator pseudonym: theonlymuffinbot (not a separate GitHub repo).
+Stage 01 MYRORSS fix complete 2026-07-08; v2.3.0 rebuild from 04c through 14 — see RUN_NOTES.
+9,797 raw mesh TIFFs; prior event/stochastic catalogs superseded pending rebuild completion.
 Stage 01/02 manifests distinguish missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.
 Hail-day climatology: scripts/diagnostics/hail_day_climatology.py.
