@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Origin-only remotes:** `docs/GIT_REMOTES.md`, `scripts/setup_git_remotes.sh`,
+  `AGENTS.md`, `CONTRIBUTING.md`, and related docs now treat
+  `cmelhauser/us-hail-cat-model` as the sole remote. Stale non-origin remotes
+  are removed by the setup script.
+- **AI collaborator attribution:** **theonlymuffinbot** is documented as the
+  project pseudonym for all AI collaboration (not a separate repository) in
+  `LICENSE`, `README.md`, `CITATION.cff`, `.zenodo.json`, `AGENTS.md`,
+  `CONTRIBUTING.md`, `docs/ai_instructions.md`, and PNAS AI disclosures.
+
 ### Added
 
 - **AWS Fargate adapter (`aws/`)** — optional cloud runner that does **not** modify stage
@@ -215,7 +226,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added (2026-05-28)
 
-- **`docs/GIT_REMOTES.md`** and **`scripts/setup_git_remotes.sh`:** document and enforce push/PR to `origin` (`cmelhauser`) only, not `upstream`.
+- **`docs/GIT_REMOTES.md`** and **`scripts/setup_git_remotes.sh`:** document and enforce push/PR to `origin` (`cmelhauser/us-hail-cat-model`) only.
 - Agent/contributor rules in `AGENTS.md`, `CONTRIBUTING.md`, `docs/ai_instructions.md`.
 
 ### Changed (2026-05-28)
@@ -326,7 +337,7 @@ run-readiness.
 - `docs/executive_summary.md` — 5-minute overview for non-technical readers.
 - `docs/explainer.md` — plain-language explanation of model methodology.
 - `docs/UPGRADE_NOTES.md` — v2.0→v2.1 migration notes.
-- `docs/PR_v1_to_v2.1.md` — reviewer-facing upstream PR narrative for
+- `docs/PR_v1_to_v2.1.md` — reviewer-facing PR narrative for
   the v1.0→v2.0→v2.1 arc.
 - `docs/REVIEW_PRE_RUN.md` — pre-execution audit artifact.
 - `run_pipeline.py`: `--from N`, `--only N`, `--skip`, `--dry-run`,

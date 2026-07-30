@@ -153,7 +153,7 @@ Separating radar hazard from report validation remains the central scientific de
 
 The **2026-07-08** rebuild incorporated a MYRORSS coordinate-fix re-ingest (eastern CONUS restored), a five-pass GridRad artifact filter with spatiotemporal persistence, and refreshed range debias from **173,766** validation pairs. Event frequency fell from the prior smoke-affected eastern truncation (**8,798** → **7,792** events; **303** → **269** yr⁻¹), while analytical return-period peaks increased materially once eastern hail entered the EVT record—underscoring that ingest geometry and artifact QA are first-order hazard uncertainties, not secondary polish.
 
-AI assistance was most valuable inside a disciplined repository: explicit tests, stage boundaries, manifests, and git-reviewed changes. Agents accelerated audit breadth; the human operator retained methodological decisions and accountability.
+AI assistance (**theonlymuffinbot**) was most valuable inside a disciplined repository: explicit tests, stage boundaries, manifests, and git-reviewed changes. Agents accelerated audit breadth; the human operator retained methodological decisions and accountability.
 """
 
     fig_section = "## Figures\n"

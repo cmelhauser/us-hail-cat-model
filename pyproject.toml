@@ -7,6 +7,7 @@ license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [
     { name = "Christopher Melhauser", email = "christopher.melhauser@gmail.com" },
+    { name = "theonlymuffinbot" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

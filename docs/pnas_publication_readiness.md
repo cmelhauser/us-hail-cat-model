@@ -37,7 +37,10 @@ No reviewed source appears to combine all of the following in one transparent ar
 1. a public-data, radar-first US hail catastrophe hazard pipeline;
 2. daily source provenance distinguishing missing-source days from source-present no-hail days;
 3. corrected daily hail rasters, sparse event templates, analytical return-period maps, and stochastic event catalogs;
-4. a documented human-AI development process spanning literature review, implementation, testing, CI, data QA, git operations, long-run monitoring, and manuscript drafting;
+4. a documented human–AI development process credited under the project
+   pseudonym **theonlymuffinbot**, spanning literature review, implementation,
+   testing, CI, data QA, git operations, long-run monitoring, and manuscript
+   drafting;
 5. an open repository intended to preserve the exact methods, commands, logs, and reproducibility controls.
 
 That combination is the novelty argument.
@@ -62,7 +65,9 @@ Can frontier AI agents help build scientific infrastructure, not merely write is
 
 ### Central answer
 
-Yes, in this case study, but the value came from disciplined human-AI workflow design: source manifests, staged execution, tests, documentation, map QA, version control, and human interpretation.
+Yes, in this case study, but the value came from disciplined human–AI workflow
+design credited as **theonlymuffinbot**: source manifests, staged execution,
+tests, documentation, map QA, version control, and human interpretation.
 
 ### Claims to avoid
 

@@ -4,6 +4,11 @@ For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
 state, or git. For deeper detail, follow the links into `docs/`.
 
+**AI collaborator identity:** All AI collaboration on this project is credited
+under the pseudonym **theonlymuffinbot** (not a separate GitHub repository).
+Scientific direction and accountability remain with Christopher Melhauser.
+The sole code remote is `origin` → `cmelhauser/us-hail-cat-model`.
+
 Last updated: 2026-07-17 (AWS Fargate adapter under `aws/`; MYRORSS Stage 01
 coordinate fix complete; Stages 05–14 rebuild in progress).
 
@@ -43,7 +48,7 @@ bump.
 | 8 | Grid constants come from `scripts/_config.py`. Do not redefine `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, or `LON_MIN` in stage scripts. |
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
 | 10 | Use `scripts/_logging.py` for stage loggers, `scripts/_io.py` for shared raster/geospatial helpers, and `scripts/_mapping.py` for CONUS map PNGs (Lambert Conformal + admin boundaries). |
-| 12 | **Git:** commit and push only to **`origin`** (`cmelhauser/us-hail-cat-model`). Never `git push upstream`. PRs: `gh pr create --repo cmelhauser/us-hail-cat-model --base main`. See `docs/GIT_REMOTES.md`. |
+| 12 | **Git:** sole remote is **`origin`** (`cmelhauser/us-hail-cat-model`). Commit and push only there. PRs: `gh pr create --repo cmelhauser/us-hail-cat-model --base main`. See `docs/GIT_REMOTES.md`. |
 
 ## Known Issues / Discrepancies
 
@@ -356,7 +361,7 @@ After the rebuild completes:
 1. `python run_pipeline.py --validate`
 2. `.venv/bin/python scripts/diagnostics/render_pnas_article_figures.py`
 3. Refresh manuscript Results from `data/analysis/pnas_article_metrics.json`
-4. Ablation: rules-only (`--skip-ml`) vs rules+ML vs upstream 04c QC — see `docs/radar_artifact_ml_plan.md`
+4. Ablation: rules-only (`--skip-ml`) vs rules+ML vs GridRad native 04c QC — see `docs/radar_artifact_ml_plan.md`
 5. Merge **`v2.3.0`** to `main` when RP maps pass artifact QA
 
 ## Documentation Quick Reference

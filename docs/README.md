@@ -41,15 +41,16 @@ Use the reading paths below to orient yourself quickly.
 12. [`../scripts/rerun_stage05.py`](../scripts/rerun_stage05.py) — blocking Stage 05 rebuild after filter/debias changes
 13. [`superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`](superpowers/specs/2026-07-17-aws-fargate-adapter-design.md) — AWS adapter design (parallel downloads + finalize)
 **AI agent or future developer:**
-1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation
+1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation (**theonlymuffinbot** = AI collaborator pseudonym)
 2. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
 3. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
-4. [`GIT_REMOTES.md`](GIT_REMOTES.md) — push/PR policy (`origin` only, not `upstream`)
+4. [`GIT_REMOTES.md`](GIT_REMOTES.md) — sole remote is `origin` (`cmelhauser/us-hail-cat-model`)
+5. [`../README.md`](../README.md)#credits — author + AI collaborator credits
 
 **Version history and migration:**
 1. [`migration_plan.md`](migration_plan.md) — v1→v2→v2.1→v3 roadmap
 2. [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) — v2.0→v2.1 breaking changes and migration steps
-3. [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) — upstream PR narrative for the v1.0→v2.0→v2.1 arc
+3. [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) — historical PR narrative for the v1.0→v2.0→v2.1 arc
 4. [`../CHANGELOG.md`](../CHANGELOG.md) — versioned change history
 
 ---
@@ -82,7 +83,7 @@ Use the reading paths below to orient yourself quickly.
 | [`project_memory.md`](project_memory.md) | Governance | Current project state: what's done, known issues, next priorities |
 | [`migration_plan.md`](migration_plan.md) | Governance | Version roadmap and migration guidance |
 | [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) | Governance | v2.0→v2.1 patch notes |
-| [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) | Governance | Reviewer-facing PR narrative for the upstream merge |
+| [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) | Governance | Reviewer-facing PR narrative for the v1.0→v2.1 merge |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Governance | Full version history |
 
 ---

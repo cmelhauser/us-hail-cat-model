@@ -4,6 +4,11 @@ Thank you for your interest in contributing. This document explains how to set
 up a development environment, how to submit changes, and what standards the
 project holds contributors to.
 
+**Credits.** Author / scientific lead: Christopher Melhauser. AI collaborator
+(project pseudonym for all AI work): **theonlymuffinbot**. That name is not a
+separate GitHub repository; the sole code remote is
+`cmelhauser/us-hail-cat-model`.
+
 ---
 
 ## Table of Contents
@@ -60,8 +65,8 @@ pre-commit install
 
 ## Git remotes
 
-**Push, branch tracking, and pull requests use `origin` only** (`cmelhauser/us-hail-cat-model`).
-The `upstream` remote (if present) is **fetch-only** — never push or open PRs against it.
+**This repository uses a single remote: `origin`** (`cmelhauser/us-hail-cat-model`).
+Push, branch tracking, and pull requests all target that repository.
 
 After cloning, run once:
 
@@ -69,7 +74,8 @@ After cloning, run once:
 ./scripts/setup_git_remotes.sh
 ```
 
-See `docs/GIT_REMOTES.md` for details.
+That script sets `remote.pushDefault` to `origin` and removes any stale non-origin
+remotes from older clones. See `docs/GIT_REMOTES.md` for details.
 
 ---
 
@@ -184,7 +190,7 @@ New documents should be indexed in `docs/README.md`.
 2. Make your changes, add tests, update documentation.
 3. Run `pre-commit run --all-files` and fix any lint issues.
 4. Run the full test suite locally.
-5. Open a PR against `main` on **`origin`** (not `upstream`):
+5. Open a PR against `main` on **`origin`**:
 
    ```bash
    gh pr create --repo cmelhauser/us-hail-cat-model --base main

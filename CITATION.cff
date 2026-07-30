@@ -19,8 +19,12 @@ authors:
     given-names: Christopher
     orcid: "https://orcid.org/0009-0000-4234-5419"
     email: christopher.melhauser@gmail.com
+  - name: "theonlymuffinbot"
+    website: "https://github.com/cmelhauser/us-hail-cat-model"
 license: MIT
 repository-code: "https://github.com/cmelhauser/us-hail-cat-model"
+# theonlymuffinbot is the project pseudonym for all AI collaboration; not a
+# separate GitHub repository. Scientific accountability: Christopher Melhauser.
 keywords:
   - hail
   - catastrophe model

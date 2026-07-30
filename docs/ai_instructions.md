@@ -10,6 +10,13 @@
 
 This document gives future AI agents and developers explicit instructions for working on the CONUS Hail Catastrophe Model. It exists to prevent accidental regressions, memory blowups, documentation drift, and methodology changes that break the model's defensibility.
 
+**AI collaborator identity:** Credit all AI collaboration under the project
+pseudonym **theonlymuffinbot**. That name is an attribution label for AI work
+(code, docs, tests, diagnostics, monitoring, manuscript drafting)—not a
+separate GitHub repository. Scientific accountability remains with Christopher
+Melhauser. Push and open PRs only against `origin`
+(`cmelhauser/us-hail-cat-model`); see `docs/GIT_REMOTES.md`.
+
 ---
 
 ## 2. Always Do
@@ -49,7 +56,7 @@ Do not:
 10. Assume missing SPC reports mean radar false alarms.
 11. Infer MYRORSS source availability from GeoTIFF file size or all-zero raster values.
 12. Commit generated data, logs, rendered figures, local bootstrap files, or model artifacts (including diagnostic summaries under `data/analysis/`).
-13. Push to **`upstream`** or open PRs against any repo other than **`cmelhauser/us-hail-cat-model`** on **`origin`**. Use `git push -u origin HEAD` and `gh pr create --repo cmelhauser/us-hail-cat-model --base main` only. See `docs/GIT_REMOTES.md`.
+13. Use any Git remote other than **`origin`** (`cmelhauser/us-hail-cat-model`), or open PRs against another repository. Use `git push -u origin HEAD` and `gh pr create --repo cmelhauser/us-hail-cat-model --base main` only. See `docs/GIT_REMOTES.md`.
 
 ---
 

@@ -78,7 +78,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 7. **`scripts/_config.py` is the single source of truth for grid constants.** Never define `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` inline in a stage script.
 8. **Stage 01 manifest is authoritative** for distinguishing missing-source days from true no-hail days. Do not infer source availability from GeoTIFF values alone.
 9. **Convective days:** Stages 01/02/04b/04c use 12 UTC → 12 UTC windows; see `docs/literature_review.md` §3.6.
-10. **Git:** push/PR to **`origin`** only (`cmelhauser/us-hail-cat-model`); see `docs/GIT_REMOTES.md`.
+10. **Git:** sole remote is **`origin`** (`cmelhauser/us-hail-cat-model`); see `docs/GIT_REMOTES.md`.
 
 ---
 

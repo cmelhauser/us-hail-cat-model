@@ -21,6 +21,7 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 - [Outputs](#outputs)
 - [Limitations](#limitations)
 - [Documentation](#documentation)
+- [Credits](#credits)
 - [License](#license)
 
 ---
@@ -317,8 +318,27 @@ Full documentation is in `/docs`. Start with [`docs/README.md`](docs/README.md) 
 
 ---
 
+## Credits
+
+| Role | Credit |
+|------|--------|
+| Author / scientific lead | Christopher Melhauser |
+| AI collaborator | **theonlymuffinbot** |
+
+**theonlymuffinbot** is the project pseudonym for all AI collaboration on this
+repository (implementation, tests, documentation, diagnostics, run monitoring,
+and manuscript drafting under human direction). It is an attribution name, not a
+separate GitHub repository. The sole code remote is
+[`cmelhauser/us-hail-cat-model`](https://github.com/cmelhauser/us-hail-cat-model).
+
+See `docs/ai_instructions.md` and the AI disclosure sections in
+`docs/pnas_article_ai_hail_model.md` for workflow detail.
+
+---
+
 ## License
 
-MIT License. See [`LICENSE`](LICENSE) for details.
+MIT License. See [`LICENSE`](LICENSE) for details (copyright: Christopher
+Melhauser and theonlymuffinbot).
 
 Data sourced from NOAA (MYRORSS, MRMS), NCAR RDA (GridRad), Copernicus CDS (ERA5), and NOAA SPC are subject to their respective terms of use.
