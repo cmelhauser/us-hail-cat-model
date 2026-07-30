@@ -1,5 +1,9 @@
 services:
   localstack:
+    # Community image: ECS/ECR/EFS are license-gated (Pro) as of LocalStack 4.x.
+    # Keep this compose file for STS/IAM/CFN/S3 smoke probes. Laptop orchestrator
+    # E2E for downloads-only / full uses stub ECS in
+    # aws/tests/test_laptop_orchestrator_e2e.py (LocalStack Community lacks ECS).
     image: localstack/localstack:4.14.0
     ports:
       - "4566:4566"

@@ -84,10 +84,14 @@ PYTHONPATH=aws OPENBLAS_NUM_THREADS=1 \
   pytest -q aws/tests -m 'not localstack' \
   --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
 
+# Laptop orchestrator E2E (downloads-only + full) — stub ECS client, no AWS/Pro
+PYTHONPATH=aws OPENBLAS_NUM_THREADS=1 \
+  pytest -q aws/tests/test_laptop_orchestrator_e2e.py
+
 # CDK synth (requires Node.js; skipped if node is missing)
 PYTHONPATH=aws:aws/cdk pytest -q aws/tests/test_cdk_stack.py -m 'not localstack'
 
-# Optional LocalStack Community 4.14.0
+# Optional LocalStack Community 4.14.0 (STS/IAM/CFN smoke only — ECS is Pro-gated)
 docker compose -f aws/docker-compose.localstack.yml up -d
 AWS_ENDPOINT_URL=http://localhost:4566 PYTHONPATH=aws \
   pytest -q aws/tests -m localstack
@@ -97,16 +101,25 @@ AWS_ENDPOINT_URL=http://localhost:4566 PYTHONPATH=aws \
 ruff check aws
 ```
 
+## Orchestration model (important)
+
+v1 always uses a **laptop process** (`run_pipeline_aws.py`) that submits Fargate
+`RunTask` calls and polls `DescribeTasks` until STOPPED. There is **no**
+Step Functions / EventBridge “AWS-only” control plane yet (see below). Keep the
+CLI process alive for long downloads, or resume with `--mode downloads-only` /
+`--mode finalize`.
+
 ## Coverage policy
 
-- **`aws/hail_aws` + `run_pipeline_aws.py`:** fail under **100%** line coverage.
+- **`aws/hail_aws` + `run_pipeline_aws.py`:** fail under **100%** line coverage
+  (`localstack_support.py` omitted — LocalStack Pro–only helpers).
 - **`scripts/`:** separate floor in `pyproject.toml` (I/O-heavy stages); not part of
   this adapter’s gate.
 
 ## What this does not do
 
-- Step Functions / EventBridge orchestration (future option)
+- Step Functions / EventBridge orchestration (future option) — no AWS-only runner
 - Fargate Spot in v1
-- Full LocalStack emulation of Fargate + EFS mounts (Community tests cover API
-  wiring only)
+- Full LocalStack Community emulation of Fargate + EFS (ECS is Pro-licensed in 4.x;
+  use `test_laptop_orchestrator_e2e.py` for laptop-monitor workflow coverage)
 - Changes to MESH methodology or stage CLI contracts

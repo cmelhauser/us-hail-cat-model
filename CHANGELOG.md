@@ -23,6 +23,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and orientation docs aligned to **v2.3.0**; public URLs corrected to
   **cmelhauser**; CI triggers document `main` + `v*`; status tables no longer
   claim `main` is stuck on 2.2.1.
+- **AWS LocalStack/E2E:** LocalStack Community 4.x gates ECS (Pro); add
+  `pipeline.localstack.yaml`, laptop-monitor E2E stubs for `downloads-only` and
+  `full`, and LocalStack-friendly exitCode handling in `ecs_client`.
 
 ### Added
 

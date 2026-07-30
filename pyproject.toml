@@ -134,7 +134,7 @@ warn_redundant_casts = true
 # ── Coverage ─────────────────────────────────────────────────────────────────
 [tool.coverage.run]
 source = ["scripts", "aws/hail_aws", "aws/run_pipeline_aws"]
-omit   = ["scripts/archive/*", "aws/cdk/*"]
+omit   = ["scripts/archive/*", "aws/cdk/*", "aws/hail_aws/localstack_support.py"]
 branch = false
 
 [tool.coverage.report]
@@ -158,7 +158,7 @@ markers   = [
     "slow: marks tests as slow (deselect with '-m not slow')",
     "integration: marks integration tests requiring synthetic pipeline run",
     "regression: marks regression tests requiring golden outputs",
-    "localstack: requires LocalStack 4.14 Community on localhost:4566",
+    "localstack: optional LocalStack probe (ECS is Pro-only as of 4.14; use laptop E2E stubs)",
 ]
 filterwarnings = [
     # Some Matplotlib dependency combinations can emit pyparsing

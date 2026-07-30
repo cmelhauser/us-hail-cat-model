@@ -128,6 +128,27 @@ def test_outcome_from_description() -> None:
     }
     o = EcsWorkflowClient.outcome_from_description("t", desc)
     assert o.succeeded
+    # LocalStack-style: STOPPED with no container exitCode → treat as success.
     desc2 = {**desc, "containers": []}
     o2 = EcsWorkflowClient.outcome_from_description("t", desc2)
-    assert o2.exit_code is None
+    assert o2.exit_code == 0
+    assert o2.succeeded
+    desc3 = {
+        "taskArn": "arn",
+        "lastStatus": "STOPPED",
+        "stopCode": "TaskFailedToStart",
+        "stoppedReason": "CannotPullContainerError",
+        "containers": [],
+    }
+    o3 = EcsWorkflowClient.outcome_from_description("t", desc3)
+    assert o3.exit_code is None
+    assert not o3.succeeded
+    desc4 = {
+        "taskArn": "arn",
+        "lastStatus": "STOPPED",
+        "stoppedReason": "ResourceInitializationError: fail to start",
+        "containers": [],
+    }
+    o4 = EcsWorkflowClient.outcome_from_description("t", desc4)
+    assert o4.exit_code is None
+    assert not o4.succeeded
