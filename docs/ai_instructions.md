@@ -1,14 +1,21 @@
 # AI Instructions for Future Work
 
-**CONUS Hail Catastrophe Model v2.2**
-**Last updated: 2026-07-17 (`v2.3.0`; AWS Fargate adapter under `aws/`; see also
-`docs/RUN_NOTES.md` for live pipeline rebuild status)**
+**CONUS Hail Catastrophe Model v2.3.0**
+**Last updated: 2026-07-30 (`v2.3.0`; origin-only remotes; CI on `main` + `v*`;
+see also `docs/RUN_NOTES.md` for live pipeline rebuild status)**
 
 ---
 
 ## 1. Purpose
 
 This document gives future AI agents and developers explicit instructions for working on the CONUS Hail Catastrophe Model. It exists to prevent accidental regressions, memory blowups, documentation drift, and methodology changes that break the model's defensibility.
+
+**AI collaborator identity:** Credit all AI collaboration under the project
+pseudonym **theonlymuffinbot**. That name is an attribution label for AI work
+(code, docs, tests, diagnostics, monitoring, manuscript drafting)—not a
+separate GitHub repository. Scientific accountability remains with Christopher
+Melhauser. Push and open PRs only against `origin`
+(`cmelhauser/us-hail-cat-model`); see `docs/GIT_REMOTES.md`.
 
 ---
 
@@ -30,6 +37,11 @@ When changing the project:
 12. Import grid constants from `scripts/_config.py` rather than redefining them inline.
 13. Prefer the optional `aws/` Fargate adapter for cloud runs rather than rewriting
     stage scripts for S3/EFS; keep stage path assumptions (`data/`, `logs/`) intact.
+    Follow `aws/README.md` end-to-end (Secrets Manager JSON field names, ECR push,
+    smoke ladder). Do not treat LocalStack Community as proof of Fargate spend safety.
+14. Keep the AWS adapter at **100%** line coverage (`hail_aws` + `run_pipeline_aws.py`).
+    Pipeline `scripts/` use the `pyproject.toml` coverage floor; do not claim 100%
+    scripts coverage without a dedicated campaign.
 
 ---
 
@@ -49,7 +61,7 @@ Do not:
 10. Assume missing SPC reports mean radar false alarms.
 11. Infer MYRORSS source availability from GeoTIFF file size or all-zero raster values.
 12. Commit generated data, logs, rendered figures, local bootstrap files, or model artifacts (including diagnostic summaries under `data/analysis/`).
-13. Push to **`upstream`** or open PRs against any repo other than **`cmelhauser/us-hail-cat-model`** on **`origin`**. Use `git push -u origin HEAD` and `gh pr create --repo cmelhauser/us-hail-cat-model --base main` only. See `docs/GIT_REMOTES.md`.
+13. Use any Git remote other than **`origin`** (`cmelhauser/us-hail-cat-model`), or open PRs against another repository. Use `git push -u origin HEAD` and `gh pr create --repo cmelhauser/us-hail-cat-model --base main` only. See `docs/GIT_REMOTES.md`.
 
 ---
 
@@ -206,19 +218,24 @@ When asked to review the project:
 
 ---
 
-## 9. Confirmed State After 2026-06-27
+## 9. Confirmed State After 2026-07-30
 
 Current repository state:
 
-- Active branch: **`v2.2.2`** (model **2.2.2** on `origin`; **2.2.1** on `main` until merge).
-- GitHub Actions: Python 3.10, 3.11, and 3.12 checks passing.
-- Stage helper refactor complete: `_config.py`, `_logging.py`, `_io.py`, and `_mapping.py` are wired into stage and diagnostic scripts where required.
-- **Stage 01 complete** (5,023 convective-day MYRORSS rasters through 2011-12-31).
-- **Stage 02 complete** (2026-06-08; 2,060 MRMS rasters 2020-10-14 → 2026-06-04; validation passed).
-- **Stage 03 complete**; **Stage 04a complete** (ERA5 isotherms on disk).
-- **Stage 04c primary ingest complete** (2026-06-27) — **2,501** gap-era TIFFs; manifest **3,209** rows. Hourly fallback now includes **d841001** (V4.2 Apr–Aug). Re-run **`--missing-only`** backfill to ingest additional warm-season days.
-- **Mesh archive:** **9,584** TIFFs (5,023 + **2,501** + 2,060). ~173 GiB disk free.
-- Diagnostic summaries (gitignored; regenerate or load externally): `data/analysis/mesh_daily_peaks/`, `data/analysis/hail_day_climatology/`.
+- Active branch: **`v2.3.0`** (model **2.3.0**). Sole remote: **`origin`**
+  (`cmelhauser/us-hail-cat-model`). AI collaborator pseudonym: **theonlymuffinbot**.
+- GitHub Actions CI: Python 3.10/3.11/3.12 unit tests + dry-run + integration on
+  pushes to `main` and `v*` (and PRs targeting those branches). Local lint:
+  `ruff` / `mypy` via pre-commit (not required GHA steps).
+- Stage helper refactor complete: `_config.py`, `_logging.py`, `_io.py`,
+  `_mapping.py`, `_radar_geometry.py`, `_gridrad_qc.py`, `_artifact_features.py`.
+- **Stage 01 complete** (5,023 convective-day MYRORSS rasters through 2011-12-31;
+  sparse-grid coordinate fix).
+- **Stages 02–04a / 03 complete**; GridRad gap-era archive under Stage **04c**.
+- **Mesh archive:** **9,797** TIFFs (5,023 + 2,714 + 2,060).
+- **v2.3.0 rebuild:** from **04c** (native QC) through **14** — see `docs/RUN_NOTES.md`.
+- Diagnostic summaries (gitignored; regenerate or load externally):
+  `data/analysis/mesh_daily_peaks/`, `data/analysis/hail_day_climatology/`.
 
 ### Files created 2026-05-01 (while pipeline was running)
 
@@ -228,7 +245,7 @@ Current repository state:
 **Python/CI infrastructure:**
 - `pyproject.toml`, `.pre-commit-config.yaml`, `environment.yml`
 - `Dockerfile`, `.dockerignore`
-- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, ruff, mypy, pytest, codecov)
+- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, py_compile, pytest, dry-run, codecov; integration on push)
 - `.github/ISSUE_TEMPLATE/{bug,methodology,feature}.md`, `.github/PULL_REQUEST_TEMPLATE.md`
 
 **Documentation:**
@@ -313,6 +330,7 @@ scripts/_config.py = single source of truth for constants and is imported by all
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 OPEN DOC WATCH: methodology.md §13 and uncertainty.md §5.1 document monthly CV Mar–Sep for σ_perturb; keep them aligned with code if Stage 13 changes.
 First full run started 2026-05-01 via Codex.
-Active branch: v2.2.2. Model 2.2.2 (12 UTC → 12 UTC convective days).
+Active branch: v2.3.0. Model 2.3.0 (12 UTC → 12 UTC convective days).
+Sole remote: origin (cmelhauser/us-hail-cat-model). AI collaborator: theonlymuffinbot.
 Stage 01 + 02 + 04c primary ingest complete (9,584 mesh TIFFs). Stages 05–14 are the active blocker.
 ```

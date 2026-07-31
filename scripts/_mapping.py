@@ -25,7 +25,7 @@ CONUS_EXTENT_PC: tuple[float, float, float, float] = (-125.0, -66.0, 24.0, 50.0)
 
 def has_cartopy() -> bool:
     try:
-        import cartopy  # noqa: F401
+        import cartopy
 
         return True
     except ImportError:

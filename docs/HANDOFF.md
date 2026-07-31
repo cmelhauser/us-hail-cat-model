@@ -1,18 +1,23 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.3
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-07-09 (**v2.3.0** Tier 0+1; full rebuild `--from 04c`).
+> Last updated: 2026-07-31 (**v2.3.0**; AWS adapter secrets+docs+100% CI gate).
 
 ---
 
 ## Repository
 
 - **Local:** `/Users/melhauserc/GitHub/us-hail-cat-model`
-- **Branch:** **`v2.3.0`** — active development (`origin` only). **`v2.2.3`** = Tier 0 patch branch. **`main`** has model **2.2.1** until v2.3.0 merges.
+- **Branch:** **`v2.3.0`** — active development. Sole remote: **`origin`**
+  (`cmelhauser/us-hail-cat-model`). Model version **2.3.0**. `origin/main` already
+  carries the 2.3.0 codebase; this branch may be a few tip commits ahead (docs/CI).
 - **Working tree:** should be kept clean except for intentional documentation or
   code edits in the current session
-- **Historical note:** `v2.1` has been merged and is no longer the active
-  development branch.
+- **AWS adapter:** `aws/` — Secrets Manager fields injected into ECS env; container
+  entrypoint writes `~/.cdsapirc`. CI job **`aws`** gates **100%** `hail_aws` coverage.
+  Operator guide: `aws/README.md`. LocalStack Community does **not** emulate ECS.
+- **Historical note:** retired branches (`v2.1`, `v2.2.2`, `v2.2.3`) are not active
+  development; do not recreate a second GitHub remote.
 
 ---
 
@@ -78,7 +83,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 7. **`scripts/_config.py` is the single source of truth for grid constants.** Never define `NROWS`, `NCOLS`, `DX`, `LAT_MAX`, `LON_MIN` inline in a stage script.
 8. **Stage 01 manifest is authoritative** for distinguishing missing-source days from true no-hail days. Do not infer source availability from GeoTIFF values alone.
 9. **Convective days:** Stages 01/02/04b/04c use 12 UTC → 12 UTC windows; see `docs/literature_review.md` §3.6.
-10. **Git:** push/PR to **`origin`** only (`cmelhauser/us-hail-cat-model`); see `docs/GIT_REMOTES.md`.
+10. **Git:** sole remote is **`origin`** (`cmelhauser/us-hail-cat-model`); see `docs/GIT_REMOTES.md`.
 
 ---
 
@@ -114,7 +119,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 - `LICENSE`, `CHANGELOG.md`, `CITATION.cff`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
 - `pyproject.toml`, `.pre-commit-config.yaml`, `environment.yml`
 - `Dockerfile`, `.dockerignore`
-- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, ruff, mypy, pytest, codecov)
+- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, py_compile, pytest, dry-run, codecov; integration on push to `main`/`v*`)
 - `.github/ISSUE_TEMPLATE/{bug,methodology,feature}.md`, `.github/PULL_REQUEST_TEMPLATE.md`
 
 **Docs written:**
@@ -244,10 +249,13 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 ## Immediate Next Priorities (in order)
 
-1. **`python run_pipeline.py --validate`** on the completed v2.2.2 outputs.
-2. Regenerate **`hail_day_climatology.py`** on the final corrected archive if needed.
+1. Complete / resume the **v2.3.0** rebuild (`--from 04c --clean-from 04c`) and
+   run **`python run_pipeline.py --validate`**.
+2. Regenerate diagnostics (`radar_artifact_diagnostic.py`, literature suite,
+   PNAS figures) on the final corrected archive.
 3. Freeze regression/golden outputs; bootstrap CIs on Stage 09.
-4. Merge **`v2.2.2` → `main`** when ready.
+4. When RP maps pass artifact QA, open a PR to fast-forward remaining tip commits
+   from **`v2.3.0` → `main`** (main already has the 2.3.0 codebase base).
 
 **Completed in session 2026-05-02:**
 - ✅ `docs/sensitivity.md` — hyperparameter sweep plan

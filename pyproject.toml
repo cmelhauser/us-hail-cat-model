@@ -7,6 +7,7 @@ license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [
     { name = "Christopher Melhauser", email = "christopher.melhauser@gmail.com" },
+    { name = "theonlymuffinbot" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -72,10 +73,10 @@ aws = [
 ]
 
 [project.urls]
-Repository = "https://github.com/melhauserc/us-hail-cat-model"
-Documentation = "https://github.com/melhauserc/us-hail-cat-model/tree/main/docs"
-Changelog = "https://github.com/melhauserc/us-hail-cat-model/blob/main/CHANGELOG.md"
-"Bug Tracker" = "https://github.com/melhauserc/us-hail-cat-model/issues"
+Repository = "https://github.com/cmelhauser/us-hail-cat-model"
+Documentation = "https://github.com/cmelhauser/us-hail-cat-model/tree/main/docs"
+Changelog = "https://github.com/cmelhauser/us-hail-cat-model/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/cmelhauser/us-hail-cat-model/issues"
 
 # ── Ruff (linter + formatter) ───────────────────────────────────────────────
 [tool.ruff]
@@ -96,7 +97,9 @@ ignore = [
     "F841",   # exploratory variables in tests/docs-adjacent checks
     "I001",   # import sorting is advisory until full style cleanup
     "N802",   # function name should be lowercase (scientific code uses caps for constants)
+    "N803",   # argument name X is conventional for feature matrices
     "N806",   # variable in function should be lowercase (numpy arrays conventionally upper)
+    "N813",   # netCDF4 as nc is the community import alias
     "B007",   # loop variables sometimes retained for readability in diagnostics
     "B905",   # zip(strict=) would require Python-version-specific churn in tests
     "RUF001", # scientific docs/scripts intentionally use unicode ranges and symbols
@@ -157,7 +160,7 @@ markers   = [
     "slow: marks tests as slow (deselect with '-m not slow')",
     "integration: marks integration tests requiring synthetic pipeline run",
     "regression: marks regression tests requiring golden outputs",
-    "localstack: requires LocalStack 4.14 Community on localhost:4566",
+    "localstack: optional LocalStack probe (ECS is Pro-only as of 4.14; use laptop E2E stubs)",
 ]
 filterwarnings = [
     # Some Matplotlib dependency combinations can emit pyparsing

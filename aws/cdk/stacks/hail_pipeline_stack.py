@@ -12,6 +12,7 @@ from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_efs as efs
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_logs as logs
+from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
 
 from hail_aws.config import PipelineConfig, TaskSpec
@@ -92,14 +93,8 @@ class HailPipelineStack(Stack):
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
         )
         file_system.grant_root_access(task_role)
-        for arn in (config.cdsapi_secret_arn, config.ncar_rda_secret_arn):
-            if arn:
-                task_role.add_to_policy(
-                    iam.PolicyStatement(
-                        actions=["secretsmanager:GetSecretValue"],
-                        resources=[arn],
-                    )
-                )
+
+        container_secrets = self._container_secrets(execution_role)
 
         # One access point per mount (EFS forbids root_directory with access points).
         mount_specs = (
@@ -142,6 +137,7 @@ class HailPipelineStack(Stack):
                 task_role=task_role,
                 volumes=volumes,
                 mount_specs=mount_specs,
+                container_secrets=container_secrets,
             )
 
         public_subnets = vpc.select_subnets(subnet_type=ec2.SubnetType.PUBLIC).subnets
@@ -156,6 +152,27 @@ class HailPipelineStack(Stack):
         for name, td in task_defs.items():
             family = config.tasks[name].family
             CfnOutput(self, f"TaskDef{family}", value=td.task_definition_arn)
+
+    def _container_secrets(
+        self, execution_role: iam.Role
+    ) -> dict[str, ecs.Secret]:
+        """Map Secrets Manager JSON fields into container env (ECS-injected)."""
+        cfg = self.config
+        secrets: dict[str, ecs.Secret] = {}
+        if cfg.cdsapi_secret_arn:
+            cds = secretsmanager.Secret.from_secret_complete_arn(
+                self, "CdsApiSecret", cfg.cdsapi_secret_arn
+            )
+            cds.grant_read(execution_role)
+            secrets["CDSAPI_URL"] = ecs.Secret.from_secrets_manager(cds, field="url")
+            secrets["CDSAPI_KEY"] = ecs.Secret.from_secrets_manager(cds, field="key")
+        if cfg.ncar_rda_secret_arn:
+            ncar = secretsmanager.Secret.from_secret_complete_arn(
+                self, "NcarRdaSecret", cfg.ncar_rda_secret_arn
+            )
+            ncar.grant_read(execution_role)
+            secrets["GDEX_TOKEN"] = ecs.Secret.from_secrets_manager(ncar, field="token")
+        return secrets
 
     def _vpc(self) -> ec2.IVpc:
         cfg = self.config
@@ -186,6 +203,7 @@ class HailPipelineStack(Stack):
         task_role: iam.Role,
         volumes: list,
         mount_specs: tuple[tuple[str, str, str], ...],
+        container_secrets: dict[str, ecs.Secret],
     ) -> ecs.FargateTaskDefinition:
         cfg = self.config
         td = ecs.FargateTaskDefinition(
@@ -222,6 +240,7 @@ class HailPipelineStack(Stack):
                 "PYTHONUNBUFFERED": "1",
                 "HAIL_PIPELINE_TASK": name,
             },
+            secrets=container_secrets or None,
             essential=True,
         )
         for label, container_path, _root in mount_specs:

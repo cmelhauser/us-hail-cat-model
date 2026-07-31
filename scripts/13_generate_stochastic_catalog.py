@@ -54,6 +54,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 
 import numpy as np
@@ -560,10 +561,8 @@ def main():
         log(f"  Historical vs stochastic annual max correlation check recommended")
     finally:
         if ann_max_mmap_path is not None:
-            try:
+            with suppress(NameError):
                 del ann_max
-            except NameError:
-                pass
             if ann_max_mmap_path.exists():
                 ann_max_mmap_path.unlink()
                 log(f"  Removed temporary ann_max memmap")

@@ -181,7 +181,7 @@ Separating radar hazard from report validation remains the central scientific de
 
 The **2026-07-08** rebuild incorporated a MYRORSS coordinate-fix re-ingest (eastern CONUS restored), a five-pass GridRad artifact filter with spatiotemporal persistence, and refreshed range debias from **173,766** validation pairs. Event frequency fell from the prior smoke-affected eastern truncation (**8,798** → **7,792** events; **303** → **269** yr⁻¹), while analytical return-period peaks increased materially once eastern hail entered the EVT record—underscoring that ingest geometry and artifact QA are first-order hazard uncertainties, not secondary polish.
 
-AI assistance was most valuable inside a disciplined repository: explicit tests, stage boundaries, manifests, and git-reviewed changes. Agents accelerated audit breadth; the human operator retained methodological decisions and accountability.
+AI assistance (**theonlymuffinbot**) was most valuable inside a disciplined repository: explicit tests, stage boundaries, manifests, and git-reviewed changes. Agents accelerated audit breadth; the human operator retained methodological decisions and accountability.
 
 
 ---
@@ -242,7 +242,7 @@ L3  Financial loss — policy terms and roll-ups
 
 ### AI disclosure
 
-Large language models were used in the development of the codebase, documentation, monitoring workflow, and manuscript draft. The systems used were `claude-sonnet-4-6` and `claude-opus-4-6` (Anthropic, accessed May 2026) and `gpt-5.5-medium` (OpenAI, accessed May 2026). AI assistance included literature synthesis, code generation, code review, test authoring, documentation editing, shell-command planning, and long-running pipeline monitoring. Git operations (commit, push, merge) were performed by the human operator. AI outputs were reviewed, edited, tested, and accepted under human direction. AI systems are not listed as authors and are not treated as accountable scientific contributors.
+Large language models were used in the development of the codebase, documentation, monitoring workflow, and manuscript draft. All such AI collaboration is credited under the project pseudonym **theonlymuffinbot** (not a separate GitHub repository; sole code remote `cmelhauser/us-hail-cat-model`). The underlying systems included `claude-sonnet-4-6` and `claude-opus-4-6` (Anthropic, accessed May 2026) and `gpt-5.5-medium` (OpenAI, accessed May 2026). Assistance attributed to **theonlymuffinbot** included literature synthesis, code generation, code review, test authoring, documentation editing, shell-command planning, and long-running pipeline monitoring. Git operations (commit, push, merge) were performed by the human operator. AI outputs were reviewed, edited, tested, and accepted under human direction. Scientific accountability remains with Christopher Melhauser.
 
 ### Data and code availability
 

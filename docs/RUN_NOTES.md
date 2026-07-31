@@ -3,7 +3,9 @@
 ## Run Context
 
 - Date started: 2026-05-01 14:47 EDT
-- Active branch: **`v2.3.0`** (development on `origin` only). **`v2.2.3`** = Tier 0 patch; **`main`** has **2.2.1**.
+- Active branch: **`v2.3.0`** (development on `origin` only). Model **2.3.0**.
+  `origin/main` already carries the 2.3.0 codebase tip (may lag this branch by
+  docs/CI commits). CI runs on `main` and `v*`.
 - Prior production mesh archived under `data/historical/mesh_0.05deg_archive_calendar_utc_00z/` (gitignored)
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active

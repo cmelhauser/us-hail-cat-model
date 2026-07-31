@@ -1,13 +1,13 @@
 # Pull Request Narrative: v1.0 -> v2.0 -> v2.1
 
-This document is the reviewer-facing narrative for merging `cmelhauser:main`
-into `theonlymuffinbot:main`.
+This document is the reviewer-facing narrative for the historical merge of
+the v1.0→v2.0→v2.1 work into `main` on `cmelhauser/us-hail-cat-model`.
 
 ---
 
 ## Summary
 
-This PR brings the upstream repository from the original v1.0-era hail
+This PR brings the repository from the original v1.0-era hail
 catastrophe prototype to the current v2.1 radar-first model. The update is
 large because it includes both a scientific redesign and a hardening pass:
 

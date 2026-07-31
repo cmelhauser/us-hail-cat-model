@@ -2,6 +2,11 @@ MIT License
 
 Copyright (c) 2024–2026 Christopher Melhauser and theonlymuffinbot
 
+`theonlymuffinbot` is the project pseudonym for all AI collaboration on this
+repository (code, documentation, tests, diagnostics, and manuscript drafting).
+It is not a separate GitHub repository. Scientific direction and accountability
+remain with Christopher Melhauser.
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights

@@ -1,0 +1,79 @@
+# LocalStack E2E overrides — same workflow shape, faster poll, tiny labels.
+# Production sizes stay in pipeline.yaml; Community LocalStack registers 256/512.
+
+project:
+  name: us-hail-cat-model
+  version: "2.3.0"
+  environment: localstack
+  region: us-east-1
+  tags:
+    Project: us-hail-cat-model
+    Component: hail-pipeline
+    Environment: localstack
+
+image:
+  repository_name: hail-cat-model
+  tag: "2.3.0"
+
+network:
+  vpc_id: null
+  subnet_ids: []
+  assign_public_ip: true
+  max_azs: 2
+
+storage:
+  efs_encrypted: true
+  data_mount: /app/data
+  logs_mount: /app/logs
+  figures_mount: /app/docs/figures
+
+ecs:
+  cluster_name: hail-pipeline
+  log_group: /ecs/hail-pipeline-localstack
+  log_retention_days: 1
+  cancel_siblings_on_failure: true
+
+secrets:
+  cdsapi_secret_arn: null
+  ncar_rda_secret_arn: null
+
+tasks:
+  download_myrorss:
+    family: hail-download-myrorss
+    stage: "01"
+    cpu: 256
+    memory: 512
+    ephemeral_storage_gib: 21
+    command: ["run_pipeline.py", "--only", "01"]
+
+  download_mrms:
+    family: hail-download-mrms
+    stage: "02"
+    cpu: 256
+    memory: 512
+    ephemeral_storage_gib: 21
+    command: ["run_pipeline.py", "--only", "02"]
+
+  download_gridrad:
+    family: hail-download-gridrad
+    stage: "04c"
+    cpu: 256
+    memory: 512
+    ephemeral_storage_gib: 21
+    command: ["run_pipeline.py", "--only", "04c"]
+
+  finalize:
+    family: hail-finalize
+    cpu: 256
+    memory: 512
+    ephemeral_storage_gib: 21
+    command: ["run_pipeline.py", "--from", "03", "--skip", "04b"]
+
+workflow:
+  parallel_downloads:
+    - download_myrorss
+    - download_mrms
+    - download_gridrad
+  finalize_task: finalize
+  poll_seconds: 1
+  stop_timeout_seconds: 30

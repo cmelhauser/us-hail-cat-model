@@ -207,13 +207,26 @@ The stochastic catalog resamples historical sparse event templates in the spirit
 
 ### Agent roles
 
-The repository was developed through interaction with three frontier AI systems: `claude-sonnet-4-6` and `claude-opus-4-6` (Anthropic, accessed May 2026) and `gpt-5.5-medium` (OpenAI, accessed May 2026). The agents were used as research assistants, software engineers, documentation editors, code reviewers, and operational monitors.
+AI collaboration on this project is credited under the collective pseudonym
+**theonlymuffinbot**. That name is an attribution label for all AI work on the
+repository; it is **not** a separate GitHub repository. The sole code remote is
+`cmelhauser/us-hail-cat-model`.
 
-The human operator remained responsible for scientific direction, acceptance criteria, prioritization, and interpretation. The AI systems were not treated as authors of scientific claims, but as tools used in model construction and manuscript preparation.
+Work attributed to **theonlymuffinbot** was performed through frontier language-model
+agents under human direction, including `claude-sonnet-4-6` and `claude-opus-4-6`
+(Anthropic, accessed May 2026) and `gpt-5.5-medium` (OpenAI, accessed May 2026).
+Those agents acted as research assistants, software engineers, documentation
+editors, code reviewers, and operational monitors.
+
+The human operator (Christopher Melhauser) remained responsible for scientific
+direction, acceptance criteria, prioritization, and interpretation. Scientific
+accountability for claims, code, and the manuscript remains with the human author;
+**theonlymuffinbot** documents AI collaboration rather than independent authorship
+of scientific claims.
 
 ### Development activities
 
-AI assistance was used for:
+AI assistance (**theonlymuffinbot**) was used for:
 
 - reviewing the existing repository and identifying methodological risks;
 - implementing Stage 05 optional ML calibration paths with deterministic fallbacks;
@@ -297,7 +310,13 @@ The repository includes documentation, pre-run review notes, validation commands
 
 ### Governance and disclosure
 
-AI use is disclosed in the Materials and Methods section. The disclosure names the systems used, the categories of work performed, and the human-review controls applied to AI-generated outputs. AI systems are not listed as authors because they cannot take responsibility for accuracy, integrity, or accountability. All AI outputs used in the code, documentation, analysis, and manuscript were reviewed and accepted under human responsibility.
+AI use is disclosed in the Materials and Methods section. Collaboration is
+credited under the project pseudonym **theonlymuffinbot**, with the underlying
+systems and categories of work named, and with human-review controls applied to
+AI-generated outputs. Scientific accountability for accuracy, integrity, and
+publication remains with Christopher Melhauser. All AI outputs used in the code,
+documentation, analysis, and manuscript were reviewed and accepted under human
+responsibility. **theonlymuffinbot** is not a separate GitHub repository.
 
 ---
 

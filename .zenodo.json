@@ -2,12 +2,17 @@
   "title": "CONUS Hail Catastrophe Model",
   "description": "A radar-based probabilistic hail hazard model for the Continental United States. Ingests NOAA MYRORSS, NCAR GridRad, and NOAA MRMS radar-derived MESH over a 28-year convective-day record (1998–present), applies bias correction and environmental filtering, fits regional Generalised Pareto Distribution tails, and generates analytical and 50,000-year stochastic return-period hazard maps on a 0.05° CONUS grid.",
   "upload_type": "software",
-  "publication_date": "2026-07-05",
+  "publication_date": "2026-07-30",
+  "version": "2.3.0",
   "creators": [
     {
       "name": "Melhauser, Christopher",
       "affiliation": "",
       "orcid": "0009-0000-4234-5419"
+    },
+    {
+      "name": "theonlymuffinbot",
+      "affiliation": "AI collaborator (project pseudonym for all AI work)"
     }
   ],
   "keywords": [
@@ -24,5 +29,5 @@
     "CONUS"
   ],
   "license": "MIT",
-  "notes": "Generated pipeline outputs and figures are not included in this GitHub archive. See docs/DATA_AVAILABILITY.md for the matching v2.X.X generated-outputs Zenodo dataset and reproduction instructions."
+  "notes": "Generated pipeline outputs and figures are not included in this GitHub archive. See docs/DATA_AVAILABILITY.md for the matching v2.X.X generated-outputs Zenodo dataset and reproduction instructions. theonlymuffinbot is the project pseudonym for all AI collaboration on this repository; it is not a separate GitHub repository. Scientific accountability remains with Christopher Melhauser. Sole code repository: https://github.com/cmelhauser/us-hail-cat-model"
 }

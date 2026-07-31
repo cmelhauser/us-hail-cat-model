@@ -1,10 +1,14 @@
-# v2.1 Unit Test Suite
+# Unit Test Suite (v2.3.0)
 
-This directory contains pytest coverage for all 15 pipeline stages plus the pipeline runner.
+This directory contains pytest coverage for pipeline stages plus the pipeline runner.
 
-AWS Fargate adapter tests live under **`aws/tests/`** (separate package; 100% coverage
-gate on `hail_aws` + `run_pipeline_aws.py`). See `aws/README.md` and
-`docs/reproduce.md` §14.
+AWS Fargate adapter tests live under **`aws/tests/`** (separate package; **100%**
+coverage gate on `hail_aws` + `run_pipeline_aws.py`, enforced by the CI **`aws`**
+job). See `aws/README.md` and `docs/reproduce.md` §14.
+
+Pipeline `scripts/` coverage uses a modest floor (`fail_under = 35` in
+`pyproject.toml`) because stages are I/O- and network-heavy; raising that floor
+is a separate campaign from the AWS adapter gate.
 
 ## Run
 
@@ -15,12 +19,13 @@ pip install -e ".[dev]"
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
 ```
 
-AWS adapter (optional):
+AWS adapter:
 
 ```bash
-pip install -e ".[aws]"
+pip install -e ".[aws,dev]"
 PYTHONPATH=aws OPENBLAS_NUM_THREADS=1 \
   pytest -q aws/tests -m 'not localstack' \
+  --ignore=aws/tests/test_cdk_stack.py \
   --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
 ```
 

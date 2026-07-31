@@ -109,6 +109,17 @@ class EcsWorkflowClient:
         exit_code = None
         if containers:
             exit_code = containers[0].get("exitCode")
+        # LocalStack Community often omits container exitCode after stop_task.
+        # Treat a clean STOPPED task with no exit code as success so the laptop
+        # monitoring loop can complete against LocalStack E2E surfaces.
+        if (
+            exit_code is None
+            and desc.get("lastStatus") == "STOPPED"
+            and desc.get("stopCode") != "TaskFailedToStart"
+        ):
+            reason = (desc.get("stoppedReason") or "").lower()
+            if "fail" not in reason and "error" not in reason:
+                exit_code = 0
         return TaskOutcome(
             task_arn=desc["taskArn"],
             task_name=task_name,

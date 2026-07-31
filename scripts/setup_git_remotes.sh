@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure this clone so pushes and PRs use origin (cmelhauser) only, not upstream.
+# Configure this clone for origin-only (cmelhauser/us-hail-cat-model).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -10,18 +10,27 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 1
 fi
 
+EXPECTED_ORIGIN="https://github.com/cmelhauser/us-hail-cat-model.git"
+
+if ! git remote get-url origin >/dev/null 2>&1; then
+  echo "error: origin remote is missing; add it first:" >&2
+  echo "  git remote add origin ${EXPECTED_ORIGIN}" >&2
+  exit 1
+fi
+
 git config remote.pushDefault origin
 
-if git remote get-url upstream >/dev/null 2>&1; then
-  git remote set-url --push upstream no_push
-  echo "upstream: fetch only (push disabled via pushurl no_push)"
-fi
+# Remove any non-origin remotes left from older multi-remote clones.
+while IFS= read -r remote; do
+  [[ -z "${remote}" ]] && continue
+  if [[ "${remote}" != "origin" ]]; then
+    git remote remove "${remote}"
+    echo "removed stale remote: ${remote}"
+  fi
+done < <(git remote)
 
 echo "remote.pushDefault = $(git config --get remote.pushDefault)"
-echo "origin push: $(git remote get-url --push origin 2>/dev/null || git remote get-url origin)"
-if git remote get-url upstream >/dev/null 2>&1; then
-  echo "upstream fetch: $(git remote get-url upstream)"
-  echo "upstream push: $(git remote get-url --push upstream)"
-fi
+echo "origin: $(git remote get-url origin)"
+echo "remotes: $(git remote | tr '\n' ' ')"
 echo "Done. Push with: git push -u origin HEAD"
 echo "PRs: gh pr create --repo cmelhauser/us-hail-cat-model --base main"

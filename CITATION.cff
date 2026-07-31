@@ -4,8 +4,8 @@ message: >
   using the metadata below.
 type: software
 title: "CONUS Hail Catastrophe Model"
-version: 2.2.2
-date-released: "2026-07-05"
+version: 2.3.0
+date-released: "2026-07-30"
 abstract: >
   A radar-based probabilistic hail hazard model for the Continental United States.
   Ingests NOAA MYRORSS, NCAR GridRad, and NOAA MRMS radar-derived MESH data over
@@ -19,8 +19,12 @@ authors:
     given-names: Christopher
     orcid: "https://orcid.org/0009-0000-4234-5419"
     email: christopher.melhauser@gmail.com
+  - name: "theonlymuffinbot"
+    website: "https://github.com/cmelhauser/us-hail-cat-model"
 license: MIT
 repository-code: "https://github.com/cmelhauser/us-hail-cat-model"
+# theonlymuffinbot is the project pseudonym for all AI collaboration; not a
+# separate GitHub repository. Scientific accountability: Christopher Melhauser.
 keywords:
   - hail
   - catastrophe model

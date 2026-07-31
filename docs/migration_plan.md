@@ -2,7 +2,7 @@
 
 **CONUS Hail Catastrophe Model**
 **Path:** v1.0 -> v2.0 -> v2.1
-**Current version:** v2.2.0 (convective-day daily MESH; see `docs/methodology.md` §2.6)
+**Current version:** v2.3.0 (inherits v2.2 convective-day daily MESH; see `docs/methodology.md` §2.6)
 
 ---
 
@@ -267,7 +267,7 @@ scientific artifact.
 | `docs/pnas_article_ai_hail_model.md` | Draft article on AI-assisted model construction |
 | `docs/pnas_publication_readiness.md` | Submission-readiness and novelty memo |
 | `docs/UPGRADE_NOTES.md` | Practical v2.0-to-v2.1 upgrade notes |
-| `docs/PR_v1_to_v2.1.md` | Pull-request narrative for upstream review |
+| `docs/PR_v1_to_v2.1.md` | Pull-request narrative for the v1.0→v2.1 review |
 | `docs/REVIEW_PRE_RUN.md` | Pre-run audit checklist |
 | `docs/RUN_NOTES.md` | Recommended staged run shape |
 

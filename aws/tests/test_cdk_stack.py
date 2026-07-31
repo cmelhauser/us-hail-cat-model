@@ -52,10 +52,10 @@ def test_stack_with_secret_arns(minimal_yaml: Path) -> None:
 
     data = yaml.safe_load(minimal_yaml.read_text(encoding="utf-8"))
     data["secrets"]["cdsapi_secret_arn"] = (
-        "arn:aws:secretsmanager:us-east-1:123456789012:secret:cds"
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:hail-cdsapi-AbCdEf"
     )
     data["secrets"]["ncar_rda_secret_arn"] = (
-        "arn:aws:secretsmanager:us-east-1:123456789012:secret:ncar"
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:hail-ncar-rda-XyZ123"
     )
     minimal_yaml.write_text(yaml.safe_dump(data), encoding="utf-8")
     cfg = load_pipeline_config(minimal_yaml)
@@ -63,6 +63,17 @@ def test_stack_with_secret_arns(minimal_yaml: Path) -> None:
     stack = HailPipelineStack(app, "TestSecrets", config=cfg)
     template = Template.from_stack(stack)
     template.resource_count_is("AWS::ECS::TaskDefinition", 4)
+    # Secrets Manager fields must be injected as container secrets (not IAM-only).
+    resources = template.to_json()["Resources"]
+    task_defs = [
+        r for r in resources.values() if r["Type"] == "AWS::ECS::TaskDefinition"
+    ]
+    secrets_keys: set[str] = set()
+    for td in task_defs:
+        for container in td["Properties"]["ContainerDefinitions"]:
+            for secret in container.get("Secrets") or []:
+                secrets_keys.add(secret["Name"])
+    assert {"CDSAPI_URL", "CDSAPI_KEY", "GDEX_TOKEN"} <= secrets_keys
 
 
 @pytest.mark.localstack

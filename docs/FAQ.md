@@ -1,4 +1,4 @@
-# FAQ — CONUS Hail Catastrophe Model v2.2
+# FAQ — CONUS Hail Catastrophe Model v2.3.0
 
 **Related:** `docs/methodology.md`, `docs/technical_documentation.md`, `docs/uncertainty.md`, `docs/REVIEW_2026-05-01.md §B.7`
 

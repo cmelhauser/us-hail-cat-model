@@ -1,21 +1,21 @@
-# CONUS Hail Catastrophe Model — v2.1
+# CONUS Hail Catastrophe Model — v2.3.0
 # Reproducible environment using micromamba (conda-compatible, minimal image)
 #
 # Build:
-#   docker build -t hail-cat-model:2.1 .
+#   docker build -t hail-cat-model:2.3.0 .
 #
 # Run pipeline interactively:
 #   docker run --rm -it \
 #     -v $(pwd)/data:/app/data \
 #     -v $(pwd)/logs:/app/logs \
 #     -v $(pwd)/docs/figures:/app/docs/figures \
-#     hail-cat-model:2.1 bash
+#     hail-cat-model:2.3.0 bash
 #
 # Run a single stage:
 #   docker run --rm \
 #     -v $(pwd)/data:/app/data \
 #     -v $(pwd)/logs:/app/logs \
-#     hail-cat-model:2.1 \
+#     hail-cat-model:2.3.0 \
 #     python run_pipeline.py --only 07
 #
 # AWS ECS Fargate: push this image to the ECR repo created by aws/cdk, then
@@ -64,11 +64,16 @@ RUN mkdir -p /app/data/historical /app/data/analysis /app/data/stochastic \
              /app/logs /app/docs/figures && \
     chown -R hailmodel:hailmodel /app
 
+# Materialize CDS credentials from env (Fargate Secrets Manager injection).
+# ENTRYPOINT was historically ["python"]; this wrapper keeps that contract while
+# writing ~/.cdsapirc from CDSAPI_URL / CDSAPI_KEY when present.
+RUN chmod +x /app/aws/docker-entrypoint.sh
+
 USER hailmodel
 
 # --- Health check: syntax + dry-run ---
 RUN python -m py_compile run_pipeline.py scripts/*.py && \
     python run_pipeline.py --dry-run
 
-ENTRYPOINT ["python"]
+ENTRYPOINT ["/app/aws/docker-entrypoint.sh"]
 CMD ["run_pipeline.py", "--help"]

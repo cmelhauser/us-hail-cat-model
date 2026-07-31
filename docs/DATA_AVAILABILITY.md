@@ -1,9 +1,11 @@
 # Data and Code Availability
 
-**Model version:** 2.2.2  
+**Model version:** 2.3.0  
 **Maintainer:** Christopher Melhauser  
+**AI collaborator:** theonlymuffinbot (project pseudonym for all AI work; not a
+separate GitHub repository)  
 **ORCID:** [0009-0000-4234-5419](https://orcid.org/0009-0000-4234-5419)  
-**Last updated:** 2026-07-05
+**Last updated:** 2026-07-30
 
 This document records where code, figures, and generated outputs live. The git
 repository holds **source code and documentation only**; pipeline data and
@@ -21,7 +23,7 @@ figures are stored externally or regenerated locally.
 | Generated outputs (Zenodo, manual upload) | **Pending** | TBD — full `data/` + `docs/figures/` tarball for the matching **`v2.X.X`** release (see §3) |
 
 After the first Zenodo deposit, replace `TBD` entries above and in `CITATION.cff`,
-`docs/pnas_article_ai_hail_model.md`, and the README DOI badge.
+`docs/pnas_article_ai_hail_model.md`, and optionally add a README DOI badge.
 
 ---
 
@@ -141,7 +143,8 @@ Omit `logs/` unless needed for audit; omit raw GridRad staging trees under
 1. [zenodo.org/deposit/new](https://zenodo.org/deposit/new)
 2. **Upload type:** Dataset
 3. **Title:** `CONUS Hail Catastrophe Model v2.X.X — generated outputs`
-4. **Creators:** Christopher Melhauser — ORCID `0009-0000-4234-5419`
+4. **Creators:** Christopher Melhauser — ORCID `0009-0000-4234-5419`;
+   theonlymuffinbot (AI collaborator pseudonym)
 5. **Description:** List major paths (`mesh_0.05deg_corrected/`, `events/`,
    `analysis/cdf/`, `stochastic/`, `docs/figures/`, diagnostics). Link to the
    **code version DOI** for the same `v2.X.X` tag and the GitHub commit SHA.

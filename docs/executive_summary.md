@@ -1,7 +1,7 @@
 # Hail Catastrophe Model — Executive Summary
 
-**Version:** 2.2.2 (model); **`2.2.1`** on `main` until v2.2.2 merge  
-**Status:** Stage 01 MYRORSS coordinate-fix re-ingest **complete** (2026-07-08); Stages **05–14** rebuilding for final v2.2.2 hazard products (`hail_from05`)  
+**Version:** 2.3.0 (active branch `v2.3.0`; sole remote `cmelhauser/us-hail-cat-model`)  
+**Status:** Stage 01 MYRORSS coordinate-fix re-ingest **complete**; **v2.3.0** rebuild from Stage **04c** through **14** (native QC + optional artifact classifier) — see `docs/RUN_NOTES.md`  
 **Primary use:** CONUS hail hazard modeling, stochastic event simulation, validation, and model-risk diagnostics
 
 ---

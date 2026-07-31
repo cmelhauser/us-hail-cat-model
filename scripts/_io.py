@@ -232,10 +232,7 @@ def convective_window_coverage_ok(
     if (end - times[-1]).total_seconds() > edge_tol:
         return False
     max_gap = max_gap_minutes * 60.0
-    for a, b in zip(times, times[1:]):
-        if (b - a).total_seconds() > max_gap:
-            return False
-    return True
+    return all((b - a).total_seconds() <= max_gap for a, b in zip(times, times[1:]))
 
 
 # ---------------------------------------------------------------------------

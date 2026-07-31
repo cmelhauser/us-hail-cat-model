@@ -1,12 +1,12 @@
 # Git remotes policy
 
-This repository uses two remotes with **different roles**. All day-to-day work
-targets **`origin` only**.
+This repository has a **single remote**: **`origin`**.
 
 | Remote | URL | Fetch | Push | PRs |
 |--------|-----|-------|------|-----|
 | **`origin`** | `https://github.com/cmelhauser/us-hail-cat-model.git` | Yes | **Yes** | **Yes** — base `main` on this repo |
-| **`upstream`** | `https://github.com/theonlymuffinbot/us-hail-cat-model.git` | Optional (read-only sync) | **No** | **No** |
+
+There is no second GitHub remote. Do not add another remote for day-to-day work.
 
 ## Required local setup (once per clone)
 
@@ -20,7 +20,8 @@ Or manually:
 
 ```bash
 git config remote.pushDefault origin
-git remote set-url --push upstream no_push   # fails loudly if someone runs git push upstream
+# If a stale non-origin remote exists from an older clone:
+# git remote remove <name>
 ```
 
 ## Commands to use
@@ -29,14 +30,15 @@ git remote set-url --push upstream no_push   # fails loudly if someone runs git 
 # Push current branch
 git push -u origin HEAD
 
-# Open a PR (always this repo, never upstream)
+# Open a PR against this repository
 gh pr create --repo cmelhauser/us-hail-cat-model --base main --head "$(git branch --show-current)"
 ```
 
 ## Do not
 
-- `git push upstream …`
-- `gh pr create` without `--repo cmelhauser/us-hail-cat-model` (defaults can target the wrong fork)
-- Merge or commit directly to `upstream` on GitHub
+- Add a second remote for day-to-day work
+- Open PRs against any repository other than `cmelhauser/us-hail-cat-model`
+- Merge or commit directly on GitHub outside the normal PR workflow without maintainer agreement
 
-AI agents and contributors must treat **`origin`** as the sole write remote.
+AI agents and contributors must treat **`origin`** (`cmelhauser/us-hail-cat-model`) as the sole remote.
+CI runs on pushes and pull requests to `main` and `v*` branches.
