@@ -24,6 +24,7 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,7 +32,7 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from scripts._pipeline_cleanup import STAGE05_PID, clean_from_stage  # noqa: E402
+from scripts._pipeline_cleanup import STAGE05_PID, clean_from_stage
 
 STAGE05_SCRIPT = _REPO / "scripts" / "05_apply_mesh_bias_correction.py"
 STAGE06_SCRIPT = _REPO / "scripts" / "06_validate_mesh_vs_spc.py"
@@ -79,10 +80,8 @@ def wait_for_stage05(*, poll_sec: float = 10.0, log=print) -> None:
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
         if STAGE05_PID.exists():
-            try:
+            with suppress(OSError):
                 STAGE05_PID.unlink()
-            except OSError:
-                pass
         return
 
 

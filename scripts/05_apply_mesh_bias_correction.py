@@ -62,6 +62,7 @@ import os
 import sys
 import time
 from collections import deque
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 
@@ -694,10 +695,8 @@ def main():
     try:
         _run_stage05_body(args)
     finally:
-        try:
+        with suppress(OSError):
             STAGE05_PID.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def _run_stage05_body(args) -> None:
