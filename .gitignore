@@ -28,6 +28,13 @@ build/
 venv/
 env/
 .env
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
 # ── Raster / gridded data / model outputs ─────────────────────────────────────
 *.tif

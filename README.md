@@ -234,7 +234,8 @@ python run_pipeline.py --validate
 ## AWS Fargate (optional)
 
 For cloud runs without changing stage scripts, use the **`aws/`** adapter: CDK deploys
-ECS Fargate + EFS + ECR, and a local CLI submits tasks.
+ECS Fargate + EFS + ECR, and a laptop CLI submits tasks (no Step Functions). Secrets
+Manager injects CDS / GDEX credentials into tasks; see the full operator guide.
 
 | Mode | Behavior |
 |------|----------|
@@ -245,12 +246,12 @@ ECS Fargate + EFS + ECR, and a local CLI submits tasks.
 ```bash
 pip install -e ".[aws]"
 python aws/run_pipeline_aws.py --dry-run
-# After CDK deploy + image push to ECR:
+# Secrets ARNs in aws/config/pipeline.yaml → cdk deploy → docker push ECR → then:
 python aws/run_pipeline_aws.py --mode full
 ```
 
-Details: [`aws/README.md`](aws/README.md), [`docs/reproduce.md`](docs/reproduce.md) §14,
-and the design spec under `docs/superpowers/specs/`.
+**Start here:** [`aws/README.md`](aws/README.md) (secrets JSON, ECR, smoke ladder, cost/teardown).
+Also [`docs/reproduce.md`](docs/reproduce.md) §14 and `docs/superpowers/specs/`.
 
 ---
 

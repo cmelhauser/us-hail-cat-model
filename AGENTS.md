@@ -9,8 +9,8 @@ under the pseudonym **theonlymuffinbot** (not a separate GitHub repository).
 Scientific direction and accountability remain with Christopher Melhauser.
 The sole code remote is `origin` → `cmelhauser/us-hail-cat-model`.
 
-Last updated: 2026-07-30 (origin-only remotes; **theonlymuffinbot** AI credit;
-CI on `main` + `v*`; readiness sync for development on **`v2.3.0`**).
+Last updated: 2026-07-31 (AWS secrets injection + 100% CI gate + operator guide;
+origin-only remotes; **theonlymuffinbot** AI credit on **`v2.3.0`**).
 
 ## What This Project Is
 
@@ -173,27 +173,41 @@ python run_pipeline.py --only 05 --clean-from 05 --skip-ml --skip-calibration
 ## AWS Fargate adapter (optional)
 
 Parallel cloud runs without changing stage scripts. Shared EFS holds `data/` /
-`logs/` / figures; the root `Dockerfile` is the container image.
+`logs/` / figures; the root `Dockerfile` (entrypoint writes `~/.cdsapirc` from
+Secrets Manager–injected `CDSAPI_*`) is the container image.
 
 ```bash
 pip install -e ".[aws]"
 python aws/run_pipeline_aws.py --dry-run
-# After `cd aws/cdk && cdk deploy` and pushing the image to ECR:
+# Secrets → pipeline.yaml ARNs → cdk deploy → docker build/push ECR → then:
 python aws/run_pipeline_aws.py --mode full          # 01|02|04c parallel, then finalize
 python aws/run_pipeline_aws.py --mode downloads-only
 python aws/run_pipeline_aws.py --mode finalize
 ```
 
-Parameters: `aws/config/pipeline.yaml`. Tests (100% gate on `hail_aws` + CLI):
+Parameters: `aws/config/pipeline.yaml`. **Complete operator guide:** `aws/README.md`
+(secrets JSON shape, ECR push, stack outputs, smoke ladder, cost/teardown,
+troubleshooting). Also `docs/reproduce.md` §14.
+
+Tests (CI job **`aws`** enforces **100%** on `hail_aws` + CLI; CDK synth needs Node):
 
 ```bash
 PYTHONPATH=aws pytest -q aws/tests -m 'not localstack' \
+  --ignore=aws/tests/test_cdk_stack.py \
   --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
 ```
 
-LocalStack Community image pin: `localstack/localstack:4.14.0` (see
-`aws/docker-compose.localstack.yml`). Full details: `aws/README.md` and
-`docs/reproduce.md` §14. Design: `docs/superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`.
+**Coverage policy:** AWS adapter = 100% gate. Pipeline `scripts/` remain on the
+`pyproject.toml` floor (`fail_under = 35`) — stages are I/O-heavy and not covered
+at 100% by unit tests alone.
+
+LocalStack Community image pin: `localstack/localstack:4.14.0` (ECS is **Pro**;
+Community does not validate Fargate spend). Laptop stub E2E:
+`aws/tests/test_laptop_orchestrator_e2e.py`. Design:
+`docs/superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`.
+
+There is no in-repo Cursor skill pack for this project; agent operating rules live
+in this file and `docs/ai_instructions.md`.
 
 **GridRad via `run_pipeline.py`:** full runs (and resumes starting before **04b**)
 auto-**skip** standalone **04b** and run **04c** with **`--with-04b-download --workers 4`**

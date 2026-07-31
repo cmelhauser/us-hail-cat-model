@@ -134,7 +134,7 @@ warn_redundant_casts = true
 # ── Coverage ─────────────────────────────────────────────────────────────────
 [tool.coverage.run]
 source = ["scripts", "aws/hail_aws", "aws/run_pipeline_aws"]
-omit   = ["scripts/archive/*", "aws/cdk/*", "aws/hail_aws/localstack_support.py"]
+omit   = ["scripts/archive/*", "aws/cdk/*"]
 branch = false
 
 [tool.coverage.report]

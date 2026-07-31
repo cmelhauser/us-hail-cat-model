@@ -37,6 +37,11 @@ When changing the project:
 12. Import grid constants from `scripts/_config.py` rather than redefining them inline.
 13. Prefer the optional `aws/` Fargate adapter for cloud runs rather than rewriting
     stage scripts for S3/EFS; keep stage path assumptions (`data/`, `logs/`) intact.
+    Follow `aws/README.md` end-to-end (Secrets Manager JSON field names, ECR push,
+    smoke ladder). Do not treat LocalStack Community as proof of Fargate spend safety.
+14. Keep the AWS adapter at **100%** line coverage (`hail_aws` + `run_pipeline_aws.py`).
+    Pipeline `scripts/` use the `pyproject.toml` coverage floor; do not claim 100%
+    scripts coverage without a dedicated campaign.
 
 ---
 

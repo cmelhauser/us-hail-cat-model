@@ -1,7 +1,7 @@
 # Session Handoff — CONUS Hail Catastrophe Model v2.3
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-07-30 (**v2.3.0**; origin-only; ready for continued development).
+> Last updated: 2026-07-31 (**v2.3.0**; AWS adapter secrets+docs+100% CI gate).
 
 ---
 
@@ -13,6 +13,9 @@
   carries the 2.3.0 codebase; this branch may be a few tip commits ahead (docs/CI).
 - **Working tree:** should be kept clean except for intentional documentation or
   code edits in the current session
+- **AWS adapter:** `aws/` — Secrets Manager fields injected into ECS env; container
+  entrypoint writes `~/.cdsapirc`. CI job **`aws`** gates **100%** `hail_aws` coverage.
+  Operator guide: `aws/README.md`. LocalStack Community does **not** emulate ECS.
 - **Historical note:** retired branches (`v2.1`, `v2.2.2`, `v2.2.3`) are not active
   development; do not recreate a second GitHub remote.
 

@@ -7,6 +7,7 @@ optionally complete tasks (stop with exit 0) so the monitoring loop can finish.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
 import time
@@ -46,7 +47,7 @@ def wait_for_localstack(endpoint_url: str, *, timeout_s: float = 90.0) -> None:
             sts = _client("sts", endpoint_url=endpoint_url, region="us-east-1")
             sts.get_caller_identity()
             return
-        except Exception as exc:  # noqa: BLE001 — readiness probe
+        except Exception as exc:
             last_exc = exc
             time.sleep(1.0)
     raise RuntimeError(f"LocalStack not ready at {endpoint_url}: {last_exc}")
@@ -79,7 +80,7 @@ def provision_workflow_surface(
         VpcId=vpc,
     )["GroupId"]
 
-    try:
+    with contextlib.suppress(Exception):
         iam.create_role(
             RoleName="hailLocalstackEcsExecution",
             AssumeRolePolicyDocument=(
@@ -88,15 +89,11 @@ def provision_workflow_surface(
                 '"Action":"sts:AssumeRole"}]}'
             ),
         )
-    except Exception:
-        pass
     exec_role_arn = iam.get_role(RoleName="hailLocalstackEcsExecution")["Role"]["Arn"]
 
     cluster_name = f"{config.cluster_name}-ls"
-    try:
+    with contextlib.suppress(Exception):
         ecs.create_cluster(clusterName=cluster_name)
-    except Exception:
-        pass
 
     outputs: dict[str, str] = {
         "ClusterName": cluster_name,
@@ -140,11 +137,9 @@ def provision_workflow_surface(
         "Outputs": cfn_outputs,
     }
 
-    try:
+    with contextlib.suppress(Exception):
         cfn.delete_stack(StackName=name)
         time.sleep(1.0)
-    except Exception:
-        pass
     cfn.create_stack(StackName=name, TemplateBody=json.dumps(template))
     for _ in range(40):
         st = cfn.describe_stacks(StackName=name)["Stacks"][0]["StackStatus"]
@@ -152,7 +147,7 @@ def provision_workflow_surface(
             break
         time.sleep(0.5)
 
-    try:
+    with contextlib.suppress(Exception):
         stack_outs = {
             o["OutputKey"]: o["OutputValue"]
             for o in cfn.describe_stacks(StackName=name)["Stacks"][0].get("Outputs")
@@ -160,8 +155,6 @@ def provision_workflow_surface(
         }
         if stack_outs:
             outputs.update(stack_outs)
-    except Exception:
-        pass
 
     return LocalStackEnv(
         endpoint_url=endpoint_url,
@@ -198,14 +191,12 @@ def start_task_completer(
                         status = t.get("lastStatus")
                         arn = t.get("taskArn")
                         if status in ("RUNNING", "PENDING", "PROVISIONING") and arn:
-                            try:
+                            with contextlib.suppress(Exception):
                                 ecs.stop_task(
                                     cluster=cluster,
                                     task=arn,
                                     reason="localstack-e2e-completer",
                                 )
-                            except Exception:
-                                pass
             except Exception:
                 pass
             stop.wait(poll_seconds)
