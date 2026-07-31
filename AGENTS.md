@@ -180,14 +180,17 @@ Secrets Manager–injected `CDSAPI_*`) is the container image.
 pip install -e ".[aws]"
 python aws/run_pipeline_aws.py --dry-run
 # Secrets → pipeline.yaml ARNs → cdk deploy → docker build/push ECR → then:
-python aws/run_pipeline_aws.py --mode full          # 01|02|04c parallel, then finalize
+python aws/run_pipeline_aws.py --mode full          # 01|02 + GridRad day fan-out, then finalize
 python aws/run_pipeline_aws.py --mode downloads-only
 python aws/run_pipeline_aws.py --mode finalize
+# Optional: bound GridRad days or disable fan-out
+python aws/run_pipeline_aws.py --dry-run \
+  --gridrad-from-date 2015-05-20 --gridrad-until-date 2015-05-21
 ```
 
-Parameters: `aws/config/pipeline.yaml`. **Complete operator guide:** `aws/README.md`
-(secrets JSON shape, ECR push, stack outputs, smoke ladder, cost/teardown,
-troubleshooting). Also `docs/reproduce.md` §14.
+Parameters: `aws/config/pipeline.yaml` (includes `workflow.gridrad_fanout`).
+**Complete operator guide:** `aws/README.md` (secrets JSON shape, ECR push, stack
+outputs, smoke ladder, cost/teardown, troubleshooting). Also `docs/reproduce.md` §14.
 
 Tests (CI job **`aws`** enforces **100%** on `hail_aws` + CLI; CDK synth needs Node):
 

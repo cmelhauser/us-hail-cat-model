@@ -76,7 +76,9 @@ def localstack_env():
 def test_localstack_downloads_only_laptop_monitor(localstack_env) -> None:
     cfg, env = localstack_env
     plan = build_plan(cfg, "downloads-only")
-    assert len(plan.parallel) == 3
+    assert len(plan.parallel) == 2
+    assert plan.gridrad_fanout is not None
+    assert plan.gridrad_fanout.day_count == 2
     assert plan.finalize is None
 
     client = EcsWorkflowClient(
@@ -102,7 +104,10 @@ def test_localstack_downloads_only_laptop_monitor(localstack_env) -> None:
     )
     assert result.ok, [(o.task_name, o.exit_code, o.stopped_reason) for o in result.outcomes]
     names = {o.task_name for o in result.outcomes}
-    assert names == {"download_myrorss", "download_mrms", "download_gridrad"}
+    assert "download_myrorss" in names
+    assert "download_mrms" in names
+    assert "download_gridrad_manifest" in names
+    assert any(n.startswith("download_gridrad_20") for n in names)
     assert all(o.succeeded for o in result.outcomes)
 
 
@@ -110,7 +115,8 @@ def test_localstack_downloads_only_laptop_monitor(localstack_env) -> None:
 def test_localstack_full_laptop_monitor(localstack_env) -> None:
     cfg, env = localstack_env
     plan = build_plan(cfg, "full")
-    assert len(plan.parallel) == 3
+    assert len(plan.parallel) == 2
+    assert plan.gridrad_fanout is not None
     assert plan.finalize is not None
 
     client = EcsWorkflowClient(
@@ -131,9 +137,10 @@ def test_localstack_full_laptop_monitor(localstack_env) -> None:
     )
     assert result.ok, [(o.task_name, o.exit_code, o.stopped_reason) for o in result.outcomes]
     names = [o.task_name for o in result.outcomes]
-    assert set(names[:3]) == {"download_myrorss", "download_mrms", "download_gridrad"}
+    assert "download_myrorss" in names
+    assert "download_mrms" in names
     assert names[-1] == "finalize"
-    assert len(result.outcomes) == 4
+    assert len(result.outcomes) == 6
 
 
 @pytest.mark.localstack

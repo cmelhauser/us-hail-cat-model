@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from hail_aws.gridrad_fanout import (
+    GRIDRAD_GAP_END,
+    GRIDRAD_GAP_START,
+    HAIL_CONTAINER_NAME,
+    parse_iso_date,
+)
 
 # Fargate CPU → allowed memory (MiB) pairs (AWS docs).
 _FARGATE_CPU_MEMORY: dict[int, set[int]] = {
@@ -33,6 +41,24 @@ class TaskSpec:
     ephemeral_storage_gib: int
     command: list[str]
     stage: str | None = None
+
+
+@dataclass(frozen=True)
+class GridradFanoutSpec:
+    """One convective day per Fargate task for Stage 04c (optional)."""
+
+    enabled: bool
+    task: str
+    max_concurrent: int
+    from_date: date | None
+    until_date: date | None
+    missing_only: bool
+    with_04b_download: bool
+    workers: int
+    download_workers: int
+    cancel_day_siblings_on_failure: bool
+    post_manifest_rebuild: bool
+    container_name: str = HAIL_CONTAINER_NAME
 
 
 @dataclass(frozen=True)
@@ -65,6 +91,7 @@ class PipelineConfig:
     finalize_task: str
     poll_seconds: int
     stop_timeout_seconds: int
+    gridrad_fanout: GridradFanoutSpec
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -121,6 +148,108 @@ def validate_ephemeral(gib: int, task_name: str) -> None:
         raise ConfigError(
             f"Task '{task_name}': ephemeral_storage_gib must be 20–200, got {gib}"
         )
+
+
+def _optional_iso_date(value: Any, name: str) -> date | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{name} must be YYYY-MM-DD or null")
+    try:
+        return parse_iso_date(value.strip())
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be YYYY-MM-DD, got {value!r}") from exc
+
+
+def _parse_gridrad_fanout(
+    workflow: dict[str, Any],
+    tasks: dict[str, TaskSpec],
+) -> GridradFanoutSpec:
+    raw = workflow.get("gridrad_fanout")
+    if raw is None:
+        return GridradFanoutSpec(
+            enabled=False,
+            task="download_gridrad",
+            max_concurrent=10,
+            from_date=None,
+            until_date=None,
+            missing_only=True,
+            with_04b_download=True,
+            workers=1,
+            download_workers=1,
+            cancel_day_siblings_on_failure=False,
+            post_manifest_rebuild=True,
+            container_name=HAIL_CONTAINER_NAME,
+        )
+    if not isinstance(raw, dict):
+        raise ConfigError("workflow.gridrad_fanout must be a mapping")
+
+    task = _as_str(raw.get("task", "download_gridrad"), "workflow.gridrad_fanout.task")
+    if task not in tasks:
+        raise ConfigError(f"workflow.gridrad_fanout.task references unknown task '{task}'")
+
+    max_concurrent = _as_int(
+        raw.get("max_concurrent", 10), "workflow.gridrad_fanout.max_concurrent"
+    )
+    if max_concurrent < 1:
+        raise ConfigError("workflow.gridrad_fanout.max_concurrent must be >= 1")
+
+    workers = _as_int(raw.get("workers", 1), "workflow.gridrad_fanout.workers")
+    download_workers = _as_int(
+        raw.get("download_workers", 1), "workflow.gridrad_fanout.download_workers"
+    )
+    if workers < 1 or download_workers < 1:
+        raise ConfigError("workflow.gridrad_fanout workers must be >= 1")
+
+    from_date = _optional_iso_date(raw.get("from_date"), "workflow.gridrad_fanout.from_date")
+    until_date = _optional_iso_date(
+        raw.get("until_date"), "workflow.gridrad_fanout.until_date"
+    )
+    if from_date is not None and (
+        from_date < GRIDRAD_GAP_START or from_date > GRIDRAD_GAP_END
+    ):
+        raise ConfigError(
+            f"workflow.gridrad_fanout.from_date must be within "
+            f"{GRIDRAD_GAP_START} → {GRIDRAD_GAP_END}"
+        )
+    if until_date is not None and (
+        until_date < GRIDRAD_GAP_START or until_date > GRIDRAD_GAP_END
+    ):
+        raise ConfigError(
+            f"workflow.gridrad_fanout.until_date must be within "
+            f"{GRIDRAD_GAP_START} → {GRIDRAD_GAP_END}"
+        )
+    if from_date is not None and until_date is not None and until_date < from_date:
+        raise ConfigError("workflow.gridrad_fanout until_date must be >= from_date")
+
+    container = raw.get("container_name", HAIL_CONTAINER_NAME)
+    container_name = _as_str(container, "workflow.gridrad_fanout.container_name")
+
+    return GridradFanoutSpec(
+        enabled=_as_bool(raw.get("enabled", False), "workflow.gridrad_fanout.enabled"),
+        task=task,
+        max_concurrent=max_concurrent,
+        from_date=from_date,
+        until_date=until_date,
+        missing_only=_as_bool(
+            raw.get("missing_only", True), "workflow.gridrad_fanout.missing_only"
+        ),
+        with_04b_download=_as_bool(
+            raw.get("with_04b_download", True),
+            "workflow.gridrad_fanout.with_04b_download",
+        ),
+        workers=workers,
+        download_workers=download_workers,
+        cancel_day_siblings_on_failure=_as_bool(
+            raw.get("cancel_day_siblings_on_failure", False),
+            "workflow.gridrad_fanout.cancel_day_siblings_on_failure",
+        ),
+        post_manifest_rebuild=_as_bool(
+            raw.get("post_manifest_rebuild", True),
+            "workflow.gridrad_fanout.post_manifest_rebuild",
+        ),
+        container_name=container_name,
+    )
 
 
 def _parse_task(name: str, body: dict[str, Any]) -> TaskSpec:
@@ -209,6 +338,13 @@ def load_pipeline_config(path: str | Path) -> PipelineConfig:
     if finalize_name not in tasks:
         raise ConfigError(f"workflow.finalize_task references unknown task '{finalize_name}'")
 
+    gridrad_fanout = _parse_gridrad_fanout(workflow, tasks)
+    if gridrad_fanout.enabled and gridrad_fanout.task not in parallel:
+        raise ConfigError(
+            "workflow.gridrad_fanout.task must also appear in workflow.parallel_downloads "
+            f"(got task={gridrad_fanout.task!r})"
+        )
+
     vpc_id = network.get("vpc_id")
     if vpc_id is not None:
         vpc_id = _as_str(vpc_id, "network.vpc_id")
@@ -265,6 +401,7 @@ def load_pipeline_config(path: str | Path) -> PipelineConfig:
         stop_timeout_seconds=_as_int(
             workflow.get("stop_timeout_seconds", 120), "workflow.stop_timeout_seconds"
         ),
+        gridrad_fanout=gridrad_fanout,
     )
 
 

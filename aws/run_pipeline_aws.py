@@ -9,12 +9,15 @@ Usage:
     python aws/run_pipeline_aws.py --mode downloads-only
     python aws/run_pipeline_aws.py --mode finalize
     python aws/run_pipeline_aws.py --dry-run
+    python aws/run_pipeline_aws.py --dry-run --gridrad-from-date 2015-05-20 \\
+        --gridrad-until-date 2015-05-21
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date
 from pathlib import Path
 
 
@@ -30,7 +33,8 @@ _ensure_aws_on_path()
 
 from hail_aws.config import ConfigError, default_config_path, load_pipeline_config
 from hail_aws.ecs_client import EcsWorkflowClient
-from hail_aws.orchestrator import Mode, build_plan, run_workflow
+from hail_aws.gridrad_fanout import parse_iso_date
+from hail_aws.orchestrator import FanoutOverrides, Mode, build_plan, run_workflow
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -69,7 +73,47 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Override region from YAML",
     )
+    parser.add_argument(
+        "--gridrad-from-date",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Override GridRad fan-out start (inclusive convective day)",
+    )
+    parser.add_argument(
+        "--gridrad-until-date",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Override GridRad fan-out end (inclusive convective day)",
+    )
+    parser.add_argument(
+        "--gridrad-max-concurrent",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Override max concurrent GridRad day tasks",
+    )
+    parser.add_argument(
+        "--no-gridrad-fanout",
+        action="store_true",
+        help="Disable one-day-per-task fan-out (monolithic download_gridrad task)",
+    )
     return parser.parse_args(argv)
+
+
+def _fanout_overrides(args: argparse.Namespace) -> FanoutOverrides:
+    from_d: date | None = None
+    until_d: date | None = None
+    if args.gridrad_from_date:
+        from_d = parse_iso_date(args.gridrad_from_date)
+    if args.gridrad_until_date:
+        until_d = parse_iso_date(args.gridrad_until_date)
+    enabled: bool | None = False if args.no_gridrad_fanout else None
+    return FanoutOverrides(
+        enabled=enabled,
+        from_date=from_d,
+        until_date=until_d,
+        max_concurrent=args.gridrad_max_concurrent,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,8 +128,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     region = args.region or config.region
+    overrides = _fanout_overrides(args)
 
-    plan = build_plan(config, mode)
+    try:
+        plan = build_plan(config, mode, fanout_overrides=overrides)
+    except ValueError as exc:
+        print(f"Plan error: {exc}", file=sys.stderr)
+        return 2
+
     print("Workflow plan:")
     for line in plan.summary_lines():
         print(f"  {line}")
@@ -100,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         mode,
         client=client,
         stack_name=args.stack_name,
+        fanout_overrides=overrides,
     )
 
     print("\nOutcomes:")
@@ -110,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
             f"reason={o.stopped_reason or '-'}"
         )
     if result.cancelled:
-        print(f"Failed downloads: {', '.join(result.cancelled)}")
+        print(f"Cancelled: {', '.join(result.cancelled)}")
 
     if result.ok:
         print("\nWorkflow completed successfully.")
@@ -118,7 +169,11 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\nWorkflow failed.", file=sys.stderr)
     print("Resume tips:", file=sys.stderr)
-    print("  python aws/run_pipeline_aws.py --mode downloads-only", file=sys.stderr)
+    print(
+        "  python aws/run_pipeline_aws.py --mode downloads-only "
+        "# GridRad uses --missing-only by default",
+        file=sys.stderr,
+    )
     print("  python aws/run_pipeline_aws.py --mode finalize", file=sys.stderr)
     return 1
 

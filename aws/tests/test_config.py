@@ -26,7 +26,10 @@ def test_load_default_pipeline_yaml(config_path: Path) -> None:
         "download_gridrad",
     }
     assert cfg.finalize_task == "finalize"
-    assert cfg.tasks["download_gridrad"].cpu == 8192
+    assert cfg.tasks["download_gridrad"].cpu == 2048
+    assert cfg.tasks["download_gridrad"].memory == 16384
+    assert cfg.gridrad_fanout.enabled is True
+    assert cfg.gridrad_fanout.max_concurrent == 10
     assert cfg.image_uri_suffix == "hail-cat-model:2.3.0"
 
 
@@ -206,3 +209,89 @@ def test_parallel_downloads_type(minimal_yaml: Path) -> None:
 
     with pytest.raises(ConfigError, match="list of non-empty strings"):
         load_pipeline_config(_mutate(minimal_yaml, mut))
+
+
+def test_gridrad_fanout_validation(minimal_yaml: Path, config_path: Path) -> None:
+    def fresh() -> dict:
+        return yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    def write(data: dict) -> Path:
+        minimal_yaml.write_text(yaml.safe_dump(data), encoding="utf-8")
+        return minimal_yaml
+
+    data = fresh()
+    data["workflow"]["gridrad_fanout"] = {
+        "enabled": True,
+        "task": "nope",
+        "max_concurrent": 2,
+    }
+    with pytest.raises(ConfigError, match="unknown task"):
+        load_pipeline_config(write(data))
+
+    data = fresh()
+    data["workflow"]["parallel_downloads"] = ["download_myrorss", "download_mrms"]
+    data["workflow"]["gridrad_fanout"] = {
+        "enabled": True,
+        "task": "download_gridrad",
+        "max_concurrent": 2,
+    }
+    with pytest.raises(ConfigError, match="parallel_downloads"):
+        load_pipeline_config(write(data))
+
+    data = fresh()
+    data["workflow"]["gridrad_fanout"]["from_date"] = "not-a-date"
+    with pytest.raises(ConfigError, match="YYYY-MM-DD"):
+        load_pipeline_config(write(data))
+
+    data = fresh()
+    data["workflow"]["gridrad_fanout"]["from_date"] = "2015-05-21"
+    data["workflow"]["gridrad_fanout"]["until_date"] = "2015-05-20"
+    with pytest.raises(ConfigError, match="until_date"):
+        load_pipeline_config(write(data))
+
+    data = fresh()
+    data["workflow"]["gridrad_fanout"]["max_concurrent"] = 0
+    with pytest.raises(ConfigError, match="max_concurrent"):
+        load_pipeline_config(write(data))
+
+    data = fresh()
+    data["workflow"]["gridrad_fanout"] = []
+    with pytest.raises(ConfigError, match="gridrad_fanout must be a mapping"):
+        load_pipeline_config(write(data))
+
+    data = fresh()
+    data["workflow"]["gridrad_fanout"]["from_date"] = "1999-01-01"
+    with pytest.raises(ConfigError, match="within"):
+        load_pipeline_config(write(data))
+
+
+def test_gridrad_fanout_defaults_when_absent(minimal_yaml: Path) -> None:
+    def mut(d):
+        d["workflow"].pop("gridrad_fanout", None)
+
+    cfg = load_pipeline_config(_mutate(minimal_yaml, mut))
+    assert cfg.gridrad_fanout.enabled is False
+
+
+def test_gridrad_fanout_empty_string_date(minimal_yaml: Path, config_path: Path) -> None:
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["workflow"]["gridrad_fanout"]["from_date"] = "   "
+    minimal_yaml.write_text(yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(ConfigError, match="YYYY-MM-DD or null"):
+        load_pipeline_config(minimal_yaml)
+
+
+def test_gridrad_fanout_bad_workers(minimal_yaml: Path, config_path: Path) -> None:
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["workflow"]["gridrad_fanout"]["workers"] = 0
+    minimal_yaml.write_text(yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(ConfigError, match="workers must be >= 1"):
+        load_pipeline_config(minimal_yaml)
+
+
+def test_gridrad_fanout_until_out_of_gap(minimal_yaml: Path, config_path: Path) -> None:
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["workflow"]["gridrad_fanout"]["until_date"] = "2025-01-01"
+    minimal_yaml.write_text(yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(ConfigError, match="within"):
+        load_pipeline_config(minimal_yaml)

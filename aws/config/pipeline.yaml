@@ -33,6 +33,7 @@ ecs:
   cluster_name: hail-pipeline
   log_group: /ecs/hail-pipeline
   log_retention_days: 30
+  # Family-level cancel (01/02). GridRad day tasks use gridrad_fanout.cancel_day_*.
   cancel_siblings_on_failure: true
 
 secrets:
@@ -57,13 +58,21 @@ tasks:
     ephemeral_storage_gib: 100
     command: ["run_pipeline.py", "--only", "02"]
 
+  # One convective day per task when workflow.gridrad_fanout.enabled.
+  # Staging (~8–12 GiB/day) is on EFS, not ephemeral. Prefer 16 GiB RAM;
+  # 8192 MiB is experimental (smoke-test a severe day before fleet use).
   download_gridrad:
     family: hail-download-gridrad
     stage: "04c"
-    cpu: 8192
-    memory: 32768
-    ephemeral_storage_gib: 200
-    command: ["run_pipeline.py", "--only", "04c"]
+    cpu: 2048
+    memory: 16384
+    ephemeral_storage_gib: 50
+    # Default command when fan-out is disabled; fan-out overrides per day.
+    command:
+      - "scripts/04c_fill_gridrad_gap.py"
+      - "--with-04b-download"
+      - "--workers"
+      - "1"
 
   finalize:
     family: hail-finalize
@@ -81,3 +90,18 @@ workflow:
   finalize_task: finalize
   poll_seconds: 60
   stop_timeout_seconds: 120
+  # One Fargate task per GridRad convective day (2012-01-01 → 2020-10-13).
+  # Cap concurrency for NCAR/GDEX (~≤10 streams/account) and EFS staging.
+  gridrad_fanout:
+    enabled: true
+    task: download_gridrad
+    max_concurrent: 10
+    from_date: null
+    until_date: null
+    missing_only: true
+    with_04b_download: true
+    workers: 1
+    download_workers: 1
+    cancel_day_siblings_on_failure: false
+    post_manifest_rebuild: true
+    container_name: hail

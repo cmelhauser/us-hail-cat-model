@@ -9,6 +9,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **AWS GridRad day fan-out:** `workflow.gridrad_fanout` in `aws/config/pipeline.yaml`
+  runs one Stage **04c** Fargate task per convective day (default 2 vCPU / 16 GB /
+  50 GiB, `max_concurrent: 10`), with CLI overrides
+  (`--gridrad-from-date` / `--until-date` / `--max-concurrent` / `--no-gridrad-fanout`)
+  and a post-pass `--manifest-only` rebuild. See `aws/README.md`.
+- **Stage 04c merge-safe `gridrad_days.txt`:** flock union-merge and window rebuild on
+  `--manifest-only` so parallel day tasks do not truncate the Stage 05 era label file.
+
 ### Changed
 
 - **Origin-only remotes:** `docs/GIT_REMOTES.md`, `scripts/setup_git_remotes.sh`,

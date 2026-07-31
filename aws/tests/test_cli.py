@@ -23,11 +23,35 @@ def test_parse_args_dry_run_flag() -> None:
 
 
 def test_main_dry_run(capsys: pytest.CaptureFixture[str]) -> None:
-    code = cli.main(["--dry-run"])
+    code = cli.main(["--dry-run", "--gridrad-from-date", "2015-05-20", "--gridrad-until-date", "2015-05-20"])
     assert code == 0
     out = capsys.readouterr().out
     assert "Dry run complete" in out
     assert "parallel downloads" in out
+    assert "gridrad fan-out" in out
+
+
+def test_main_no_gridrad_fanout(capsys: pytest.CaptureFixture[str]) -> None:
+    code = cli.main(["--dry-run", "--no-gridrad-fanout"])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "download_gridrad" in out
+    assert "gridrad fan-out" not in out
+
+
+def test_main_plan_error(capsys: pytest.CaptureFixture[str]) -> None:
+    code = cli.main(
+        [
+            "--dry-run",
+            "--gridrad-from-date",
+            "2020-10-13",
+            "--gridrad-until-date",
+            "2012-01-01",
+        ]
+    )
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "Plan error" in err
 
 
 def test_main_config_error(tmp_path: Path) -> None:

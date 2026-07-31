@@ -48,10 +48,11 @@ Shared state lives on EFS so existing path assumptions (`data/`, `logs/`) work u
 |------|-----:|-------:|----------:|-----------|-------|
 | 01 MYRORSS | 4 | 16 GB | 100 GiB | ~8–20 h | S3 I/O; `--workers` tunable |
 | 02 MRMS | 4–8 | 16–32 GB | 100 GiB | ~86 h local | Long but finishes inside GridRad wall |
-| 04c GridRad | 8 | 32–60 GB | 200 GiB | ~158 h @ workers=4 | Critical path; ~8–12 GB scratch/day |
+| 04c GridRad (fan-out) | 2 | 16 GB | 50 GiB | ~hours–1 day wall @ concurrency 10 | One convective day per task; staging on EFS (~8–12 GiB/day) |
 | finalize | 8 | 32 GB | 200 GiB | ~21 h | 05~8h + 10~5h + 13~7h + misc |
 
 YAML is the single source of truth for sizing, commands, and workflow order.
+`workflow.gridrad_fanout` expands Stage 04c into per-day RunTask overrides.
 
 ## AWS best practices (v1)
 
