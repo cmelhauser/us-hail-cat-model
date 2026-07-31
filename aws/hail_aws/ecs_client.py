@@ -70,21 +70,33 @@ class EcsWorkflowClient:
         assign_public_ip: bool,
         started_by: str,
         task_name: str,
+        command: list[str] | None = None,
+        container_name: str = "hail",
     ) -> RunningTask:
-        resp = self.ecs.run_task(
-            cluster=cluster,
-            taskDefinition=task_definition,
-            launchType="FARGATE",
-            count=1,
-            startedBy=started_by[:36],
-            networkConfiguration={
+        kwargs: dict[str, Any] = {
+            "cluster": cluster,
+            "taskDefinition": task_definition,
+            "launchType": "FARGATE",
+            "count": 1,
+            "startedBy": started_by[:36],
+            "networkConfiguration": {
                 "awsvpcConfiguration": {
                     "subnets": subnets,
                     "securityGroups": security_groups,
                     "assignPublicIp": "ENABLED" if assign_public_ip else "DISABLED",
                 }
             },
-        )
+        }
+        if command is not None:
+            kwargs["overrides"] = {
+                "containerOverrides": [
+                    {
+                        "name": container_name,
+                        "command": list(command),
+                    }
+                ]
+            }
+        resp = self.ecs.run_task(**kwargs)
         failures = resp.get("failures") or []
         if failures:
             raise RuntimeError(f"ECS RunTask failures for {task_name}: {failures}")

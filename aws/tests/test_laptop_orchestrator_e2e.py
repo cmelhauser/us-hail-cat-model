@@ -58,16 +58,20 @@ class StubEcsWorkflowClient(EcsWorkflowClient):
         assign_public_ip: bool,
         started_by: str,
         task_name: str,
+        command: list[str] | None = None,
+        container_name: str = "hail",
     ) -> RunningTask:
         assert cluster and task_definition and subnets and security_groups
         assert started_by
         assert assign_public_ip in (True, False)
+        assert container_name
         arn = f"arn:stub:task/{task_name}/{uuid.uuid4()}"
         self._tasks[arn] = {
             "taskArn": arn,
             "lastStatus": "RUNNING",
             "task_name": task_name,
             "polls": 0,
+            "command": command,
         }
         self.run_calls.append(task_name)
         return RunningTask(task_arn=arn, task_name=task_name, cluster=cluster)
@@ -126,14 +130,25 @@ def _outputs_for(cfg) -> dict[str, str]:
     return outs
 
 
-@pytest.mark.parametrize("mode,expected_n", [("downloads-only", 3), ("full", 4)])
+@pytest.mark.parametrize(
+    "mode,expected_n",
+    [
+        # myrorss + mrms + 2 gridrad days + manifest
+        ("downloads-only", 5),
+        # + finalize
+        ("full", 6),
+    ],
+)
 def test_stub_laptop_monitor_modes(mode: str, expected_n: int) -> None:
     cfg = load_pipeline_config(LS_CONFIG)
     plan = build_plan(cfg, mode)  # type: ignore[arg-type]
+    assert len(plan.parallel) == 2
+    assert plan.gridrad_fanout is not None
+    assert plan.gridrad_fanout.day_count == 2
     if mode == "downloads-only":
-        assert len(plan.parallel) == 3 and plan.finalize is None
+        assert plan.finalize is None
     else:
-        assert len(plan.parallel) == 3 and plan.finalize is not None
+        assert plan.finalize is not None
 
     client = StubEcsWorkflowClient(_outputs_for(cfg))
     sleeps: list[float] = []
@@ -147,11 +162,10 @@ def test_stub_laptop_monitor_modes(mode: str, expected_n: int) -> None:
     assert result.ok
     assert len(result.outcomes) == expected_n
     assert sleeps  # polled while RUNNING
-    assert set(client.run_calls[:3]) == {
-        "download_myrorss",
-        "download_mrms",
-        "download_gridrad",
-    }
+    assert "download_myrorss" in client.run_calls
+    assert "download_mrms" in client.run_calls
+    assert any(c.startswith("download_gridrad_20") for c in client.run_calls)
+    assert "download_gridrad_manifest" in client.run_calls
     if mode == "full":
         assert client.run_calls[-1] == "finalize"
         assert result.outcomes[-1].task_name == "finalize"
@@ -207,11 +221,10 @@ def test_stub_cli_downloads_only_and_full(capsys: pytest.CaptureFixture[str]) ->
         assert "Workflow completed successfully" in out_full
 
     assert len(clients) == 2
-    assert clients[0].run_calls == [
-        "download_myrorss",
-        "download_mrms",
-        "download_gridrad",
-    ]
+    assert "download_myrorss" in clients[0].run_calls
+    assert "download_mrms" in clients[0].run_calls
+    assert any(c.startswith("download_gridrad_20") for c in clients[0].run_calls)
+    assert "download_gridrad_manifest" in clients[0].run_calls
     assert clients[1].run_calls[-1] == "finalize"
 
 

@@ -65,6 +65,35 @@ def test_run_task_success() -> None:
     assert rt.task_name == "download_mrms"
     kwargs = ecs.run_task.call_args.kwargs
     assert kwargs["networkConfiguration"]["awsvpcConfiguration"]["assignPublicIp"] == "ENABLED"
+    assert "overrides" not in kwargs
+
+
+def test_run_task_with_command_override() -> None:
+    session = MagicMock()
+    cfn = MagicMock()
+    ecs = MagicMock()
+    session.client.side_effect = lambda svc, **kw: cfn if svc == "cloudformation" else ecs
+    ecs.run_task.return_value = {
+        "tasks": [{"taskArn": "arn:task:2"}],
+        "failures": [],
+    }
+    client = EcsWorkflowClient(region="us-east-1", session=session)
+    client.run_task(
+        cluster="c",
+        task_definition="td",
+        subnets=["s1"],
+        security_groups=["sg"],
+        assign_public_ip=False,
+        started_by="cli",
+        task_name="download_gridrad_20150520",
+        command=["scripts/04c_fill_gridrad_gap.py", "--manifest-only"],
+        container_name="hail",
+    )
+    kwargs = ecs.run_task.call_args.kwargs
+    assert kwargs["overrides"]["containerOverrides"][0]["name"] == "hail"
+    assert kwargs["overrides"]["containerOverrides"][0]["command"][0].endswith(
+        "04c_fill_gridrad_gap.py"
+    )
 
 
 def test_run_task_failures() -> None:

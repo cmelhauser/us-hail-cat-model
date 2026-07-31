@@ -36,11 +36,16 @@ Stage 04a (``era5_monthly_isotherms_conus.nc``) must exist before SHI computatio
 Output manifest (same schema as Stage 01):
 
   data/historical/mesh_0.05deg/manifest_stage04c_gridrad.csv
+
+``gridrad_days.txt`` is **merge-safe**: each run unions new YYYYMMDD labels under a
+file lock (safe for AWS one-day-per-task fan-out). ``--manifest-only`` also rebuilds
+that file from existing gap GeoTIFFs so Stage 05 era tagging stays complete.
 """
 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import importlib.util
 import shutil
 import sys
@@ -461,6 +466,76 @@ def upsert_manifest_row(row: dict) -> None:
     upsert_mesh_manifest_row(MANIFEST_FILE, row)
 
 
+def merge_gridrad_days_labels(path: Path, new_ymds: list[str]) -> int:
+    """Union-merge YYYYMMDD labels into ``gridrad_days.txt`` (flock-safe)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with open(lock_path, "w") as lock_f:
+        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+        try:
+            existing: set[str] = set()
+            if path.is_file():
+                existing = {
+                    line.strip()
+                    for line in path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                }
+            existing.update(y for y in new_ymds if y)
+            ordered = sorted(existing)
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text("\n".join(ordered) + ("\n" if ordered else ""), encoding="utf-8")
+            tmp.replace(path)
+            return len(ordered)
+        finally:
+            fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+
+
+def rebuild_gridrad_days_from_geotiffs(
+    out_dir: Path,
+    d_start: date,
+    d_end: date,
+) -> list[str]:
+    """Rebuild ``gridrad_days.txt`` labels for ``[d_start, d_end]`` from GeoTIFFs.
+
+    Labels outside the window are preserved; labels inside the window are
+    replaced by whatever GeoTIFFs currently exist (fan-out / ``--manifest-only``).
+    """
+    in_window: set[str] = set()
+    cur = d_start
+    while cur <= d_end:
+        in_window.add(cur.strftime("%Y%m%d"))
+        cur = cur + timedelta(days=1)
+
+    discovered: list[str] = []
+    for day in iter_dates(d_start, d_end):
+        tif = mesh_path_for_convective_day(out_dir, day)
+        if tif.is_file():
+            discovered.append(day.strftime("%Y%m%d"))
+
+    path = out_dir / "gridrad_days.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with open(lock_path, "w") as lock_f:
+        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+        try:
+            existing: set[str] = set()
+            if path.is_file():
+                existing = {
+                    line.strip()
+                    for line in path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                }
+            kept = {y for y in existing if y not in in_window}
+            kept.update(discovered)
+            ordered = sorted(kept)
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text("\n".join(ordered) + ("\n" if ordered else ""), encoding="utf-8")
+            tmp.replace(path)
+        finally:
+            fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+    return discovered
+
+
 def manifest_row_for_day(
     convective_day: date,
     out_path: Path,
@@ -798,8 +873,17 @@ def main(argv: list[str] | None = None) -> None:
         else:
             d_start = GAP_START
             d_end = GAP_END
+        if args.from_date:
+            d_start = max(parse_iso_date(args.from_date), GAP_START)
+        if args.until_date:
+            d_end = min(parse_iso_date(args.until_date), GAP_END)
         n = rebuild_manifest_from_outputs(d_start, d_end)
+        labels = rebuild_gridrad_days_from_geotiffs(OUT_DIR, d_start, d_end)
         log(f"  Manifest rows upserted: {n:,} → {MANIFEST_FILE}")
+        log(
+            f"  gridrad_days.txt labels in window: {len(labels):,} → "
+            f"{OUT_DIR / 'gridrad_days.txt'}"
+        )
         sys.exit(0)
 
     if args.validate:
@@ -1035,8 +1119,8 @@ def main(argv: list[str] | None = None) -> None:
             b_sess.close()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    with open(gridrad_days_file, "w") as f:
-        f.write("\n".join(sorted(gridrad_days)))
+    n_labels = merge_gridrad_days_labels(gridrad_days_file, gridrad_days)
+    log(f"  gridrad_days.txt labels (union): {n_labels:,} → {gridrad_days_file}")
 
     elapsed = time.time() - t0
     log(f"\n{'='*60}")

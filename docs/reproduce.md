@@ -459,19 +459,24 @@ guide: [`../aws/README.md`](../aws/README.md).
 
 ### Architecture
 
-1. **Parallel downloads** — three Fargate tasks: Stage **01** (MYRORSS), **02** (MRMS),
-   **04c** (GridRad with embedded 04b download).
+1. **Parallel downloads** — Stage **01** (MYRORSS) and **02** (MRMS) as family
+   tasks, plus **GridRad fan-out**: one Fargate task per convective day for Stage
+   **04c** (embedded 04b download), bounded by `workflow.gridrad_fanout.max_concurrent`
+   (default 10). A post-pass runs `04c --manifest-only` to rebuild the manifest and
+   merge-safe `gridrad_days.txt`.
 2. **Finalize** — one Fargate task: Stages **03**, **04a**, **05–14** (`--from 03 --skip 04b`).
-3. **Storage** — EFS mounted at `/app/data`, `/app/logs`, `/app/docs/figures`.
+3. **Storage** — EFS mounted at `/app/data`, `/app/logs`, `/app/docs/figures`
+   (GridRad day staging ~8–12 GiB lives on EFS, not Fargate ephemeral).
 4. **Image** — root `Dockerfile` (entrypoint `aws/docker-entrypoint.sh` writes
    `~/.cdsapirc` from `CDSAPI_URL` / `CDSAPI_KEY`), pushed to the stack’s ECR repo.
 5. **Orchestration** — laptop `run_pipeline_aws.py` polls `DescribeTasks` (no Step
    Functions). Keep the process running, or resume with `--mode downloads-only` /
-   `--mode finalize`.
+   `--mode finalize`. Override the fan-out window with `--gridrad-from-date` /
+   `--gridrad-until-date`, or disable with `--no-gridrad-fanout`.
 
 Sizing, commands, and workflow order come from **`aws/config/pipeline.yaml`** (CDK and
-runtime share this file). Defaults are sized from production logs (GridRad is the
-critical path; ~8–12 GiB scratch per concurrent 04c day) and are **not** Free-tier.
+runtime share this file). GridRad day tasks default to **2 vCPU / 16 GB / 50 GiB**
+ephemeral. They are **not** Free-tier sized.
 
 ### Secrets (required for production downloads)
 

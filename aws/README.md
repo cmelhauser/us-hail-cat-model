@@ -25,20 +25,27 @@ CDK and submits ECS Fargate tasks from a laptop CLI.
 
 ```text
 Laptop: run_pipeline_aws.py          (poll DescribeTasks; no Step Functions)
-    │  RunTask ×3 in parallel
+    │  RunTask: 01 + 02 + GridRad day pool (bounded concurrency)
     ▼
-Fargate: 01 MYRORSS | 02 MRMS | 04c GridRad
+Fargate: 01 MYRORSS | 02 MRMS | 04c × N days (2 vCPU / 16 GB each)
     │  shared EFS → /app/data, /app/logs, /app/docs/figures
+    │  post-pass: 04c --manifest-only (rebuild manifest + gridrad_days.txt)
     ▼
 Fargate: finalize (03, 04a, 05–14; skip standalone 04b)
 ```
 
-Default Fargate sizes are in `pipeline.yaml` (tuned from production logs; GridRad
-is the wall-clock critical path). They are **not** Free-tier sized.
+Default Fargate sizes are in `pipeline.yaml`. **GridRad fan-out**
+(`workflow.gridrad_fanout.enabled`) runs **one convective day per Fargate task**
+(2012-01-01 → 2020-10-13) with `max_concurrent` (default **10**) for NCAR/GDEX
+and EFS headroom. Staging (~8–12 GiB/day) lives on **EFS**, not ephemeral disk.
+Day tasks use `scripts/04c_fill_gridrad_gap.py --from-date/--until-date` via ECS
+`containerOverrides` (not `run_pipeline.py --only 04c`, which forces `--workers 4`).
 
 **Orchestration model:** v1 always uses a **laptop process**. There is no
 EventBridge / Step Functions control plane yet. Keep the CLI alive for long
 downloads, or resume with `--mode downloads-only` / `--mode finalize`.
+GridRad defaults to `--missing-only` so re-runs skip days that already have a
+GeoTIFF.
 
 ## Prerequisites
 
@@ -166,7 +173,16 @@ python aws/run_pipeline_aws.py --mode downloads-only
 python aws/run_pipeline_aws.py --mode finalize
 ```
 
-Useful flags: `--config`, `--stack-name`, `--region`, `--endpoint-url` (LocalStack).
+Useful flags: `--config`, `--stack-name`, `--region`, `--endpoint-url` (LocalStack),
+`--gridrad-from-date` / `--gridrad-until-date` / `--gridrad-max-concurrent`,
+`--no-gridrad-fanout` (monolithic single 04c task).
+
+Smoke a two-day GridRad window before the full gap:
+
+```bash
+python aws/run_pipeline_aws.py --mode downloads-only \
+  --gridrad-from-date 2015-05-20 --gridrad-until-date 2015-05-21
+```
 
 ## Cost and teardown
 
@@ -232,7 +248,9 @@ CLI gate and CDK synth (with Node).
 | `RunTask` networking errors | Public subnets + `assign_public_ip: true` required without NAT |
 | Orchestrator hangs | Laptop process killed; resume with `--mode downloads-only` or `--mode finalize` |
 | LocalStack `RunTask` never STOPPED | Expected on Community; use stub E2E or Pro |
-| Huge bill | Default task sizes; shrink YAML, destroy stack, delete retained EFS |
+| Huge bill | Default task sizes / high `max_concurrent`; shrink YAML, destroy stack, delete retained EFS |
+| Incomplete `gridrad_days.txt` | Fan-out post-pass runs `--manifest-only`; or re-run `scripts/04c_fill_gridrad_gap.py --manifest-only` on EFS |
+| NCAR 429 / throttling | Lower `workflow.gridrad_fanout.max_concurrent` (start at 10) |
 
 ## What this does not do
 

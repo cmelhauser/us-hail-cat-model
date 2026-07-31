@@ -60,7 +60,11 @@ tasks:
     cpu: 256
     memory: 512
     ephemeral_storage_gib: 21
-    command: ["run_pipeline.py", "--only", "04c"]
+    command:
+      - "scripts/04c_fill_gridrad_gap.py"
+      - "--with-04b-download"
+      - "--workers"
+      - "1"
 
   finalize:
     family: hail-finalize
@@ -77,3 +81,17 @@ workflow:
   finalize_task: finalize
   poll_seconds: 1
   stop_timeout_seconds: 30
+  # Two-day fan-out window for stub E2E (not the full gap).
+  gridrad_fanout:
+    enabled: true
+    task: download_gridrad
+    max_concurrent: 2
+    from_date: "2015-05-20"
+    until_date: "2015-05-21"
+    missing_only: true
+    with_04b_download: true
+    workers: 1
+    download_workers: 1
+    cancel_day_siblings_on_failure: false
+    post_manifest_rebuild: true
+    container_name: hail
