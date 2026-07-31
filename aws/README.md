@@ -80,12 +80,13 @@ aws secretsmanager create-secret \
   --secret-string '{"token":"YOUR_GDEX_TOKEN"}'
 ```
 
-Copy the returned ARNs into `pipeline.yaml`:
+Copy the returned ARNs into `pipeline.yaml` (**must** include Secrets Manager’s
+6-character suffix — CDK `from_secret_complete_arn` rejects partial ARNs):
 
 ```yaml
 secrets:
-  cdsapi_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:hail-cdsapi-XXXX"
-  ncar_rda_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:hail-ncar-rda-XXXX"
+  cdsapi_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:hail-cdsapi-AbCdEf"
+  ncar_rda_secret_arn: "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:hail-ncar-rda-XyZ123"
 ```
 
 Leave both `null` only for CDK dry-run / infrastructure synth without credentials.

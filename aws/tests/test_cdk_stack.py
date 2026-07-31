@@ -52,10 +52,10 @@ def test_stack_with_secret_arns(minimal_yaml: Path) -> None:
 
     data = yaml.safe_load(minimal_yaml.read_text(encoding="utf-8"))
     data["secrets"]["cdsapi_secret_arn"] = (
-        "arn:aws:secretsmanager:us-east-1:123456789012:secret:cds"
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:hail-cdsapi-AbCdEf"
     )
     data["secrets"]["ncar_rda_secret_arn"] = (
-        "arn:aws:secretsmanager:us-east-1:123456789012:secret:ncar"
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:hail-ncar-rda-XyZ123"
     )
     minimal_yaml.write_text(yaml.safe_dump(data), encoding="utf-8")
     cfg = load_pipeline_config(minimal_yaml)
