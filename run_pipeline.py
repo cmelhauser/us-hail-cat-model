@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 """
-run_pipeline.py — CONUS Hail Cat Model v2.2: Full Pipeline Runner
-==================================================================
+run_pipeline.py — CONUS Hail Cat Model: Full Pipeline Runner
+============================================================
 Runs all pipeline stages in order. Stops on any failure.
+Version comes from ``scripts._config.MODEL_VERSION`` (currently 2.3.0).
 
 Usage:
     python run_pipeline.py              # Run all stages
@@ -13,7 +14,7 @@ Usage:
     python run_pipeline.py --dry-run    # Print stages without running
     python run_pipeline.py --skip 14      # Skip figure rendering
     python run_pipeline.py --validate   # Validate outputs only
-    python run_pipeline.py --skip-ml    # Use deterministic v2.1 fallbacks
+    python run_pipeline.py --skip-ml    # Use deterministic fallbacks (Stage 05)
     python run_pipeline.py --clean-from 05 --only 05 --skip-ml --skip-calibration
                                         # Wipe Stage 05+ outputs, then rebuild Stage 05
 
@@ -38,6 +39,11 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+_SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from _config import MODEL_VERSION
 
 REQUIRED_PACKAGES = [
     ("numpy",       "numpy"),
@@ -81,7 +87,7 @@ STAGES = [
     ("04a", "04a_download_era5_isotherms.py",  "Download ERA5 monthly isotherm heights",           "~30 min"),
     ("04b", "04b_download_gridrad.py",         "Download GridRad inputs from NCAR RDA/GDEX",       "~varies"),
     ("04c", "04c_fill_gridrad_gap.py",         "GridRad MESH75 (embedded 04b dl, 4-day workers)",   "~8–24 hrs"),
-    ("05",  "05_apply_mesh_bias_correction.py","v2.1 bias correction + optional ML filtering",     "~1 hr"),
+    ("05",  "05_apply_mesh_bias_correction.py","MESH bias correction + optional ML filtering",     "~1 hr"),
     ("06",  "06_validate_mesh_vs_spc.py",      "Validate corrected MESH vs SPC reports",           "~15 min"),
     ("07",  "07_build_hail_climo.py",          "Build 366-day daily climatology",                  "~10 min"),
     ("08",  "08_build_event_catalog.py",       "Event identification + catalog",                   "~15 min"),
@@ -140,7 +146,7 @@ def fmt_duration(seconds: float) -> str:
 def print_header():
     n = len(STAGES)
     print(f"\n{BOLD}{'='*60}{RESET}")
-    print(f"{BOLD}  CONUS Hail Cat Model v2.1 — Pipeline Runner{RESET}")
+    print(f"{BOLD}  CONUS Hail Cat Model v{MODEL_VERSION} — Pipeline Runner{RESET}")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Repo:   {REPO_ROOT}")
     print(f"  Stages: {n}")
@@ -227,7 +233,9 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the CONUS hail cat model v2.1 pipeline.")
+    parser = argparse.ArgumentParser(
+        description=f"Run the CONUS hail cat model v{MODEL_VERSION} pipeline."
+    )
     parser.add_argument("--from",   dest="from_stage", type=str, default=None,
                         help="Start from this stage ID (e.g., 05 or 04b). Auto-skips 04b when resuming before 04b if 04c will run.")
     parser.add_argument("--only",   dest="only_stage", type=str, default=None,

@@ -78,6 +78,18 @@ Documentation = "https://github.com/cmelhauser/us-hail-cat-model/tree/main/docs"
 Changelog = "https://github.com/cmelhauser/us-hail-cat-model/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/cmelhauser/us-hail-cat-model/issues"
 
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# Dependency-only root package + aws/hail_aws. Do not auto-discover sibling
+# dirs such as logs/, docs/, or scripts/ (breaks `pip install -e .` once a
+# local run creates logs/).
+[tool.setuptools.packages.find]
+where = ["aws"]
+include = ["hail_aws*"]
+namespaces = false
+
 # ── Ruff (linter + formatter) ───────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
