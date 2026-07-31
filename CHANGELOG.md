@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pip install -e .` with local `logs/`:** `pyproject.toml` now declares an
+  explicit setuptools package layout (`aws/hail_aws` only) so editable installs
+  no longer fail when a local run has created `logs/` (or other top-level dirs).
+- **`run_pipeline.py` banner:** prints ``MODEL_VERSION`` (2.3.0) instead of a stale
+  hardcoded v2.1 string.
+
 ### Added
 
 - **AWS GridRad day fan-out:** `workflow.gridrad_fanout` in `aws/config/pipeline.yaml`
