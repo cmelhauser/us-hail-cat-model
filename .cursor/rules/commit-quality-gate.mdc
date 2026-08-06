@@ -1,0 +1,31 @@
+---
+description: Mandatory 100% coverage, green CI, and docs sync before every commit
+alwaysApply: true
+---
+
+# Commit quality gate (non-negotiable)
+
+Before every `git commit` in this repository:
+
+1. Sync documentation and agent files with the change (`AGENTS.md`,
+   `docs/ai_instructions.md`, `CONTRIBUTING.md`, `README.md`, and any touched
+   methodology/schema/operator docs). Do not leave CLI flags, coverage floors,
+   or Stage behavior claims stale.
+2. Run the mandatory gate and wait for success:
+
+```bash
+./scripts/quality_gate.sh
+```
+
+   This enforces: policy consistency, `py_compile`, `ruff check .`, **100%**
+   statement coverage on `scripts` + `run_pipeline`, **100%** AWS
+   `hail_aws` + `run_pipeline_aws`, and `run_pipeline.py --dry-run`.
+
+3. Only then create the commit. Do not use `--no-verify` or skip hooks unless
+   the user explicitly orders it.
+4. Push only to `origin`. CI on `main` / `v*` must stay green; fix failures
+   before further commits.
+
+If the Cursor shell hook denies a commit, re-run `./scripts/quality_gate.sh`
+after finishing docs/tests — the stamp is invalidated by any working-tree
+change.

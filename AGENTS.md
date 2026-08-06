@@ -51,6 +51,7 @@ bump.
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
 | 10 | Use `scripts/_logging.py` for stage loggers, `scripts/_io.py` for shared raster/geospatial helpers, and `scripts/_mapping.py` for CONUS map PNGs (Lambert Conformal + admin boundaries). |
 | 12 | **Git:** sole remote is **`origin`** (`cmelhauser/us-hail-cat-model`). Commit and push only there. PRs: `gh pr create --repo cmelhauser/us-hail-cat-model --base main`. CI runs on `main` and `v*`. See `docs/GIT_REMOTES.md`. |
+| 13 | **Quality gate before every commit:** run `./scripts/quality_gate.sh` (100% `scripts`+`run_pipeline` coverage, 100% AWS coverage, ruff, dry-run, docs/policy sync). Do not commit with stale docs/`AGENTS.md`/`docs/ai_instructions.md`, and do not use `--no-verify` unless the user explicitly orders it. CI on every push/PR to `main`/`v*` must stay green. |
 
 ## Known Issues / Discrepancies
 
@@ -203,7 +204,28 @@ PYTHONPATH=aws pytest -q aws/tests -m 'not localstack' \
 **Coverage policy:** AWS adapter = 100% gate. Pipeline `scripts/` + `run_pipeline.py`
 also gate at **100%** statement coverage in `pyproject.toml` (`fail_under = 100`;
 `scripts/archive/*` and `aws/cdk/*` omitted). Stages remain I/O-heavy; unit tests
-use mocks for network/filesystem paths.
+use mocks for network/filesystem paths. CI (`.github/workflows/tests.yml`) and
+the local pre-commit hook both enforce the same floors via
+`./scripts/quality_gate.sh`.
+
+## Quality gate (required before every commit)
+
+```bash
+./scripts/quality_gate.sh
+# equivalent checks (also run in CI on main / v*):
+#   python scripts/check_policy_consistency.py
+#   python -m py_compile run_pipeline.py scripts/*.py
+#   ruff check .
+#   OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+#     pytest -q tests -p pytest_cov --cov=scripts --cov=run_pipeline --cov-fail-under=100
+#   PYTHONPATH=aws ... --cov-fail-under=100
+#   python run_pipeline.py --dry-run
+```
+
+Update `AGENTS.md`, `docs/ai_instructions.md`, and any touched operator/methodology
+docs in the same commit as code/schema/CLI changes. Cursor loads
+`.cursor/rules/commit-quality-gate.mdc` and blocks `git commit` until the gate
+stamp is current.
 
 LocalStack Community image pin: `localstack/localstack:4.14.0` (ECS is **Pro**;
 Community does not validate Fargate spend). Laptop stub E2E:
@@ -285,16 +307,13 @@ Manifest statuses:
 
 ## Pre-Run Checklist
 
-Before any full pipeline execution:
+Before any full pipeline execution **or any git commit**:
 
 ```bash
-python -m py_compile run_pipeline.py scripts/*.py
-ruff check .
-OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
-python run_pipeline.py --dry-run
+./scripts/quality_gate.sh
 ```
 
-Then review `docs/REVIEW_PRE_RUN.md`.
+Then review `docs/REVIEW_PRE_RUN.md` before launching production stages.
 
 ## Key Constants
 

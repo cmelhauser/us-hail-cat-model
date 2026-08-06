@@ -1,7 +1,8 @@
 # AI Instructions for Future Work
 
 **CONUS Hail Catastrophe Model v2.3.0**
-**Last updated: 2026-07-30 (`v2.3.0`; origin-only remotes; CI on `main` + `v*`;
+**Last updated: 2026-08-06 (`v2.3.0`; origin-only remotes; CI on `main` + `v*`;
+mandatory `./scripts/quality_gate.sh` before every commit; 100% coverage gates;
 see also `docs/RUN_NOTES.md` for live pipeline rebuild status)**
 
 ---
@@ -39,9 +40,14 @@ When changing the project:
     stage scripts for S3/EFS; keep stage path assumptions (`data/`, `logs/`) intact.
     Follow `aws/README.md` end-to-end (Secrets Manager JSON field names, ECR push,
     smoke ladder). Do not treat LocalStack Community as proof of Fargate spend safety.
-14. Keep the AWS adapter at **100%** line coverage (`hail_aws` + `run_pipeline_aws.py`).
-    Pipeline `scripts/` use the `pyproject.toml` coverage floor; do not claim 100%
-    scripts coverage without a dedicated campaign.
+14. Keep **100%** statement coverage on `scripts/` + `run_pipeline.py` and on the
+    AWS adapter (`hail_aws` + `run_pipeline_aws.py`). Never lower
+    `fail_under` in `pyproject.toml` or CI `--cov-fail-under` without explicit
+    user sign-off and a versioned policy change.
+15. Before every `git commit`, run `./scripts/quality_gate.sh`, keep
+    `AGENTS.md` / `docs/ai_instructions.md` / operator docs synchronized with
+    the change, and do not use `--no-verify` unless the user explicitly orders
+    it. Push only when CI on `main` / `v*` will stay green.
 
 ---
 
@@ -224,9 +230,11 @@ Current repository state:
 
 - Active branch: **`v2.3.0`** (model **2.3.0**). Sole remote: **`origin`**
   (`cmelhauser/us-hail-cat-model`). AI collaborator pseudonym: **theonlymuffinbot**.
-- GitHub Actions CI: Python 3.10/3.11/3.12 unit tests + dry-run + integration on
-  pushes to `main` and `v*` (and PRs targeting those branches). Local lint:
-  `ruff` / `mypy` via pre-commit (not required GHA steps).
+- GitHub Actions CI: Python 3.10/3.11/3.12 unit tests with **100%**
+  `scripts`+`run_pipeline` coverage, policy check, dry-run; AWS job at **100%**
+  `hail_aws`; integration on push to `main`/`v*` (and PRs targeting those
+  branches). Local mandate: `./scripts/quality_gate.sh` before every commit
+  (also wired in `.pre-commit-config.yaml`). Lint: `ruff` / `mypy` via pre-commit.
 - Stage helper refactor complete: `_config.py`, `_logging.py`, `_io.py`,
   `_mapping.py`, `_radar_geometry.py`, `_gridrad_qc.py`, `_artifact_features.py`.
 - **Stage 01 complete** (5,023 convective-day MYRORSS rasters through 2011-12-31;

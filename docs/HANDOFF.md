@@ -122,7 +122,8 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 - `LICENSE`, `CHANGELOG.md`, `CITATION.cff`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
 - `pyproject.toml`, `.pre-commit-config.yaml`, `environment.yml`
 - `Dockerfile`, `.dockerignore`
-- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, py_compile, pytest, dry-run, codecov; integration on push to `main`/`v*`)
+- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, **100%** `scripts`+`run_pipeline` coverage, policy check, dry-run, codecov; AWS **100%** `hail_aws`; integration on push to `main`/`v*`)
+- `./scripts/quality_gate.sh` + `.pre-commit-config.yaml` local hooks (mandatory before every commit)
 - `.github/ISSUE_TEMPLATE/{bug,methodology,feature}.md`, `.github/PULL_REQUEST_TEMPLATE.md`
 
 **Docs written:**
@@ -290,9 +291,7 @@ release/submission blockers; record them only after those external actions occur
 ## Pre-Run Commands
 
 ```bash
-python -m py_compile run_pipeline.py scripts/*.py
-OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
-python run_pipeline.py --dry-run
+./scripts/quality_gate.sh
 ```
 
 Recommended first-run stage order:

@@ -28,16 +28,18 @@ Use the reading paths below to orient yourself quickly.
 
 **Engineer / developer running the pipeline:**
 1. [`RUN_NOTES.md`](RUN_NOTES.md) — canonical run status, verification, restart commands, disk/workers notes
-2. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands (includes §14 AWS Fargate)
-3. [`../aws/README.md`](../aws/README.md) — optional ECS Fargate adapter (CDK + `run_pipeline_aws.py`)
-4. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
-5. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
-6. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
-7. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
-8. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
-9. [`../scripts/diagnostics/radar_artifact_diagnostic.py`](../scripts/diagnostics/radar_artifact_diagnostic.py) — speckle/range debias QA (`data/analysis/radar_artifacts/`)
-10. [`radar_artifact_ml_plan.md`](radar_artifact_ml_plan.md) — Tier 0–2 radar artifact roadmap and success metrics
-11. [`../scripts/_gridrad_qc.py`](../scripts/_gridrad_qc.py) — native GridRad echo-frequency and clutter QC
+2. [`../AGENTS.md`](../AGENTS.md) — agent rules + mandatory `./scripts/quality_gate.sh` before every commit
+3. [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — 100% coverage gates, docs sync, PR workflow
+4. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands (includes §14 AWS Fargate)
+5. [`../aws/README.md`](../aws/README.md) — optional ECS Fargate adapter (CDK + `run_pipeline_aws.py`)
+6. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
+7. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
+8. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
+9. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
+10. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
+11. [`../scripts/diagnostics/radar_artifact_diagnostic.py`](../scripts/diagnostics/radar_artifact_diagnostic.py) — speckle/range debias QA (`data/analysis/radar_artifacts/`)
+12. [`radar_artifact_ml_plan.md`](radar_artifact_ml_plan.md) — Tier 0–2 radar artifact roadmap and success metrics
+13. [`../scripts/_gridrad_qc.py`](../scripts/_gridrad_qc.py) — native GridRad echo-frequency and clutter QC
 12. [`../scripts/_artifact_features.py`](../scripts/_artifact_features.py) — geometry features for the optional classifier
 13. [`../scripts/train_artifact_classifier.py`](../scripts/train_artifact_classifier.py) — optional research classifier; train only after deterministic Stage 05 + Stage 06
 14. [`../scripts/rerun_stage05.py`](../scripts/rerun_stage05.py) — blocking Stage 05 rebuild after filter/debias changes

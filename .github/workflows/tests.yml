@@ -55,16 +55,22 @@ jobs:
       - name: Syntax check (py_compile)
         run: python -m py_compile run_pipeline.py scripts/*.py
 
-      - name: Unit tests
+      - name: Policy / documentation consistency
+        run: python scripts/check_policy_consistency.py
+
+      - name: Unit tests (100% scripts + run_pipeline)
         env:
           OPENBLAS_NUM_THREADS: "1"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
           pytest -q tests \
             -m "not integration and not regression and not slow" \
+            -p pytest_cov \
             --cov=scripts \
+            --cov=run_pipeline \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=35
+            --cov-fail-under=100
 
       - name: Ruff
         run: ruff check .
@@ -141,6 +147,7 @@ jobs:
       - name: AWS unit + laptop E2E (100% hail_aws gate)
         env:
           OPENBLAS_NUM_THREADS: "1"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
           AWS_ACCESS_KEY_ID: testing
           AWS_SECRET_ACCESS_KEY: testing
           AWS_DEFAULT_REGION: us-east-1
@@ -148,6 +155,7 @@ jobs:
           PYTHONPATH=aws pytest -q aws/tests \
             -m "not localstack" \
             --ignore=aws/tests/test_cdk_stack.py \
+            -p pytest_cov \
             --cov=hail_aws --cov=run_pipeline_aws \
             --cov-report=term-missing \
             --cov-fail-under=100
