@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts._config import MODEL_VERSION, RP_MAP_CBAR_VMAX_IN
+from scripts._config import MODEL_VERSION, N_SIM_YEARS, RP_MAP_CBAR_VMAX_IN, RP_YEARS
 from scripts._mapping import (
     create_conus_axes,
     load_conus_raster_for_map,
@@ -44,6 +44,10 @@ OUT_FIG = REPO / "docs" / "figures" / "pnas"
 OUT_METRICS = REPO / "data" / "analysis" / "pnas_article_metrics.json"
 MASK_TIF = REPO / "data" / "analysis" / "conus_mask" / "conus_mask.tif"
 STOCH_MAP_DIR = REPO / "data" / "stochastic" / "maps"
+STOCH_PET_DIR = REPO / "data" / "stochastic" / "pet"
+STOCH_CATALOG = (
+    REPO / "data" / "stochastic" / "catalog" / "stochastic_event_summary.parquet"
+)
 
 MANIFESTS = {
     "MYRORSS": MESH_DIR / "manifest_stage01_myrorss.csv",
@@ -56,6 +60,16 @@ HAIL_CLIM_DIR = REPO / "data" / "analysis" / "hail_day_climatology"
 VALID_DIR = REPO / "data" / "historical" / "validation"
 EVENT_CSV = REPO / "data" / "historical" / "events" / "event_catalog.csv"
 CDF_DIR = REPO / "data" / "analysis" / "cdf"
+ARTIFACT_CLASSIFIER = (
+    REPO / "data" / "analysis" / "calibration" / "artifact_classifier.pkl"
+)
+ARTIFACT_CLASSIFIER_DIAGNOSTICS = (
+    REPO
+    / "data"
+    / "analysis"
+    / "calibration"
+    / "artifact_classifier_diagnostics.json"
+)
 
 MRMS_START = date(2020, 10, 14)
 GRIDRAD_START = date(2012, 1, 1)
@@ -491,6 +505,148 @@ def fig_ai_workflow(out: Path) -> None:
     plt.close(fig)
 
 
+def _validation_metrics() -> dict:
+    """Collect validation counts and tuning-disclosure metadata."""
+    summary_path = VALID_DIR / "validation_summary.txt"
+    pairs_path = VALID_DIR / "mesh_vs_spc_pairs.csv"
+    summary = summary_path.read_text() if summary_path.is_file() else ""
+    pair_match = re.search(
+        r"Total report[–-]MESH pairs:\s*([\d,]+)",
+        summary,
+        flags=re.IGNORECASE,
+    )
+    n_pairs = int(pair_match.group(1).replace(",", "")) if pair_match else None
+    if n_pairs is None and pairs_path.is_file():
+        n_pairs = int(len(pd.read_csv(pairs_path, usecols=[0])))
+
+    result: dict = {
+        "n_pairs": n_pairs,
+        "validation_summary_excerpt": summary[:800],
+        "holdout_tuning_disclosure_required": None,
+    }
+    if ARTIFACT_CLASSIFIER_DIAGNOSTICS.is_file():
+        diagnostics = json.loads(ARTIFACT_CLASSIFIER_DIAGNOSTICS.read_text())
+        split = diagnostics.get("metrics", {})
+        split_name = str(
+            diagnostics.get("split")
+            or split.get("split")
+            or "unknown"
+        )
+        train_years = diagnostics.get("train_years") or split.get("train_years")
+        holdout_years = diagnostics.get("holdout_years") or split.get("holdout_years")
+        if split_name == "grouped_by_year":
+            year_bits = []
+            if train_years:
+                year_bits.append(f"train years {train_years}")
+            if holdout_years:
+                year_bits.append(f"holdout years {holdout_years}")
+            year_txt = f" ({'; '.join(year_bits)})" if year_bits else ""
+            disclosure = (
+                "SPC-collocated pairs supply weak labels for the optional research "
+                "artifact classifier; its reported score uses a year-grouped holdout"
+                f"{year_txt}, not an independent external validation dataset."
+            )
+        else:
+            disclosure = (
+                "SPC-collocated pairs supply weak labels for the optional research "
+                f"artifact classifier; its reported score uses split={split_name!r}, "
+                "not an independent external validation dataset."
+            )
+        result.update(
+            {
+                "holdout_tuning_disclosure_required": True,
+                "holdout_tuning_disclosure": disclosure,
+                "artifact_classifier_split": {
+                    key: split[key]
+                    for key in ("n_train", "n_test", "roc_auc", "split")
+                    if key in split
+                },
+                "artifact_classifier_split_name": split_name,
+                "artifact_classifier_train_years": train_years,
+                "artifact_classifier_holdout_years": holdout_years,
+            }
+        )
+    elif ARTIFACT_CLASSIFIER.is_file():
+        result.update(
+            {
+                "holdout_tuning_disclosure_required": True,
+                "holdout_tuning_disclosure": (
+                    "An optional research artifact classifier is present, but its "
+                    "train/test diagnostics are unavailable; independent holdout "
+                    "status cannot be established from generated outputs."
+                ),
+            }
+        )
+    return result
+
+
+def _stochastic_metrics() -> dict:
+    """Report Stage 13 completeness and metrics available from durable outputs."""
+    map_paths = {
+        rp: STOCH_MAP_DIR / f"rp_{rp:05d}yr_stochastic.tif" for rp in RP_YEARS
+    }
+    occurrence_pet = STOCH_PET_DIR / "pet_occurrence.csv"
+    aggregate_pet = STOCH_PET_DIR / "pet_aggregate.csv"
+    available_maps = [rp for rp, path in map_paths.items() if path.is_file()]
+    required_pets = [occurrence_pet, aggregate_pet]
+    simulated_years = None
+    if STOCH_CATALOG.is_file():
+        try:
+            import pyarrow.parquet as pq
+
+            parquet = pq.ParquetFile(STOCH_CATALOG)
+            sim_year_index = parquet.schema_arrow.names.index("sim_year")
+            maxima = []
+            for row_group in range(parquet.metadata.num_row_groups):
+                stats = parquet.metadata.row_group(row_group).column(sim_year_index).statistics
+                if stats is not None and stats.has_min_max:
+                    maxima.append(int(stats.max))
+            if maxima:
+                simulated_years = max(maxima) + 1
+        except (ImportError, OSError, ValueError):
+            pass
+    complete = (
+        len(available_maps) == len(map_paths)
+        and all(path.is_file() for path in required_pets)
+        and simulated_years is not None
+        and simulated_years >= N_SIM_YEARS
+    )
+    has_any = bool(available_maps) or any(path.is_file() for path in required_pets)
+    has_any = has_any or STOCH_CATALOG.is_file()
+
+    peak_metrics: dict = {}
+    for rp in available_maps:
+        with rasterio.open(map_paths[rp]) as src:
+            data = src.read()[0]
+        finite = data[np.isfinite(data)]
+        if finite.size:
+            peak_metrics[f"rp_{rp}yr_map_max_mm"] = round(float(finite.max()), 1)
+
+    if occurrence_pet.is_file():
+        pet = pd.read_csv(occurrence_pet)
+        required = {"return_period_yr", "peak_hail_mm"}
+        if required.issubset(pet.columns):
+            for row in pet.itertuples(index=False):
+                peak_metrics[
+                    f"oep_{int(row.return_period_yr)}yr_peak_mm"
+                ] = float(row.peak_hail_mm)
+
+    return {
+        "complete": complete,
+        "status": "complete" if complete else ("partial" if has_any else "not_available"),
+        "configured_years": N_SIM_YEARS,
+        "simulated_years": simulated_years,
+        "available_return_period_maps": available_maps,
+        "missing_return_period_maps": [
+            rp for rp in map_paths if rp not in available_maps
+        ],
+        "occurrence_pet_available": occurrence_pet.is_file(),
+        "aggregate_pet_available": aggregate_pet.is_file(),
+        "catalog_summary_available": STOCH_CATALOG.is_file(),
+        "peak_metrics": peak_metrics,
+    }
+
+
 def collect_metrics(manifest_pivot: pd.DataFrame, extra: dict) -> dict:
     """Assemble JSON metrics for manuscript insertion."""
     metrics: dict = {
@@ -498,6 +654,10 @@ def collect_metrics(manifest_pivot: pd.DataFrame, extra: dict) -> dict:
         "model_version": MODEL_VERSION,
         **extra,
     }
+    validation = _validation_metrics()
+    validation.update(metrics.get("validation", {}))
+    metrics["validation"] = validation
+    metrics["stochastic"] = _stochastic_metrics()
     if CORRECTED_DIR.is_dir():
         metrics["total_daily_rasters"] = sum(1 for _ in CORRECTED_DIR.rglob("mesh_????????.tif"))
     for key, path in MANIFESTS.items():

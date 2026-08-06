@@ -47,3 +47,21 @@ repos:
     hooks:
       - id: yamllint
         args: [-d, relaxed]
+
+  # ── Repository mandates (100% coverage + docs policy) ─────────────────────
+  - repo: local
+    hooks:
+      - id: policy-consistency
+        name: Policy / documentation consistency
+        entry: python scripts/check_policy_consistency.py
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: quality-gate
+        name: Full quality gate (100% coverage)
+        entry: bash scripts/quality_gate.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        verbose: true

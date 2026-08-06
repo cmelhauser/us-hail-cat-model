@@ -2,7 +2,8 @@
 
 **Working manuscript:** *Scientific Infrastructure at Agent Speed: An Open Source US Hail Hazard Model*  
 **Status:** Promising, but contingent on final model results and reproducibility evidence  
-**Last reviewed:** 2026-05-02
+**Last reviewed:** 2026-08-05 (documentation synchronization; run status
+unverified since 2026-07-09)
 
 ---
 
@@ -93,7 +94,9 @@ tests, documentation, map QA, version control, and human interpretation.
 
 The manuscript needs final values for:
 
-- total processed days and source coverage by era (MYRORSS 5,023; GridRad 2,501+; MRMS 2,060 as of 2026-06-27);
+- total processed days and source coverage by era (historical 2026-06-27
+  snapshot: MYRORSS 5,023; GridRad 2,501+; MRMS 2,060; refresh after the
+  validated v2.3.0 run);
 - manifest status counts by year (Stage 01 and Stage 04c manifests on disk);
 - missing-source versus no-hail days (712 GridRad `missing_source` rows documented);
 - corrected annual hail climatology;
@@ -103,7 +106,11 @@ The manuscript needs final values for:
 - analytical return-period maps;
 - stochastic catalog event counts and return-period agreement;
 - map QA confirming no longitude/latitude orientation or Mexico/Canada displacement artifacts;
-- **radar artifact diagnostic** (`radar_artifact_diagnostic.py`) with progression: GridRad speckle 9.7%→6.1%→**1.8%** (2026-07-06 four-pass, pre–eastern fix); five-pass persistence filter; MYRORSS Stage 01 re-ingest **complete** (2026-07-08); refresh diagnostic + RP maps after Stages 05–14 rebuild.
+- **radar artifact diagnostic** (`radar_artifact_diagnostic.py`): the
+  9.7%→6.1%→1.8% progression is a historical 2026-07-06 four-pass,
+  pre–eastern-fix snapshot. v2.3.0 uses five core passes plus default-on site
+  remediation as a sixth layer and an optional research classifier. Refresh
+  the diagnostic and RP maps after run completion is verified.
 
 ### AI-process evidence
 
@@ -128,6 +135,9 @@ Before submission:
 - state why generated outputs are not tracked in git;
 - document where large outputs can be retained or regenerated;
 - preserve logs and manifests for the final full run.
+
+The DOI and exact manuscript SHA are external release/submission blockers.
+They cannot be inferred from repository documentation and must not be invented.
 
 See **[`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md)** for ORCID/Zenodo setup, tarball
 layout, and DOI placeholders (maintainer ORCID:

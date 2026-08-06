@@ -96,6 +96,7 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 
 try:
     from _config import DATA_ROOT, LOG_ROOT
+    from _logging import get_logger
     from _io import (
         calendar_days_for_convective_day,
         convective_window_coverage_ok,
@@ -104,7 +105,7 @@ try:
         parse_observation_utc_from_name,
         staged_nc_files_for_convective_day,
     )
-    from _logging import get_logger
+
 except ImportError:  # pragma: no cover
     from scripts._config import DATA_ROOT, LOG_ROOT
     from scripts._io import (

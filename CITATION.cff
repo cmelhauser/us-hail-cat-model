@@ -23,6 +23,9 @@ authors:
     website: "https://github.com/cmelhauser/us-hail-cat-model"
 license: MIT
 repository-code: "https://github.com/cmelhauser/us-hail-cat-model"
+# Release DOI is an external blocker: add a `doi:` field only after the v2.3.0
+# GitHub Release has been archived and Zenodo has minted the real identifier.
+# Do not invent a DOI or manuscript commit SHA.
 # theonlymuffinbot is the project pseudonym for all AI collaboration; not a
 # separate GitHub repository. Scientific accountability: Christopher Melhauser.
 keywords:
@@ -52,11 +55,8 @@ references:
     end: 1223
     doi: "10.1175/JAMC-D-20-0271.1"
   - type: article
-    # VERIFY BEFORE SUBMISSION: title, pages, and DOI below appear to belong
-    # to a different paper. The intended reference is Cintineo et al. (2012)
-    # "An objective high-resolution hail climatology of the contiguous United States"
-    # Wea. Forecasting, 27, 1235–1248. Confirm title, pages (1235-1248), first-
-    # author initial (J. M.), and DOI before archiving the code release.
+    # Cintineo et al. (2012) citation metadata is intentionally harmonized with
+    # docs/literature_review.md and docs/benchmarks.md.
     title: "An Objective High-Resolution Hail Climatology of the Contiguous United States"
     authors:
       - family-names: Cintineo

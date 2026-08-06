@@ -1,9 +1,21 @@
 # Scientific Infrastructure at Agent Speed: An Open Source US Hail Hazard Model
 
-**Publication manuscript (PNAS-style)**  
-**Model version:** 2.2.2  
-**Metrics freeze:** 2026-07-09 11:47:13  
-**Code:** [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model)  
+> **STALE CHECKED-IN RENDER (do not submit).** This file was last generated from a
+> **2026-07-09 / model 2.2.2** metrics freeze and still embeds superseded counts
+> (for example hardcoded `173,766` pairs and a GridRad `— missing_source`
+> template artifact). Regenerate only after
+> `data/analysis/pnas_article_metrics.json` exists for the verified v2.3.0 run:
+> `.venv/bin/python scripts/diagnostics/render_pnas_publication_md.py`.
+> Current draft methods live in `docs/pnas_article_ai_hail_model.md`.
+
+**Publication manuscript (PNAS-style)**
+
+**Model version:** 2.2.2 (stale render; live codebase is 2.3.0)
+
+**Metrics freeze:** 2026-07-09 11:47:13
+
+**Code:** [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model)
+
 **Corresponding author:** Christopher Melhauser (christopher.melhauser@gmail.com)
 
 ---
@@ -55,7 +67,7 @@ The model uses a fixed **0.05°** CONUS grid (520 × 1180), convective-day MESH 
 
 ### Data coverage and hazard pipeline (model 2.2.2)
 
-The corrected convective-day archive contains **9,797** daily MESH rasters (1998–2026): **5,023** MYRORSS days (manifest: 4994 ok / 20 missing_source), **3,209** GridRad gap-fill days (2661 ok / — missing_source), and **2,060** MRMS days. Stage **01** MYRORSS re-ingest with corrected WDSS-II sparse-grid axes completed **2026-07-08**, restoring eastern CONUS coverage truncated in earlier ingests.
+The corrected convective-day archive contains **9,797** daily MESH rasters (1998–2026): **5,023** MYRORSS days (manifest: 4994 ok / 20 missing_source), **3,209** GridRad gap-fill days (2661 ok / **499** missing_source — historical freeze; refresh from metrics), and **2,060** MRMS days. Stage **01** MYRORSS re-ingest with corrected WDSS-II sparse-grid axes completed **2026-07-08**, restoring eastern CONUS coverage truncated in earlier ingests.
 
 ### Event catalog and dispersion
 

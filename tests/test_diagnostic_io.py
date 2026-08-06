@@ -57,3 +57,33 @@ def test_exit_if_missing_exits_zero(capsys):
         exit_if_missing(False, "step", "reason")
     assert exc.value.code == 0
     assert "WARNING: SKIP step" in capsys.readouterr().out
+
+
+def test_require_path_generic_kind(tmp_path: Path, capsys):
+    ok = require_path(tmp_path / "any", "generic", kind="path")
+    assert ok is False
+    assert "required path not found" in capsys.readouterr().out
+
+
+def test_count_mesh_tifs_non_dir(tmp_path: Path):
+    assert count_mesh_tifs(tmp_path / "not-a-dir") == 0
+
+
+def test_require_path_kind_path(tmp_path: Path):
+    f = tmp_path / "exists.txt"
+    f.write_text("ok")
+    assert require_path(f, "path_step", kind="path") is True
+
+
+def test_count_mesh_tifs_not_a_directory(tmp_path: Path):
+    f = tmp_path / "file_not_dir"
+    f.write_text("x")
+    assert count_mesh_tifs(f) == 0
+
+
+def test_require_path_generic_kind_existing_dir(tmp_path: Path):
+    assert require_path(tmp_path, "any", kind="path") is True
+
+
+def test_count_mesh_tifs_missing_dir(tmp_path: Path):
+    assert count_mesh_tifs(tmp_path / "nope") == 0

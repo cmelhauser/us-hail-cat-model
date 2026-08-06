@@ -397,6 +397,10 @@ MESH_SOURCE_MANIFEST_FIELDS = [
     "source_files",
     "plain_netcdf_files",
     "gz_netcdf_files",
+    "source_first_utc",
+    "source_last_utc",
+    "source_max_gap_minutes",
+    "temporal_coverage_status",
     "source_valid_pixels",
     "active_cells_0p05",
     "max_mesh_mm",
@@ -456,6 +460,10 @@ def mesh_manifest_row(
     status: str,
     skipped: bool = False,
     read_errors: int | None = None,
+    source_first_utc: str | None = None,
+    source_last_utc: str | None = None,
+    source_max_gap_minutes: float | None = None,
+    temporal_coverage_status: str | None = None,
 ) -> dict:
     """Build one daily MESH source-coverage manifest row."""
     try:
@@ -468,6 +476,12 @@ def mesh_manifest_row(
         "source_files": source_files,
         "plain_netcdf_files": plain_count,
         "gz_netcdf_files": gz_count,
+        "source_first_utc": source_first_utc or "",
+        "source_last_utc": source_last_utc or "",
+        "source_max_gap_minutes": (
+            "" if source_max_gap_minutes is None else round(source_max_gap_minutes, 1)
+        ),
+        "temporal_coverage_status": temporal_coverage_status or "",
         "source_valid_pixels": "" if source_pixels is None else source_pixels,
         "active_cells_0p05": active_cells,
         "max_mesh_mm": max_mesh_mm,

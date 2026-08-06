@@ -1,4 +1,4 @@
-# Session Handoff — CONUS Hail Catastrophe Model v2.3
+# Session Handoff — CONUS Hail Catastrophe Model v2.3.0
 
 > Paste this file at the start of a new chat to restore full project context.
 > Last updated: 2026-07-31 (**v2.3.0**; AWS adapter secrets+docs+100% CI gate).
@@ -50,7 +50,7 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 03_download_spc.py              10_build_smooth_cdf.py
 04a_download_era5_isotherms.py  11_build_occurrence_probs.py
 04b_download_gridrad.py         04c_fill_gridrad_gap.py
-12_apply_conus_mask.py
+11b_prepare_topography.py       12_apply_conus_mask.py
 05_apply_mesh_bias_correction.py 13_generate_stochastic_catalog.py
 06_validate_mesh_vs_spc.py      14_render_figures.py
 07_build_hail_climo.py
@@ -58,8 +58,11 @@ via L-moments, and generates a 50,000-year stochastic event catalog. **Hazard on
 scripts/diagnostics/summarize_mesh_daily_peaks.py  ← optional mesh-era peak CSV/ECDF
 scripts/diagnostics/hail_day_climatology.py      ← per-cell hail-day threshold sensitivity
 scripts/diagnostics/radar_artifact_diagnostic.py ← speckle/range debias QA
-scripts/_radar_geometry.py                       ← NEXRAD sites, debias, five-pass artifact filter
+scripts/_radar_geometry.py                       ← NEXRAD sites, debias, five core passes + default-on site layer
+scripts/_gridrad_qc.py                            ← native GridRad echo-frequency/clutter QC
+scripts/_artifact_features.py                     ← optional classifier geometry features
 scripts/_pipeline_cleanup.py                     ← delete Stage N+ outputs (--clean-from / rerun)
+scripts/train_artifact_classifier.py              ← diagnostic train after Stage 05 + 06 (not a hazard path)
 scripts/rerun_stage05.py                         ← blocking Stage 05 rebuild (wait, clean 05+, run)
 
 scripts/_config.py   ← all grid constants, paths, EVT defaults (wired into all stage scripts)
@@ -76,7 +79,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 1. **Stage 13 must be sparse-safe.** No `(n_events, 520, 1180)` arrays. Translation, scaling, and perturbation operate on `rows, cols, vals` only.
 2. **Stage 05 must have a deterministic fallback.** `--skip-ml` must produce complete valid output with no ML artifacts.
-3. **SPC = validation only.** Never a hazard input.
+3. **SPC = validation only.** Never a hazard input; never applied to Stage 05 hazard rasters.
 4. **`event_peaks.npz`** (rows/cols/vals per event_id) is the authoritative event store.
 5. **0.05° grid is fixed.** Convective-day definition (12 UTC start) is versioned in v2.2; see `docs/methodology.md` §2.6.
 6. **Never commit data files.** `.tif`, `.npy`, `.npz`, `.grib2`, `.parquet`, diagnostic CSV/PNG outputs, and all of `data/` are gitignored.
@@ -119,7 +122,8 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 - `LICENSE`, `CHANGELOG.md`, `CITATION.cff`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
 - `pyproject.toml`, `.pre-commit-config.yaml`, `environment.yml`
 - `Dockerfile`, `.dockerignore`
-- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, py_compile, pytest, dry-run, codecov; integration on push to `main`/`v*`)
+- `.github/workflows/tests.yml` (CI: Python 3.10/3.11/3.12, **100%** `scripts`+`run_pipeline` coverage, policy check, dry-run, codecov; AWS **100%** `hail_aws`; integration on push to `main`/`v*`)
+- `./scripts/quality_gate.sh` + `.pre-commit-config.yaml` local hooks (mandatory before every commit)
 - `.github/ISSUE_TEMPLATE/{bug,methodology,feature}.md`, `.github/PULL_REQUEST_TEMPLATE.md`
 
 **Docs written:**
@@ -133,7 +137,10 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 - `scripts/_logging.py` — `get_logger()` factory; **14/14 stage scripts import from it**
 - `scripts/_io.py` — `write_geotiff`, `haversine_km`, `latlon_to_grid`; imported by stage scripts where needed
 
-**Tests:** 28 pytest files cover all 14 stages (test_01 through test_14, test_run_pipeline, test_stage\*); integration smoke test and no-dup-constants test written. GitHub Actions is green on Python 3.10, 3.11, and 3.12 at commit `c0b35b8`.
+**Tests:** pytest modules under `tests/` cover Stages 01–14, including Stage
+11b, native GridRad QC, artifact features, the pipeline runner, diagnostics,
+and synthetic integration. AWS adapter tests live under `aws/tests/`. Do not
+reuse the historical 28-file inventory.
 
 **README.md** — professional rewrite: Python badge corrected to 3.10+, Mermaid removed, pipeline table with exact filenames
 
@@ -157,42 +164,17 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 ---
 
-## Pipeline Run Status (as of 2026-07-08)
+## Current Pipeline Run Status
 
-**Stage 01 MYRORSS re-ingest complete** (5,023/5,023; eastern CONUS + geotransform QA
-passed). **Stages 05–14 rebuilding** in `screen hail_from05`:
+Status is **unverified since 2026-07-09**. The canonical state, verification
+commands, and Stage 05 → Stage 06 workflow live only in
+[`RUN_NOTES.md`](RUN_NOTES.md#canonical-current-run-state). Do not resume a
+historical screen command or infer completion from the snapshots below.
 
-```bash
-screen -r hail_from05
-# or:
-.venv/bin/python run_pipeline.py --from 05 --skip-ml
-# logs: logs/pipeline_from05.run.log
-```
-
-After Stage 06:
-
-```bash
-.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
-```
-
-After Stages 05–14 complete:
-
-```bash
-.venv/bin/python run_pipeline.py --validate
-.venv/bin/python scripts/14_render_figures.py
-.venv/bin/python scripts/diagnostics/render_pnas_article_figures.py
-# then freeze Results / Abstract from data/analysis/pnas_article_metrics.json
-```
-
-| Stage | Status |
-|-------|--------|
-| 01 | ✅ MYRORSS re-ingest complete (2026-07-08) |
-| 05–14 | 🔄 Rebuild in progress (`hail_from05`; five-pass filter) |
-| Prior 06-30 hazard / 8,798 events | Superseded — do not cite as final v2.2.2 |
-
-**2026-07-07:** Added spatiotemporal persistence pass 5 and Stage 01 MYRORSS axis fix.
-Prior four-pass diagnostic (2026-07-06): GridRad speckle **1.8%** mean (**9.1%** P95)
-on the pre–eastern-fix corrected archive.
+Stage 05 terminology: five core GridRad artifact passes plus site-specific
+remediation as a sixth layer, enabled by default. SPC is never applied to
+hazard rasters. Optional `train_artifact_classifier.py` / `--retrain-models`
+training after Stage 06 is diagnostic only.
 
 ---
 
@@ -249,13 +231,10 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 ## Immediate Next Priorities (in order)
 
-1. Complete / resume the **v2.3.0** rebuild (`--from 04c --clean-from 04c`) and
-   run **`python run_pipeline.py --validate`**.
-2. Regenerate diagnostics (`radar_artifact_diagnostic.py`, literature suite,
-   PNAS figures) on the final corrected archive.
-3. Freeze regression/golden outputs; bootstrap CIs on Stage 09.
-4. When RP maps pass artifact QA, open a PR to fast-forward remaining tip commits
-   from **`v2.3.0` → `main`** (main already has the 2.3.0 codebase base).
+Do not maintain a second next-action list here. Follow
+[`RUN_NOTES.md`](RUN_NOTES.md#canonical-current-run-state), beginning with
+state verification. DOI minting and the manuscript commit SHA remain external
+release/submission blockers; record them only after those external actions occur.
 
 **Completed in session 2026-05-02:**
 - ✅ `docs/sensitivity.md` — hyperparameter sweep plan
@@ -268,7 +247,8 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 
 **Completed in session 2026-05-03:**
 - ✅ `docs/pnas_article_ai_hail_model.md` — comprehensive review and update: v2.1 stage descriptions, missing references (Cintineo 2012, Brown 2015), AI model names corrected, author line filled (Christopher Melhauser, Ph.D., Independent Researcher), Google Scholar URL, repository URL, pipeline stage table rewritten
-- ✅ `scripts/08_build_event_catalog.py` — `MAX_CENTROID_KM_DAY` corrected from 100.0 → 140.0 (canonical value per `methodology.md §8.2` and `_config.py`)
+- ✅ `scripts/08_build_event_catalog.py` — `MAX_CENTROID_KM_DAY` corrected from
+  100.0 to the canonical **150.0** in `_config.py` and the stage implementation.
 - ✅ `tests/test_no_duplicated_constants.py` — MAX_CENTROID xfail converted to passing assertion
 - ✅ All stale MAX_CENTROID discrepancy references cleared across AGENTS.md, HANDOFF.md, project_memory.md, ai_instructions.md
 - ✅ `docs/methodology.md §0` — notation glossary added
@@ -299,10 +279,10 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 | `docs/data_dictionary.md` | All output file schemas |
 | `docs/reproduce.md` | Reproduction guide (local + §14 AWS Fargate) |
 | `aws/README.md` | Optional ECS Fargate adapter (CDK + orchestrator) |
-| `docs/RUN_NOTES.md` | Live run status and restart commands |
+| `docs/RUN_NOTES.md` | Canonical run status, verification, and restart commands |
 | `docs/uncertainty.md` | Six-category uncertainty budget |
 | `docs/ai_instructions.md` | AI operating instructions |
-| `docs/project_memory.md` | Canonical project state (this file's parent) |
+| `docs/project_memory.md` | Stable project identity, decisions, and historical work log |
 | `docs/REVIEW_PRE_RUN.md` | Pre-execution audit checklist |
 | `docs/REVIEW_2026-05-01.md` | Comprehensive post-v2.1 review, action plan with ✅/⏳ status |
 
@@ -311,9 +291,7 @@ Stage 08 validation **explicitly failed**: "Too few events: 31".
 ## Pre-Run Commands
 
 ```bash
-python -m py_compile run_pipeline.py scripts/*.py
-OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
-python run_pipeline.py --dry-run
+./scripts/quality_gate.sh
 ```
 
 Recommended first-run stage order:

@@ -1,7 +1,8 @@
 """
-Geometry-aware feature builder for the optional Stage 05 artifact classifier.
+Geometry-aware feature builder for the optional research hail-likelihood classifier.
 
-Feature order is stable for training and inference (``ARTIFACT_FEATURE_NAMES``).
+Feature order is stable for training and inference. The historical
+``ARTIFACT_FEATURE_NAMES`` name is retained for model-file compatibility.
 """
 
 from __future__ import annotations
@@ -123,15 +124,20 @@ def build_single_cell_features(
     )
 
 
-def apply_classifier_weights(
+def apply_hail_likelihood_weights(
     mesh_mm: np.ndarray,
-    probabilities: np.ndarray,
+    hail_probabilities: np.ndarray,
     active: np.ndarray,
 ) -> np.ndarray:
-    """Multiply active cells by classifier probabilities in-place copy."""
+    """Down-weight active cells by estimated hail probability."""
     out = mesh_mm.astype(np.float32, copy=True)
     rows = np.flatnonzero(active)
-    if rows.size != probabilities.size:
+    if rows.size != hail_probabilities.size:
         raise ValueError("probability length does not match active cell count")
-    out.ravel()[rows] *= probabilities.astype(np.float32)
+    out.ravel()[rows] *= hail_probabilities.astype(np.float32)
     return out
+
+
+# Backward-compatible import for existing pickles/tests. Despite the legacy name,
+# the probabilities represent likely hail (positive SPC weak labels), not artifacts.
+apply_classifier_weights = apply_hail_likelihood_weights

@@ -20,47 +20,83 @@
 - **GridRad staging:** `gridrad(_severe)/by_convective_day/YYYYMMDD/` (not `YYYY/YYYYMMDD/`).
 - **Mesh peak diagnostic:** v2.1 CSV/PNG removed; regenerate after re-ingest with `scripts/diagnostics/summarize_mesh_daily_peaks.py`.
 
-## Current Run Status
+## Canonical Current Run State
 
-Snapshot taken **2026-07-09** — **v2.3.0 full rebuild** (Tier 0 + Tier 1) after
-`v2.2.3`/`v2.3.0` branches committed. Prior v2.2.2 run (7,792 events; SPC POD 0.48)
-superseded.
+**Status is unverified since 2026-07-09. Do not assume that the v2.3.0 rebuild
+completed or that a previously documented process is still running. Check the
+process list, logs, manifests, and output validation before resuming or deleting
+outputs.** This is the only current run-state section in the repository; other
+documents must link here rather than duplicate stage status or next actions.
 
-| Stage | Status | Notes |
-|-------|--------|-------|
-| Stage 01 | ✅ Complete | MYRORSS re-ingest (5,023 days); unchanged |
-| Stages 02–04a, 03 | ✅ Complete | Unchanged |
-| Stage 04c | ⏳ Re-run | Native GridRad QC (`_gridrad_qc.py`); ~2,714 GridRad days |
-| Stages 05–14 | ⏳ Pending | Classifier enabled (no `--skip-ml`); site remediation on |
+The last verified snapshot on **2026-07-09** recorded Stage 01 and the other
+pre-04c inputs as available, with the v2.3.0 rebuild from Stage 04c through
+Stage 14 not yet verified complete. All stage counts and metrics below are
+historical snapshots until regenerated and validated for v2.3.0.
 
-```bash
-screen -r hail_v230
-tail -f logs/pipeline_v230.run.log
-tail -f logs/04c_fill_gridrad_gap.log
-```
-
-Pre-run (2026-07-09):
+First establish the actual state:
 
 ```bash
-.venv/bin/python scripts/train_artifact_classifier.py   # ROC-AUC ~0.90; 382k samples
-.venv/bin/python run_pipeline.py --from 04c --clean-from 04c
+screen -ls
+tail -n 100 logs/pipeline_v230.run.log
+tail -n 100 logs/04c_fill_gridrad_gap.log
+.venv/bin/python run_pipeline.py --validate
 ```
 
-After Stage 06: `radar_artifact_diagnostic.py`, `literature_validation_suite.py`
-(check `rp_ring_energy`).
+Treat missing screen sessions or stale logs as evidence to inspect outputs, not
+as proof that a run either failed or completed.
 
-Previous snapshot **2026-07-08** — v2.2.2 Stages 05–14 complete (`--skip-ml`);
+If inspection confirms that the v2.3.0 rebuild still needs to be run:
+
+1. Rebuild Stage 04c with native GridRad QC, then run a deterministic Stage 05
+   baseline (`--skip-ml`) and Stage 06. Stage 05 applies **five core artifact
+   passes plus site-specific remediation as a sixth layer, enabled by default**.
+   SPC is validation-only and is **never** applied to hazard rasters.
+2. Optionally, after Stage 06 has produced `mesh_vs_spc_pairs.csv`, train a
+   diagnostic classifier with `scripts/train_artifact_classifier.py` (or
+   Stage 05 `--retrain-models`) and review diagnostics. Training does not
+   change Stage 05 hazard outputs.
+3. Continue the deterministic Stage 05 baseline through Stage 14.
+
+```bash
+# Run only after state inspection confirms these outputs need rebuilding.
+.venv/bin/python run_pipeline.py --only 04c --clean-from 04c
+.venv/bin/python run_pipeline.py --only 05 --skip-ml
+.venv/bin/python run_pipeline.py --only 06 --skip-ml
+# Optional diagnostic only (does not feed Stage 05 hazard rasters):
+.venv/bin/python scripts/train_artifact_classifier.py
+```
+
+After the accepted path, run the Stage 13 sparse-safe smoke before the
+full catalog, validate all outputs, and regenerate diagnostics:
+
+```bash
+.venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
+.venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000
+.venv/bin/python run_pipeline.py --only 14
+.venv/bin/python run_pipeline.py --validate
+.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
+.venv/bin/python scripts/diagnostics/literature_validation_suite.py
+```
+
+## Historical Run Snapshots (Superseded)
+
+**2026-07-09:** v2.3.0 rebuild was launched/planned from Stage 04c. Its eventual
+completion was not verified in this documentation pass. A classifier metric of
+ROC-AUC ~0.90 on ~382k samples was recorded, but it must be regenerated after
+the deterministic Stage 05 → Stage 06 baseline before use.
+
+**2026-07-08:** v2.2.2 Stages 05–14 complete (`--skip-ml`);
 7,792 events; analytical 100-yr 123 mm; stochastic OEP 231.7 mm.
 
-Previous snapshot **2026-07-06 ~23:24 EDT** — inner-range radial ring pass (1.12× /
+**2026-07-06 ~23:24 EDT:** inner-range radial ring pass (1.12× /
 1.18× vs ≤75 km baseline); superseded by persistence pass 5 + MYRORSS re-ingest.
 
-Previous snapshot **2026-07-06 ~19:56 EDT** — four-pass filter; GridRad speckle **1.8%**
+**2026-07-06 ~19:56 EDT:** four-pass filter; GridRad speckle **1.8%**
 mean (**9.1%** P95) vs **6.1%** (**33%**) three-pass.
 
-Previous snapshot **2026-07-05** — three-pass filter (no radial ring); superseded.
+**2026-07-05:** three-pass filter (no radial ring); superseded.
 
-Previous snapshot **2026-06-30** — **v2.2.1 production run complete** (pre–eastern fix;
+**2026-06-30:** **v2.2.1 production run complete** (pre–eastern fix;
 superseded for final v2.2.2 hazard products):
 
 | Stage | Status | Notes |
@@ -78,10 +114,13 @@ superseded for final v2.2.2 hazard products):
 | Stage 13 | ✅ Complete | **50,000** yr; **15.17M** synthetic events; **~5.4 h** (memmap fix 2026-06-30). |
 | Stage 14 | ✅ Complete | Figures and validation report (`14_render_figures.py`) |
 
-**v2.2.2 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled GridRad QM; five-pass
-artifact filter; see `docs/methodology.md` §2.7 and §5.5.
+**Historical v2.2.2 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled
+GridRad QM; five core artifact passes. v2.3.0 adds default-on site remediation
+as a sixth layer and an optional research classifier.
 
-**Mesh archive totals:** **9,797** `mesh_*.tif` under `data/historical/mesh_0.05deg/` (5,023 + 2,714 + 2,060).
+**Historical archive count:** **9,797** `mesh_*.tif` under
+`data/historical/mesh_0.05deg/` (5,023 + 2,714 + 2,060), observed in this
+snapshot; re-count before presenting it as current.
 
 **Logs:** `logs/pipeline_from05.run.log`, `logs/01_myrorss_reingest.run.log`
 
@@ -117,7 +156,7 @@ From `logs/02_download_mrms_mesh.log`:
 
 ---
 
-### Historical snapshots (superseded)
+### Earlier historical snapshots (superseded)
 
 **2026-06-27:** Stage 04c primary ingest complete. Production runs **2026-06-08 → 2026-06-27** wrote **2,501** gap-era TIFFs. Manifest complete for all **3,209** convective days. **`--missing-only`** backfill launched for remaining days without TIFFs.
 
@@ -156,9 +195,10 @@ to monthly chunks if CDS rejects a yearly request as too large. Chunk files are
 cached under `data/historical/era5/pressure_chunks/` and can be reused after an
 interrupted run.
 
-## Recommended Full Run Shape
+## General Run Guidance
 
-Stages 01–04c and the full **v2.2.2** hazard pipeline (**05–14**) are complete. Optional:
+This section describes reusable commands, not current run status. Consult
+**Canonical Current Run State** above and inspect outputs before running them.
 
 ```bash
 .venv/bin/python run_pipeline.py --validate
@@ -193,7 +233,11 @@ Stage 13 sparse-safe smoke before any full stochastic rerun:
 
 ## Known Fallbacks / Watch Items
 
-- Stage 05 should use `--skip-ml` first, forcing deterministic calibration/filter fallbacks.
+- Stage 05 should use `--skip-ml` for the baseline pass, forcing deterministic
+  calibration/filter fallbacks. Run Stage 06 before training the optional
+  research classifier, because its labels come from Stage 06 pairs.
+- The deterministic GridRad filter consists of five core passes plus
+  site-specific remediation as a sixth layer; remediation is enabled by default.
 - Stage 11b prepares `data/analysis/topography/elevation_0.05deg.tif` from NOAA/NCEI ETOPO 2022.
 - Stage 12 uses uniform topographic correction if `data/analysis/topography/elevation_0.05deg.tif` is absent.
 - Generated rasters, logs, and rendered figures are intentionally ignored by git.
@@ -216,21 +260,9 @@ parallel Fargate tasks for Stages 01 / 02 / 04c, then finalize 03–14 on shared
 See `aws/README.md` and `docs/reproduce.md` §14. This does not replace the local
 `run_pipeline.py` path documented above.
 
-## Next Actions
+## Current Next Actions
 
-1. **Confirm Stage 04c backfill is done** (or accept manifest `missing_source` days as NCAR gaps).
-2. **Re-run Stages 05–14** with `--skip-ml`.
-3. **Stage 13 smoke** then full 50,000-year catalog.
-4. **Validate** and regenerate mesh-era diagnostic summaries.
-
-```bash
-.venv/bin/python run_pipeline.py --from 05 --skip-ml
-.venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 1000
-.venv/bin/python scripts/13_generate_stochastic_catalog.py --n-years 50000
-.venv/bin/python run_pipeline.py --only 14
-.venv/bin/python run_pipeline.py --validate
-.venv/bin/python scripts/diagnostics/summarize_mesh_daily_peaks.py
-```
-
-Stage 03 has already completed and only needs rerunning if the user wants a
-fresh SPC pull.
+Use only the ordered verification and rebuild workflow in **Canonical Current
+Run State** above. Historical stage-completion statements in this file do not
+authorize skipping verification or deleting outputs. Refresh the canonical
+section after the next operator verifies the run state.

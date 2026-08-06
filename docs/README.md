@@ -1,4 +1,4 @@
-# Documentation Index — CONUS Hail Catastrophe Model v2.3
+# Documentation Index — CONUS Hail Catastrophe Model v2.3.0
 
 This directory contains the complete documentation for the v2.3.0 hail hazard model.
 Use the reading paths below to orient yourself quickly.
@@ -27,23 +27,28 @@ Use the reading paths below to orient yourself quickly.
 13. [`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md) — Zenodo/ORCID archival plan, tarball layout, DOI placeholders
 
 **Engineer / developer running the pipeline:**
-1. [`RUN_NOTES.md`](RUN_NOTES.md) — live run status, restart commands, disk/workers notes
-2. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands (includes §14 AWS Fargate)
-3. [`../aws/README.md`](../aws/README.md) — optional ECS Fargate adapter (CDK + `run_pipeline_aws.py`)
-4. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
-5. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
-6. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
-7. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
-8. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
-9. [`../scripts/diagnostics/radar_artifact_diagnostic.py`](../scripts/diagnostics/radar_artifact_diagnostic.py) — speckle/range debias QA (`data/analysis/radar_artifacts/`)
-10. [`radar_artifact_ml_plan.md`](radar_artifact_ml_plan.md) — Tier 0–2 radar artifact roadmap and success metrics
-11. [`../scripts/train_artifact_classifier.py`](../scripts/train_artifact_classifier.py) — optional geometry-aware artifact classifier (v2.3.0)
-12. [`../scripts/rerun_stage05.py`](../scripts/rerun_stage05.py) — blocking Stage 05 rebuild after filter/debias changes
-13. [`superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`](superpowers/specs/2026-07-17-aws-fargate-adapter-design.md) — AWS adapter design (parallel downloads + finalize)
+1. [`RUN_NOTES.md`](RUN_NOTES.md) — canonical run status, verification, restart commands, disk/workers notes
+2. [`../AGENTS.md`](../AGENTS.md) — agent rules + mandatory `./scripts/quality_gate.sh` before every commit
+3. [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — 100% coverage gates, docs sync, PR workflow
+4. [`reproduce.md`](reproduce.md) — environment setup, data acquisition, run commands (includes §14 AWS Fargate)
+5. [`../aws/README.md`](../aws/README.md) — optional ECS Fargate adapter (CDK + `run_pipeline_aws.py`)
+6. [`technical_documentation.md`](technical_documentation.md) — stage-by-stage implementation details
+7. [`data_dictionary.md`](data_dictionary.md) — output file schemas, units, and conventions
+8. [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) — pre-execution audit artifact (start here before any run)
+9. [`../scripts/diagnostics/summarize_mesh_daily_peaks.py`](../scripts/diagnostics/summarize_mesh_daily_peaks.py) — optional mesh-era peak CSV/ECDF (`data/analysis/mesh_daily_peaks/`)
+10. [`../scripts/diagnostics/hail_day_climatology.py`](../scripts/diagnostics/hail_day_climatology.py) — per-cell hail-day climatology (`data/analysis/hail_day_climatology/`)
+11. [`../scripts/diagnostics/radar_artifact_diagnostic.py`](../scripts/diagnostics/radar_artifact_diagnostic.py) — speckle/range debias QA (`data/analysis/radar_artifacts/`)
+12. [`radar_artifact_ml_plan.md`](radar_artifact_ml_plan.md) — Tier 0–2 radar artifact roadmap and success metrics
+13. [`../scripts/_gridrad_qc.py`](../scripts/_gridrad_qc.py) — native GridRad echo-frequency and clutter QC
+12. [`../scripts/_artifact_features.py`](../scripts/_artifact_features.py) — geometry features for the optional classifier
+13. [`../scripts/train_artifact_classifier.py`](../scripts/train_artifact_classifier.py) — optional research classifier; train only after deterministic Stage 05 + Stage 06
+14. [`../scripts/rerun_stage05.py`](../scripts/rerun_stage05.py) — blocking Stage 05 rebuild after filter/debias changes
+15. [`../scripts/11b_prepare_topography.py`](../scripts/11b_prepare_topography.py) — Stage 11b ETOPO preparation
+16. [`superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`](superpowers/specs/2026-07-17-aws-fargate-adapter-design.md) — AWS adapter design (parallel downloads + finalize)
 **AI agent or future developer:**
 1. [`../AGENTS.md`](../AGENTS.md) — canonical AI-agent and developer orientation (**theonlymuffinbot** = AI collaborator pseudonym)
 2. [`ai_instructions.md`](ai_instructions.md) — non-negotiable constraints, high-risk stages, test categories
-3. [`project_memory.md`](project_memory.md) — canonical project state, design decisions, known issues
+3. [`project_memory.md`](project_memory.md) — stable project identity, design decisions, historical work log
 4. [`GIT_REMOTES.md`](GIT_REMOTES.md) — sole remote is `origin` (`cmelhauser/us-hail-cat-model`)
 5. [`../README.md`](../README.md)#credits — author + AI collaborator credits
 
@@ -76,11 +81,11 @@ Use the reading paths below to orient yourself quickly.
 | [`reproduce.md`](reproduce.md) | Engineering | Step-by-step instructions to reproduce the model from scratch (local + §14 AWS) |
 | [`../aws/README.md`](../aws/README.md) | Engineering | Optional ECS Fargate adapter: YAML, CDK, local orchestrator, LocalStack 4.14 tests |
 | [`superpowers/specs/2026-07-17-aws-fargate-adapter-design.md`](superpowers/specs/2026-07-17-aws-fargate-adapter-design.md) | Engineering | AWS adapter architecture, sizing, coverage policy |
-| [`RUN_NOTES.md`](RUN_NOTES.md) | Engineering | First-run context, current stage status, restart commands |
+| [`RUN_NOTES.md`](RUN_NOTES.md) | Engineering | Canonical current run state, verification, historical snapshots, restart commands |
 | [`REVIEW_PRE_RUN.md`](REVIEW_PRE_RUN.md) | Audit | Checklist completed before each full pipeline execution |
 | [`AGENTS.md`](../AGENTS.md) | Governance | Canonical AI-agent and developer orientation |
 | [`ai_instructions.md`](ai_instructions.md) | Governance | Operating constraints for AI-assisted development |
-| [`project_memory.md`](project_memory.md) | Governance | Current project state: what's done, known issues, next priorities |
+| [`project_memory.md`](project_memory.md) | Governance | Stable project identity, design decisions, and historical work log; links to RUN_NOTES for current state |
 | [`migration_plan.md`](migration_plan.md) | Governance | Version roadmap and migration guidance |
 | [`UPGRADE_NOTES.md`](UPGRADE_NOTES.md) | Governance | v2.0→v2.1 patch notes |
 | [`PR_v1_to_v2.1.md`](PR_v1_to_v2.1.md) | Governance | Reviewer-facing PR narrative for the v1.0→v2.1 merge |

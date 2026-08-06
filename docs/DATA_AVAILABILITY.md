@@ -15,12 +15,17 @@ figures are stored externally or regenerated locally.
 
 ## Identifiers (fill in after first upload)
 
+The DOI and manuscript commit SHA are **external blockers**, not values that can
+be completed by editing this repository. Do not invent identifiers. Populate
+them only after the v2.3.0 release is archived and the exact submission
+snapshot is selected.
+
 | Artifact | Status | Location / DOI |
 |----------|--------|----------------|
 | Source code (GitHub) | Active | [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model) |
 | Manuscript commit SHA | TBD | Record the exact `git rev-parse HEAD` used for the PNAS submission |
-| Code archive (Zenodo, via GitHub Release) | **Pending** | TBD — one archived snapshot per GitHub Release tag **`v2.X.X`** (e.g. `v2.2.2`); minted automatically when Zenodo–GitHub integration is enabled |
-| Generated outputs (Zenodo, manual upload) | **Pending** | TBD — full `data/` + `docs/figures/` tarball for the matching **`v2.X.X`** release (see §3) |
+| Code archive (Zenodo, via GitHub Release) | **External blocker — pending** | Real DOI pending publication of GitHub Release **`v2.3.0`** |
+| Generated outputs (Zenodo, manual upload) | **External blocker — pending** | Real DOI pending upload of the matching **v2.3.0** `data/` + `docs/figures/` bundle (see §3) |
 
 After the first Zenodo deposit, replace `TBD` entries above and in `CITATION.cff`,
 `docs/pnas_article_ai_hail_model.md`, and optionally add a README DOI badge.
@@ -44,8 +49,8 @@ Each **GitHub Release** tagged **`v2.X.X`** (semantic version matching
 `CHANGELOG.md` / `CITATION.cff`) produces a separate **version DOI** on Zenodo.
 All versions share one **concept DOI** (always resolves to the latest release).
 
-Your Zenodo account is linked. No deposit exists yet for this repository
-(verified 2026-07-05).
+Historical check (2026-07-05): the Zenodo account was linked and no deposit
+existed. Reverify externally before publishing v2.3.0.
 
 ### One-time setup (if not already done)
 
@@ -59,12 +64,12 @@ Zenodo reads metadata from `.zenodo.json` (highest priority) and `CITATION.cff`.
 The GitHub integration archives **source code only** (what is in the git tree).
 Gitignored `data/` and `docs/figures/` are **not** included in that snapshot.
 
-### Publish a code DOI (repeat for each `v2.X.X` release)
+### Publish the v2.3.0 code DOI
 
 1. Merge or tag the release commit.
 2. On GitHub: **Releases → Draft a new release**.
-   - Tag: `v2.X.X` (e.g. `v2.2.2`, `v2.3.0`)
-   - Title: `CONUS Hail Catastrophe Model v2.X.X`
+   - Tag: `v2.3.0`
+   - Title: `CONUS Hail Catastrophe Model v2.3.0`
    - Description: point to `CHANGELOG.md` and this file.
 3. Publish the release. Zenodo archives the repository snapshot within minutes.
 4. Copy the **version DOI** for that tag into the table in § Identifiers and
@@ -106,7 +111,7 @@ If `du` shows the tree near or above 50 GB uncompressed, compress aggressively
 
 ### Generate locally
 
-Run after the production pipeline for the target `v2.X.X` release:
+Run only after the v2.3.0 production pipeline is verified:
 
 ```bash
 # Diagnostics
@@ -122,10 +127,10 @@ Run after the production pipeline for the target `v2.X.X` release:
 
 ### Build the upload tarball
 
-From the repository root (replace `v2.X.X` with the release tag):
+From the repository root:
 
 ```bash
-VERSION=v2.X.X
+VERSION=v2.3.0
 BUNDLE="us-hail-cat-model-${VERSION}-generated-outputs"
 
 mkdir -p "/tmp/${BUNDLE}"
@@ -168,7 +173,7 @@ these directories to git.
 
 After DOIs are minted, use language like:
 
-> Source code for the CONUS Hail Catastrophe Model v2.X.X is available at
+> Source code for the CONUS Hail Catastrophe Model v2.3.0 is available at
 > https://github.com/cmelhauser/us-hail-cat-model (commit `<SHA>`) and archived
 > on Zenodo (DOI `<code-version-doi>`). Generated pipeline outputs and figures
 > for the same release are archived on Zenodo (DOI `<outputs-doi>`). Outputs are
@@ -181,7 +186,7 @@ After DOIs are minted, use language like:
 
 - [ ] ORCID [0009-0000-4234-5419](https://orcid.org/0009-0000-4234-5419) linked on Zenodo
 - [ ] GitHub repository enabled on Zenodo (profile → GitHub → sync)
-- [ ] GitHub Release `v2.X.X` published → code version DOI recorded
+- [ ] GitHub Release `v2.3.0` published → real code version DOI recorded
 - [ ] Generated-outputs tarball (≤ 50 GB) uploaded → outputs DOI recorded
 - [ ] Commit SHA recorded for manuscript
 - [ ] `CITATION.cff` updated with code DOI

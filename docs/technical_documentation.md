@@ -6,7 +6,10 @@
 
 ## 1. Purpose
 
-This document describes the implementation contract for the v2.2 hail hazard pipeline. It complements `docs/methodology.md`: the methodology document explains the scientific rationale, while this document specifies stage behavior, inputs, outputs, invariants, validation checks, and failure modes.
+This document describes the implementation contract for the v2.3.0 hail hazard
+pipeline. It complements `docs/methodology.md`: the methodology document
+explains the scientific rationale, while this document specifies stage
+behavior, inputs, outputs, invariants, validation checks, and failure modes.
 
 The pipeline is intentionally file-oriented. Each stage writes durable artifacts that can be inspected independently, rerun, validated, and excluded from git tracking. This design favors reproducibility and auditability over a monolithic in-memory workflow.
 
@@ -167,7 +170,7 @@ than shifted over oceans, Mexico, or Canada by grid-orientation error.
 **Input:** SPC daily hail report CSVs
 **Output:** `data/historical/spc/YYYY/YYMMDD_rpts_hail.csv`
 
-SPC reports are validation and calibration-support data. They are not the primary hazard field.
+SPC reports are validation-only data. They are not a hazard input and are never applied to Stage 05 hazard rasters.
 
 ### 5.1 Validation
 
@@ -395,13 +398,12 @@ else:
     when same-day overlap is unavailable; median ratio ~1.10 above 10 mm
 ```
 
-Deterministic environmental filters (v2.2.2):
+Deterministic environmental filters (v2.2.2 / v2.3.0):
 
 ```text
 noise floor: 5 mm
 subtropical winter (Nov–Feb, lat < 30°N): require >= EVENT_ACTIVE_THRESH_MM (29.0 mm)
-range debias: multiply by per-era factor(range_km) when range_debias.npz exists
-GridRad artifact filter (five passes on GridRad days only):
+GridRad artifact filter (five core passes on GridRad days only):
   1. Isolated speckle — zero cells > 2.5 × local 3×3 median (>= 5 mm)
   2. Radial range ring — per (site, 10 km bin) vs ±1/±2 neighbors AND inner-range
      baseline (<= 75 km) for bins >= 50 km; thresholds 1.12× / 1.18× (far range)
@@ -409,28 +411,45 @@ GridRad artifact filter (five passes on GridRad days only):
   4. Background filament — 21×21 background; quiet-area thin rings
   5. Spatiotemporal persistence — 21-day trailing history; chronic (site, range)
      annuli and cells zeroed unless burst/storm-day exceptions apply
+     (resume-safe via .tif.prefilter_history.npy sidecars)
 ```
 
-Optional site-specific remediation (`site_remediation=True` in code) remains for nine
-QA-flagged WSR-88D radars but is disabled by default.
+Site-specific remediation is the sixth deterministic layer for nine QA-flagged
+WSR-88D radars. It is **enabled by default**
+(`site_remediation=True` in `remove_gridrad_artifacts`).
 
-Optional ML path (when artifacts exist and `--skip-ml` is false):
+SPC reports are **validation-only** (AGENTS rule #3). Stage 05 never applies
+SPC-derived range debias or classifier inference to hazard rasters.
+`scripts/diagnostics/radar_artifact_diagnostic.py` may still fit
+`range_debias.npz` for diagnostic review; `scripts/train_artifact_classifier.py`
+(or `--retrain-models`) may train `artifact_classifier.pkl` for diagnostics
+after Stage 06. Neither artifact is a hazard-input path.
+
+Optional ML path (when calibration artifacts exist and `--skip-ml` is false):
 
 ```text
 if hail-filter artifact exists:
     apply probabilistic filter instead of deterministic winter threshold
 ```
 
+The geometry-aware classifier is a diagnostic research tool, not a Stage 05
+hazard step. Its training labels come from Stage 06. Required ordering for
+diagnostic training: deterministic Stage 05 baseline (`--skip-ml`) → Stage 06
+→ train and review `artifact_classifier.pkl`.
+
 ### 9.2 Optional artifacts
 
 ```text
 data/analysis/calibration/gridrad_cqm_model.pkl
 data/analysis/calibration/hail_filter_model.pkl
-data/analysis/calibration/range_debias.npz          # from radar_artifact_diagnostic.py
+data/analysis/calibration/artifact_classifier.pkl      # diagnostic; trained after Stage 06
+data/analysis/calibration/range_debias.npz             # diagnostic; from radar_artifact_diagnostic.py
 data/analysis/calibration/nearest_radar_distance_km.npy
 ```
 
-CLI flags: `--no-range-debias`, `--no-speckle-filter` (disables full five-pass GridRad filter).
+CLI flags: `--no-speckle-filter` (disables the five core GridRad passes and
+default-on site-remediation layer), `--retrain-models` (diagnostic classifier
+training only).
 
 ### 9.3 Hard requirement
 
@@ -564,7 +583,12 @@ Dense event cubes are prohibited as production event storage. They are memory-in
 **Script:** `scripts/diagnostics/hail_day_climatology.py` (optional, not a pipeline stage)  
 **Output:** `data/analysis/hail_day_climatology/`
 
-Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al. (2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm. **v2.2.2 adopted 29.0 mm** for Stage 08 based on this diagnostic (GP max **3.7** vs **5.5** days/yr at 25.4 mm).
+Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell
+severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al.
+(2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm.
+v2.2.2 adopted 29.0 mm for Stage 08 based on a historical diagnostic snapshot
+(GP max 3.7 vs 5.5 days/yr at 25.4 mm); refresh those values after the validated
+v2.3.0 run.
 
 Review:
 
@@ -578,11 +602,12 @@ Review:
 **Helpers:** `scripts/_radar_geometry.py`  
 **Output:** `data/analysis/radar_artifacts/`; fit `data/analysis/calibration/range_debias.npz`
 
-Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Stage 05 applies `range_debias.npz` automatically on the next rerun.
+Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Fitted `range_debias.npz` is a **diagnostic** artifact only; Stage 05 never applies it to hazard rasters (AGENTS rule #3).
 
-**2026-07-06:** four-pass filter with inner-range radial ring baseline (≤75 km for bins
-≥50 km; 1.12× / 1.18×). Stages 05–07 rebuild in progress (`logs/pipeline_05_07.run.log`).
-Run diagnostic after Stage 05/06 before downstream stages.
+**Historical 2026-07-06 snapshot:** four-pass filter with inner-range radial
+ring baseline (≤75 km for bins ≥50 km; 1.12× / 1.18×). The documented process
+state is no longer current. Follow `docs/RUN_NOTES.md`, then run the diagnostic
+after the final Stage 05/06 path before downstream interpretation.
 
 ### 12.7 Literature validation suite
 
@@ -649,19 +674,44 @@ estimate cell-specific scale where possible
 
 ### 13.3 Threshold diagnostics
 
-`threshold_selection.csv` should contain:
+`threshold_selection.csv` contains (emitted field names):
 
 ```text
-region_id
+region
 candidate_threshold_mm
-exceedance_count
+selected
+n_exceedances
 xi
 sigma
 mrl_score
 stability_score
 gof_score
-selected
+count_penalty
+mrl_score_normalized
+stability_score_normalized
+gof_score_normalized
+count_penalty_normalized
+score
+reason
 ```
+
+Each candidate is scored after min–max normalizing the four raw components
+(`gof_score`, `mrl_score`, `stability_score`, `count_penalty`) to `[0, 1]`
+within the region, then combining with equal weights:
+
+```text
+score = 0.25 * (
+    gof_score_normalized
+  + mrl_score_normalized
+  + stability_score_normalized
+  + count_penalty_normalized
+)
+```
+
+The selected threshold is the candidate with minimum `score`
+(`reason=selected_min_score`). Non-finite diagnostics receive the worst
+normalized value (1.0). Fallback rows with no valid candidate use
+`reason=no_valid_candidate_default` and may omit the normalized columns.
 
 Threshold selection is a model-risk control. Long return-period maps should not be interpreted without reviewing these diagnostics.
 

@@ -9,8 +9,8 @@ under the pseudonym **theonlymuffinbot** (not a separate GitHub repository).
 Scientific direction and accountability remain with Christopher Melhauser.
 The sole code remote is `origin` → `cmelhauser/us-hail-cat-model`.
 
-Last updated: 2026-07-31 (AWS secrets injection + 100% CI gate + operator guide;
-origin-only remotes; **theonlymuffinbot** AI credit on **`v2.3.0`**).
+Last updated: 2026-08-05 (documentation synchronized; run status unverified
+since 2026-07-09; canonical state in `docs/RUN_NOTES.md`).
 
 ## What This Project Is
 
@@ -19,13 +19,13 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: **2.3.0** (Tier 0 radar QC + geometry-aware artifact classifier)
+- Version: **2.3.0** (Tier 0 radar QC + optional geometry-aware research classifier)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
 - Pipeline: 14 stages (01–13 hazard + 14 figures), all written and tested
-- Python: 3.10+ for project support; the active long run is still on the
-  existing Python 3.9.6 `.venv` and should be upgraded only after that run
+- Python: 3.10+ for project support; the historical long-run environment used
+  Python 3.9.6. Verify that no run is active before replacing that `.venv`.
 
 Current operating branch: **`v2.3.0`** (push/PR to `origin` only; CI on `main` and
 `v*`). Model release **2.3.0**. `origin/main` already carries the 2.3.0 codebase tip
@@ -51,6 +51,7 @@ bump.
 | 9 | Preserve source-coverage metadata. Stage 01 GeoTIFF zeros alone do not distinguish missing source files from no-hail days; use `manifest_stage01_myrorss.csv`. |
 | 10 | Use `scripts/_logging.py` for stage loggers, `scripts/_io.py` for shared raster/geospatial helpers, and `scripts/_mapping.py` for CONUS map PNGs (Lambert Conformal + admin boundaries). |
 | 12 | **Git:** sole remote is **`origin`** (`cmelhauser/us-hail-cat-model`). Commit and push only there. PRs: `gh pr create --repo cmelhauser/us-hail-cat-model --base main`. CI runs on `main` and `v*`. See `docs/GIT_REMOTES.md`. |
+| 13 | **Quality gate before every commit:** run `./scripts/quality_gate.sh` (100% `scripts`+`run_pipeline` coverage, 100% AWS coverage, ruff, dry-run, docs/policy sync). Do not commit with stale docs/`AGENTS.md`/`docs/ai_instructions.md`, and do not use `--no-verify` unless the user explicitly orders it. CI on every push/PR to `main`/`v*` must stay green. |
 
 ## Known Issues / Discrepancies
 
@@ -160,9 +161,9 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --skip-ml          # force deterministic fallback in Stage 05
 --skip-calibration # Stage 05: skip ML calibration (with --skip-ml)
 --clean-from N     # delete outputs from stage N onward before run (e.g. 05)
---retrain-models   # retrain optional ML artifacts in Stage 05
+--retrain-models   # train diagnostic artifact classifier only (never applied to hazard rasters)
 
-# Stage 05 rebuild (five-pass filter) — blocking; do not background from agents
+# Stage 05 deterministic baseline — blocking; do not background from agents
 python scripts/rerun_stage05.py
 python run_pipeline.py --only 05 --clean-from 05 --skip-ml --skip-calibration
 
@@ -200,9 +201,31 @@ PYTHONPATH=aws pytest -q aws/tests -m 'not localstack' \
   --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
 ```
 
-**Coverage policy:** AWS adapter = 100% gate. Pipeline `scripts/` remain on the
-`pyproject.toml` floor (`fail_under = 35`) — stages are I/O-heavy and not covered
-at 100% by unit tests alone.
+**Coverage policy:** AWS adapter = 100% gate. Pipeline `scripts/` + `run_pipeline.py`
+also gate at **100%** statement coverage in `pyproject.toml` (`fail_under = 100`;
+`scripts/archive/*` and `aws/cdk/*` omitted). Stages remain I/O-heavy; unit tests
+use mocks for network/filesystem paths. CI (`.github/workflows/tests.yml`) and
+the local pre-commit hook both enforce the same floors via
+`./scripts/quality_gate.sh`.
+
+## Quality gate (required before every commit)
+
+```bash
+./scripts/quality_gate.sh
+# equivalent checks (also run in CI on main / v*):
+#   python scripts/check_policy_consistency.py
+#   python -m py_compile run_pipeline.py scripts/*.py
+#   ruff check .
+#   OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+#     pytest -q tests -p pytest_cov --cov=scripts --cov=run_pipeline --cov-fail-under=100
+#   PYTHONPATH=aws ... --cov-fail-under=100
+#   python run_pipeline.py --dry-run
+```
+
+Update `AGENTS.md`, `docs/ai_instructions.md`, and any touched operator/methodology
+docs in the same commit as code/schema/CLI changes. Cursor loads
+`.cursor/rules/commit-quality-gate.mdc` and blocks `git commit` until the gate
+stamp is current.
 
 LocalStack Community image pin: `localstack/localstack:4.14.0` (ECS is **Pro**;
 Community does not validate Fargate spend). Laptop stub E2E:
@@ -284,16 +307,13 @@ Manifest statuses:
 
 ## Pre-Run Checklist
 
-Before any full pipeline execution:
+Before any full pipeline execution **or any git commit**:
 
 ```bash
-python -m py_compile run_pipeline.py scripts/*.py
-ruff check .
-OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
-python run_pipeline.py --dry-run
+./scripts/quality_gate.sh
 ```
 
-Then review `docs/REVIEW_PRE_RUN.md`.
+Then review `docs/REVIEW_PRE_RUN.md` before launching production stages.
 
 ## Key Constants
 
@@ -320,22 +340,18 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-07-30:
+Repository identity is **v2.3.0** on branch **`v2.3.0`**, with `origin` as the
+sole remote. Pipeline run status is **unverified since 2026-07-09**; do not
+assert completion or reuse historical archive counts as current. The one
+canonical run-state section, verification steps, and ordered next actions are
+in [`docs/RUN_NOTES.md`](docs/RUN_NOTES.md#canonical-current-run-state).
 
-| Area | Status |
-|---|---|
-| Active branch | **`v2.3.0`** (sole write remote: `origin`) |
-| Model version | **2.3.0** (`MODEL_VERSION` / `pyproject.toml`) |
-| `origin/main` | Carries 2.3.0 codebase; may lag this branch by docs/CI tip commits |
-| All stage scripts (01–14) | Written, tested; CI green on Python 3.10/3.11/3.12 + integration |
-| Tests | pytest modules under `tests/`; AWS adapter tests under `aws/tests/` |
-| Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Tier 0 (v2.2.3 lineage) | 04c native QC, site remediation, 10 km azimuth bins — in **2.3.0** |
-| Tier 1 (v2.3.0) | Geometry artifact classifier + `train_artifact_classifier.py` |
-| **v2.3.0 full rebuild** | From **04c** through **14** — see `docs/RUN_NOTES.md` / `docs/HANDOFF.md` |
-| `artifact_classifier.pkl` | Optional; trained from Stage 06 pairs; gitignored |
-| Regression / golden tests | Pending frozen checksums after v2.3.0 run |
-| Bootstrap CIs on RP maps | Pending |
+The Stage 05 path is five core artifact passes plus site-specific remediation
+as a sixth layer, enabled by default. SPC reports are validation-only and are
+**never** applied to hazard rasters (AGENTS rule #3). Optional
+`train_artifact_classifier.py` / `--retrain-models` may train a diagnostic
+classifier from Stage 06 pairs after a deterministic Stage 05 → Stage 06
+baseline; that artifact is not a hazard-input path.
 
 ## Production Run Summary (v2.2.1, 2026-06-30 — superseded)
 
@@ -351,46 +367,13 @@ do not cite as final v2.2.2 hazard results.
 | 13 | 50k-yr stochastic catalog (~5.4 h) |
 | 14 | Figures + validation report |
 
-## Current Run Watch
+## Run Operations
 
-**v2.3.0 full rebuild (2026-07-09)** — Tier 0 (04c native QC, site remediation, 10 km
-azimuth bins) + Tier 1 (optional `artifact_classifier.pkl`). Requires **04c** re-run for
-GridRad days, then **05–14**.
-
-```bash
-screen -r hail_v230
-# or:
-tail -f logs/pipeline_v230.run.log
-tail -f logs/04c_fill_gridrad_gap.log
-tail -f logs/05_apply_mesh_bias_correction.log
-```
-
-Command:
-
-```bash
-.venv/bin/python scripts/train_artifact_classifier.py   # once, after Stage 06 exists
-.venv/bin/python run_pipeline.py --from 04c --clean-from 04c
-```
-
-Stage 05: six rule passes + site remediation + optional classifier (no `--skip-ml` when
-classifier should apply). After Stage 06:
-
-```bash
-.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
-.venv/bin/python scripts/diagnostics/literature_validation_suite.py
-```
-
-Success metrics: `map_gridrad_minus_myrorss_mean_annual_max.png` ring visibility ↓;
-GridRad speckle P95 < **5%**; SPC POD @ ≥1″ not degraded > **3%** absolute;
-`rp_ring_energy` ↓; analytical vs stochastic 100-yr median ratio ~**1.1**.
-
-After the rebuild completes:
-
-1. `python run_pipeline.py --validate`
-2. `.venv/bin/python scripts/diagnostics/render_pnas_article_figures.py`
-3. Refresh manuscript Results from `data/analysis/pnas_article_metrics.json`
-4. Ablation: rules-only (`--skip-ml`) vs rules+ML vs GridRad native 04c QC — see `docs/radar_artifact_ml_plan.md`
-5. Merge **`v2.3.0`** to `main` when RP maps pass artifact QA
+Do not use a stale screen-session name as evidence of current state. Before
+resuming, follow the checks in
+[`docs/RUN_NOTES.md`](docs/RUN_NOTES.md#canonical-current-run-state). That
+section also owns the two-pass baseline → Stage 06 → optional classifier
+workflow and all current next actions.
 
 ## Documentation Quick Reference
 
@@ -407,9 +390,10 @@ After the rebuild completes:
 | Data / Zenodo archival | `docs/DATA_AVAILABILITY.md` |
 | Uncertainty disclosures | `docs/uncertainty.md` |
 | Extended AI operating rules | `docs/ai_instructions.md` |
-| Canonical project state | `docs/project_memory.md` |
+| Stable identity and historical work log | `docs/project_memory.md` |
 | Full review findings | `docs/REVIEW_2026-05-01.md` |
 | Pre-run audit | `docs/REVIEW_PRE_RUN.md` |
+| 2026-08-05 agent audit + reaudit | `docs/AGENT_AUDIT_2026-08-05.md` |
 | Contribution workflow | `CONTRIBUTING.md` |
 | Version history | `CHANGELOG.md` |
 

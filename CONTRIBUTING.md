@@ -61,6 +61,18 @@ Fargate adapter under `aws/`. Activate the pre-commit hooks:
 pre-commit install
 ```
 
+**Before every commit**, run the mandatory quality gate (also installed as a
+local pre-commit hook):
+
+```bash
+./scripts/quality_gate.sh
+```
+
+That script enforces documentation/policy consistency, `ruff`, **100%**
+coverage on `scripts` + `run_pipeline`, **100%** coverage on the AWS adapter,
+and `run_pipeline.py --dry-run`. Do not use `git commit --no-verify` to bypass
+it unless the maintainer explicitly requests an emergency override.
+
 ---
 
 ## Git remotes
@@ -119,17 +131,32 @@ grid geometry requires a model-version bump and full pipeline rerun.
 
 ## Tests
 
-The project uses `pytest`. Run the full suite from the repo root:
+**Mandate:** every commit must keep **100%** statement coverage on
+`scripts/` + `run_pipeline.py` and on `aws/hail_aws` + `aws/run_pipeline_aws.py`.
+CI fails otherwise (`fail_under = 100` / `--cov-fail-under=100`).
+
+Preferred single entry point:
 
 ```bash
-OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests
+./scripts/quality_gate.sh
+```
+
+Or run pieces manually:
+
+```bash
+python scripts/check_policy_consistency.py
+OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+  pytest -q tests -p pytest_cov \
+  --cov=scripts --cov=run_pipeline --cov-fail-under=100
 ```
 
 AWS adapter tests (100% coverage gate on `hail_aws` + CLI):
 
 ```bash
-PYTHONPATH=aws OPENBLAS_NUM_THREADS=1 \
+PYTHONPATH=aws OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
   pytest -q aws/tests -m 'not localstack' \
+  --ignore=aws/tests/test_cdk_stack.py \
+  -p pytest_cov \
   --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
 ```
 
@@ -146,15 +173,10 @@ Lint (from repo root; `scripts/archive/` is excluded in `pyproject.toml`):
 ruff check .
 ```
 
-Run with coverage:
-
-```bash
-pytest --cov=scripts --cov-report=term-missing tests
-```
-
-**All PRs must pass the full test suite.** If you add a new stage feature or
-fix a bug, add a test that covers the new/changed behaviour. PRs that touch
-`aws/` must keep the `hail_aws` / CLI coverage gate at 100%.
+**All commits and PRs must pass the full quality gate and GitHub Actions CI.**
+If you add a new stage feature or fix a bug, add a test that covers the
+new/changed behaviour. Never lower the coverage floors without an explicit
+maintainer decision and docs update.
 
 Test categories:
 
@@ -171,36 +193,42 @@ fixed `numpy` seed and produce the same output byte-for-byte.
 
 ## Documentation
 
-When changing code, update the relevant documentation **in the same PR**:
+When changing code, update the relevant documentation **in the same commit**
+(enforced by review + `scripts/check_policy_consistency.py` for coverage/CI
+policy drift):
 
 | What changed | Update |
 |---|---|
 | User-facing behaviour | `README.md` |
+| Agent / contributor operating rules | `AGENTS.md`, `docs/ai_instructions.md`, `CONTRIBUTING.md` |
 | Scientific assumptions | `docs/methodology.md` |
 | Per-stage implementation | `docs/technical_documentation.md` |
 | Output files or schemas | `docs/data_dictionary.md` |
 | Run commands or environment | `docs/reproduce.md` (and `aws/README.md` if cloud runner changed) |
 | Run readiness | `docs/REVIEW_PRE_RUN.md` |
 | AWS adapter / CDK / orchestrator | `aws/README.md`, `docs/reproduce.md` §14, `CHANGELOG.md` |
+| Coverage / CI policy | `AGENTS.md`, `CONTRIBUTING.md`, `.github/workflows/tests.yml`, `pyproject.toml` |
 
-New documents should be indexed in `docs/README.md`.
+New documents should be indexed in `docs/README.md`. Commits that change
+behavior without updating the matching docs above will be rejected.
 
 ---
 
 ## Submitting a Pull Request
 
 1. Fork the repository and create your branch.
-2. Make your changes, add tests, update documentation.
-3. Run `pre-commit run --all-files` and fix any lint issues.
-4. Run the full test suite locally.
-5. Open a PR against `main` on **`origin`**:
+2. Make your changes, add tests, update documentation and agent files.
+3. Run `./scripts/quality_gate.sh` (or `pre-commit run --all-files`) and fix
+   any failures. Coverage must remain at 100%.
+4. Open a PR against `main` on **`origin`**:
 
    ```bash
    gh pr create --repo cmelhauser/us-hail-cat-model --base main
    ```
 
    Use the PR template.
-6. Describe *what* changed and *why*. Link any relevant issues.
+5. Describe *what* changed and *why*. Link any relevant issues.
+6. Do not merge while GitHub Actions is red on the PR.
 
 PRs are merged by the maintainer after review. Expect comments on scientific
 defensibility as well as code quality.

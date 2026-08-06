@@ -40,7 +40,6 @@ Output
   data/stochastic/maps/rp_*yr_stochastic.tif (empirical RP GeoTIFFs)
   data/stochastic/pet/pet_occurrence.csv
   data/stochastic/pet/pet_aggregate.csv
-  data/stochastic/ann_max_hail.npy (50,000 × nrows × ncols, active-cell sparse)
 
 Usage
 -----
@@ -65,11 +64,12 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_HAIL_MM, RP_YEARS, RNG_SEED, N_SIM_YEARS, TRANSLATE_CELLS, NODATA
-    from _io import write_geotiff
+    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_HAIL_MM, RP_YEARS, RNG_SEED, N_SIM_YEARS, TRANSLATE_CELLS, NODATA, MODEL_VERSION
     from _logging import get_logger
+    from _io import write_geotiff
+
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_HAIL_MM, RP_YEARS, RNG_SEED, N_SIM_YEARS, TRANSLATE_CELLS, NODATA
+    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, MAX_HAIL_MM, RP_YEARS, RNG_SEED, N_SIM_YEARS, TRANSLATE_CELLS, NODATA, MODEL_VERSION
     from scripts._io import write_geotiff
     from scripts._logging import get_logger
 
@@ -86,6 +86,16 @@ MAP_DIR   = OUT_DIR / "maps"
 PET_DIR   = OUT_DIR / "pet"
 LOG_DIR   = LOG_ROOT
 LOG_FILE  = LOG_DIR / "13_stochastic_catalog.log"
+CATALOG_MANIFEST = CAT_DIR / "stochastic_catalog_manifest.json"
+CATALOG_REQUIRED_COLUMNS = (
+    "sim_year",
+    "event_idx",
+    "template_id",
+    "doy",
+    "scale_factor",
+    "peak_hail_mm",
+    "n_cells",
+)
 
 # DAMAGE_THRESH_MM, MAX_HAIL_MM, N_SIM_YEARS, TRANSLATE_CELLS, and RNG_SEED imported from _config
 SPATIAL_TRANSLATE  = True
@@ -458,8 +468,104 @@ def load_conus_mask():
         return None
     return mask
 
+def write_catalog_manifest(
+    *,
+    n_years: int,
+    seed: int,
+    model_version: str,
+    status: str,
+    n_events: int | None = None,
+) -> Path:
+    """Persist durable Stage 13 simulation metadata for production validation."""
+    import json
+    from datetime import datetime, timezone
+
+    CAT_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "n_years": int(n_years),
+        "seed": int(seed),
+        "model_version": str(model_version),
+        "status": str(status),
+        "n_events": None if n_events is None else int(n_events),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    tmp = CATALOG_MANIFEST.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(CATALOG_MANIFEST)
+    return CATALOG_MANIFEST
+
+
 def validate_outputs() -> bool:
     errors = []
+    catalog_path = CAT_DIR / "stochastic_event_summary.parquet"
+    if not CATALOG_MANIFEST.exists():
+        errors.append(f"Missing: {CATALOG_MANIFEST.name}")
+    else:
+        try:
+            import json
+
+            manifest = json.loads(CATALOG_MANIFEST.read_text(encoding="utf-8"))
+            n_years = int(manifest.get("n_years", -1))
+            status = str(manifest.get("status", ""))
+            if n_years != int(N_SIM_YEARS):
+                errors.append(
+                    f"{CATALOG_MANIFEST.name}: n_years={n_years} "
+                    f"(production requires {N_SIM_YEARS})"
+                )
+            if status != "complete":
+                errors.append(
+                    f"{CATALOG_MANIFEST.name}: status={status!r} "
+                    "(production requires 'complete')"
+                )
+            if str(manifest.get("model_version", "")) != str(MODEL_VERSION):
+                errors.append(
+                    f"{CATALOG_MANIFEST.name}: model_version mismatch "
+                    f"({manifest.get('model_version')!r} != {MODEL_VERSION!r})"
+                )
+            if "seed" not in manifest:
+                errors.append(f"{CATALOG_MANIFEST.name}: missing seed")
+        except Exception as exc:
+            errors.append(f"{CATALOG_MANIFEST.name}: unreadable ({exc})")
+
+    if not catalog_path.exists():
+        errors.append(f"Missing: {catalog_path.name}")
+    else:
+        try:
+            import pyarrow.parquet as pq
+
+            pf = pq.ParquetFile(catalog_path)
+            if pf.metadata is None or pf.metadata.num_rows < 1:
+                errors.append(f"{catalog_path.name}: empty Parquet catalog")
+            else:
+                names = set(pf.schema_arrow.names)
+                missing_cols = [
+                    c for c in CATALOG_REQUIRED_COLUMNS if c not in names
+                ]
+                if missing_cols:
+                    errors.append(
+                        f"{catalog_path.name}: missing columns {missing_cols}"
+                    )
+                else:
+                    # Year coverage: require both ends of the production window.
+                    years = pf.read(columns=["sim_year"]).column("sim_year").to_pylist()
+                    if not years:
+                        errors.append(f"{catalog_path.name}: empty sim_year column")
+                    else:
+                        # Reject truncated smoke catalogs while allowing empty
+                        # Poisson years near the ends of a full production run.
+                        ymin, ymax = int(min(years)), int(max(years))
+                        if ymin < 0 or ymax >= int(N_SIM_YEARS):
+                            errors.append(
+                                f"{catalog_path.name}: sim_year out of range "
+                                f"[{ymin}, {ymax}] for n_years={N_SIM_YEARS}"
+                            )
+                        elif ymax < int(N_SIM_YEARS) - 100:
+                            errors.append(
+                                f"{catalog_path.name}: sim_year coverage ends at "
+                                f"{ymax} (production requires near {N_SIM_YEARS - 1})"
+                            )
+        except Exception as exc:
+            errors.append(f"{catalog_path.name}: unreadable Parquet ({exc})")
     for rp in RP_YEARS:
         p = MAP_DIR / f"rp_{rp:05d}yr_stochastic.tif"
         if not p.exists():
@@ -543,13 +649,30 @@ def main():
 
         # Event summary
         CAT_DIR.mkdir(parents=True, exist_ok=True)
+        n_events_written = None
         if not stoch_df.empty:
             stoch_df.to_parquet(catalog_path, index=False)
+            n_events_written = int(len(stoch_df))
             log(f"  Stochastic events: {len(stoch_df):,} saved to Parquet")
         elif catalog_path.exists():
+            try:
+                import pyarrow.parquet as pq
+
+                n_events_written = int(pq.ParquetFile(catalog_path).metadata.num_rows)
+            except Exception:
+                n_events_written = None
             log(f"  Stochastic events saved to Parquet (streamed)")
         else:
             log("  WARN: no stochastic event summary written")
+
+        write_catalog_manifest(
+            n_years=n_years,
+            seed=RNG_SEED,
+            model_version=MODEL_VERSION,
+            status="complete",
+            n_events=n_events_written,
+        )
+        log(f"  Wrote {CATALOG_MANIFEST.name}")
 
         # Summary
         log(f"\n  ── Stochastic Summary ──")
@@ -571,8 +694,15 @@ def main():
     log(f"  Complete")
     log(f"{'='*60}\n")
 
-    ok = validate_outputs()
-    sys.exit(0 if ok else 1)
+    # Smoke / truncated runs write outputs but must not pass production validation.
+    if n_years == N_SIM_YEARS:
+        ok = validate_outputs()
+        sys.exit(0 if ok else 1)
+    log(
+        f"  Smoke/truncated run (n_years={n_years:,}); "
+        "skipping production validation gate"
+    )
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

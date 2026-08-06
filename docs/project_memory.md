@@ -1,8 +1,8 @@
 # Project Memory
 
-**CONUS Hail Catastrophe Model v2.3**
-**Last updated: 2026-07-17 (`v2.3.0` — Tier 0+1 radar artifact ML; AWS Fargate
-adapter under `aws/`; full rebuild from 04c)**
+**CONUS Hail Catastrophe Model v2.3.0**
+**Last updated: 2026-08-05 (`v2.3.0`; run status unverified since 2026-07-09;
+canonical state in `docs/RUN_NOTES.md`)**
 
 ---
 
@@ -22,19 +22,20 @@ adapter under `aws/`; full rebuild from 04c)**
 
 ---
 
-## 2. Current State (as of 2026-07-09)
+## 2. Current State
 
-**v2.3.0 Tier 0+1** committed on branches **`v2.2.3`** (04c native QC, site remediation,
-10 km azimuth bins) and **`v2.3.0`** (geometry artifact classifier). **Full rebuild**
-`--from 04c --clean-from 04c` with `artifact_classifier.pkl` (ROC-AUC ~0.90). Prior
-v2.2.2 run (7,792 events; SPC POD 0.48 @ ≥1″) superseded.
+Pipeline status is **unverified since 2026-07-09**. The single canonical
+run-state section, verification procedure, and ordered two-pass workflow are in
+[`RUN_NOTES.md`](RUN_NOTES.md#canonical-current-run-state). Historical archive
+counts, classifier scores, and stage outputs in this work log must not be
+presented as current v2.3.0 results until refreshed.
 
-| Metric | Value |
-|--------|------:|
-| Convective-day archive | **9,797** (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| GridRad 04c | re-running with native echo-frequency + clutter QC |
-| Stage 05 | six rule passes + site remediation + optional classifier |
-| Historical events / stochastic | **pending** v2.3.0 Stages 08 / 13 |
+Stage 05 uses five core GridRad artifact passes plus site-specific remediation
+as a sixth layer, enabled by default. SPC reports are validation-only and are
+never applied to hazard rasters. Optional `train_artifact_classifier.py` /
+`--retrain-models` may train a diagnostic classifier after a deterministic
+Stage 05 baseline and Stage 06 create SPC–MESH pairs; that path does not feed
+Stage 05 hazard outputs.
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 
@@ -88,7 +89,10 @@ Any future methodology change must update tests and documentation in the same co
 
 ### Stage 05
 
-Handles source calibration, **range-dependent debias** (`range_debias.npz`), **five-pass GridRad artifact filtering** (speckle, inner-range radial ring, azimuthal, filament, spatiotemporal persistence), and environmental filtering.
+Handles source calibration, **range-dependent debias** (`range_debias.npz`),
+**five core GridRad artifact passes** (speckle, inner-range radial ring,
+azimuthal, filament, spatiotemporal persistence), **default-on site remediation
+as a sixth layer**, an optional research classifier, and environmental filtering.
 
 ### Stage 08
 
@@ -234,7 +238,8 @@ the same finite/non-negative/300.0 mm value invariant.
 
 ### 2026-05-03 — Pre-pipeline fixes and PNAS article update ✅
 
-- `scripts/08_build_event_catalog.py`: `MAX_CENTROID_KM_DAY` corrected 100.0 → 140.0 (canonical per methodology.md §8.2 and _config.py)
+- `scripts/08_build_event_catalog.py`: `MAX_CENTROID_KM_DAY` corrected from
+  100.0 to the canonical **150.0** in `_config.py` and the stage implementation.
 - `tests/test_no_duplicated_constants.py`: MAX_CENTROID xfail converted to passing assertion
 - `docs/pnas_article_ai_hail_model.md`: comprehensive update — author line (Christopher Melhauser, Ph.D., Independent Researcher, Google Scholar URL), repository URL, AI model names (`claude-sonnet-4-6`, `claude-opus-4-6`, `gpt-5.5-medium`), v2.1 stage descriptions (event merge logic, EVT threshold diagnostics, topographic correction, sparse safety), missing references (Cintineo 2012, Brown 2015), pipeline stage table rewritten, benchmark discussion paragraph added
 - `docs/methodology.md §0`: notation glossary written (grid, hazard, occurrence, EVT, stochastic, topographic, vulnerability, abbreviations)
@@ -247,7 +252,9 @@ Complete grep scan and refactor of all 14 stage scripts confirming:
 - 15/15 scripts use `_logging.get_logger()` instead of print-based `log()` helpers
 - Shared `_io.py` helpers are wired where needed (`write_geotiff`, `haversine_km`, `latlon_to_grid`)
 - `RP_YEARS`, `DAMAGE_THRESH_MM`, `MAX_HAIL_MM`, and `MAX_CENTROID_KM_DAY` are sourced from `_config.py` where used
-- 28 pytest files exist, including `tests/integration/test_smoke_synthetic.py`
+- Pytest coverage includes all stages, Stage 11b, `_gridrad_qc.py`,
+  `_artifact_features.py`, diagnostics, AWS adapter modules, and synthetic
+  integration; avoid the obsolete 28-file inventory.
 - Missing docs: sensitivity.md, benchmarks.md, FAQ.md
 
 Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instructions.md
@@ -264,18 +271,12 @@ Updated: docs/HANDOFF.md, AGENTS.md, docs/project_memory.md, docs/ai_instruction
 
 ## 8. Immediate Priorities
 
-In order:
-
-1. **Confirm Stage 04c `--missing-only` backfill is finished** (or accept manifest `missing_source` days).
-2. **Re-run Stages 05–14 with `--skip-ml`** against the full dataset; this includes Stage 11b DEM preparation before Stage 12.
-3. **Run Stage 13 smoke then full catalog** (`--n-years 1000`, then 50,000 years).
-4. **Regenerate mesh-era diagnostic** if ingest changes (`scripts/diagnostics/summarize_mesh_daily_peaks.py`).
-5. **Regenerate hail-day climatology** after Stage 05 (`scripts/diagnostics/hail_day_climatology.py`).
-5. **Review Stage 14 figures** once production outputs exist (Lambert Conformal maps via `_mapping.py`).
-6. **Regression tests** — freeze golden outputs after first production run.
-7. **Bootstrap CIs on Stage 09 RP estimates** once first-run outputs exist.
-8. **Rebuild `.venv` to Python 3.10+** — current run venv is Python 3.9.6 (EOL Oct 2025).
-9. **PNAS article Results section** — fill in after pipeline completes.
+Do not duplicate operational priorities here. Follow
+[`RUN_NOTES.md`](RUN_NOTES.md#canonical-current-run-state), beginning with
+verification because no run completion has been confirmed since 2026-07-09.
+After the run is validated, regression/golden outputs and bootstrap CIs remain
+model-development work. DOI minting and the exact submission SHA remain
+external release/submission actions.
 
 ---
 
@@ -302,8 +303,8 @@ Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build den
 Stage 05 must always work with --skip-ml (no ML artifacts required).
 Active branch: v2.3.0. Model 2.3.0. Sole remote: origin (cmelhauser/us-hail-cat-model).
 AI collaborator pseudonym: theonlymuffinbot (not a separate GitHub repo).
-Stage 01 MYRORSS fix complete 2026-07-08; v2.3.0 rebuild from 04c through 14 — see RUN_NOTES.
-9,797 raw mesh TIFFs; prior event/stochastic catalogs superseded pending rebuild completion.
+Run status unverified since 2026-07-09; inspect before resuming — see RUN_NOTES.
+Historical archive counts and prior event/stochastic catalogs are not current v2.3.0 results.
 Stage 01/02 manifests distinguish missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.
 Hail-day climatology: scripts/diagnostics/hail_day_climatology.py.

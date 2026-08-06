@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +18,41 @@ from hail_aws.gridrad_fanout import (
     plan_day_commands,
     resolve_gap_window,
 )
+
+
+def _stage04c_gap_dates() -> dict[str, date]:
+    """Read numeric stage constants without importing the executable script."""
+    stage_path = (
+        Path(__file__).resolve().parents[2]
+        / "scripts"
+        / "04c_fill_gridrad_gap.py"
+    )
+    tree = ast.parse(stage_path.read_text())
+    dates = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        value = node.value
+        if (
+            isinstance(target, ast.Name)
+            and target.id in {"GAP_START", "GAP_END"}
+            and isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "date"
+        ):
+            dates[target.id] = date(
+                *(ast.literal_eval(arg) for arg in value.args)
+            )
+    return dates
+
+
+def test_aws_gap_dates_match_stage04c() -> None:
+    stage_dates = _stage04c_gap_dates()
+    assert stage_dates == {
+        "GAP_START": GRIDRAD_GAP_START,
+        "GAP_END": GRIDRAD_GAP_END,
+    }
 
 
 def test_iter_and_resolve_window() -> None:

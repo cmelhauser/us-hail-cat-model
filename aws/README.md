@@ -236,7 +236,7 @@ CLI gate and CDK synth (with Node).
 |---------|------|
 | `aws/hail_aws` + `run_pipeline_aws.py` | **100%** line coverage in CI |
 | `aws/cdk` | Synth tests (not line-covered; jsii-generated) |
-| `scripts/` | Separate floor (`fail_under = 35` in `pyproject.toml`); I/O-heavy stages are not part of the AWS gate |
+| `scripts/` + `run_pipeline.py` | **100%** statement coverage (`fail_under = 100` in `pyproject.toml`; same floor in CI and `./scripts/quality_gate.sh`) |
 
 ## Troubleshooting
 

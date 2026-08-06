@@ -13,22 +13,29 @@
 
 ## Checklist
 
+### Pre-commit mandate
+- [ ] `./scripts/quality_gate.sh` passed on this branch tip
+- [ ] Documentation and agent files (`AGENTS.md`, `docs/ai_instructions.md`, and any touched operator/methodology docs) are synchronized in this PR
+- [ ] Did **not** use `--no-verify` / skip hooks
+
 ### Code
 - [ ] `python -m py_compile run_pipeline.py scripts/*.py` passes
-- [ ] `OPENBLAS_NUM_THREADS=1 pytest -q tests` passes (all non-slow tests)
+- [ ] `OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests -p pytest_cov --cov=scripts --cov=run_pipeline --cov-fail-under=100` passes
 - [ ] `ruff check .` passes
 - [ ] `python run_pipeline.py --dry-run` passes
 - [ ] No dense `(n_events, 520, 1180)` arrays introduced
 - [ ] No new `NROWS = 520` / `NCOLS = 1180` literals in stage scripts (use `_config`)
 - [ ] Grid constants unchanged or version bump documented
 
-### Tests
+### Tests / coverage
 - [ ] Unit test added or updated for the changed behavior
 - [ ] Integration test updated if stage boundary or output schema changed
-- [ ] If `aws/` changed: `PYTHONPATH=aws pytest -q aws/tests -m 'not localstack' --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100`
+- [ ] Pipeline coverage remains **100%** (`scripts` + `run_pipeline`)
+- [ ] AWS coverage remains **100%**: `PYTHONPATH=aws pytest -q aws/tests -m 'not localstack' --ignore=aws/tests/test_cdk_stack.py -p pytest_cov --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100`
 
 ### Documentation
 - [ ] `README.md` updated (if user-facing behavior changed)
+- [ ] `AGENTS.md` / `docs/ai_instructions.md` / `CONTRIBUTING.md` updated (if agent or contributor rules changed)
 - [ ] `docs/methodology.md` updated (if scientific assumptions changed)
 - [ ] `docs/technical_documentation.md` updated (if stage behavior changed)
 - [ ] `docs/data_dictionary.md` updated (if new/renamed outputs)

@@ -1,13 +1,17 @@
-# Sensitivity Analysis Plan — CONUS Hail Catastrophe Model v2.1
+# Sensitivity Analysis Plan — CONUS Hail Catastrophe Model v2.3.0
 
-**Status:** Framework document — sweeps to be executed after first full run produces baseline outputs.
+**Status:** Framework document — sweeps require refreshed, validated v2.3.0
+baseline outputs.
 **Related:** `docs/methodology.md`, `docs/uncertainty.md`, `docs/REVIEW_2026-05-01.md §B.5`
 
 ---
 
 ## Overview
 
-This document defines the hyperparameter sensitivity sweeps planned for v2.1. For each parameter, it records the stage that uses it, the default value, the justification for that default, the planned sweep range, and the diagnostic output expected from the sweep.
+This document defines the hyperparameter sensitivity sweeps planned for
+v2.3.0. For each parameter, it records the stage that uses it, the default
+value, the justification for that default, the planned sweep range, and the
+diagnostic output expected from the sweep.
 
 Sensitivity results are saved to `docs/figures/analysis/sensitivity/` and summarized in `data/analysis/sensitivity_report.csv` (populated post-run).
 
@@ -60,7 +64,7 @@ The goal is not to re-optimize every parameter on the first run. It is to verify
 | Justification | Cintineo et al. (2012) and Murillo et al. (2021) benchmark per-cell hail days at skill thresholds (29–63 mm); conventional 25.4 mm over-diagnoses vs SPC report days, especially off-season. |
 | Sweep | {25.4, 29.0, 35.56, 41.91, 50.8, 63.25} mm |
 | Primary output | `data/analysis/hail_day_climatology/threshold_benchmark_summary.csv` |
-| Cliff risk | High for interpreting Stage 08 λ as literature hail-alley frequency; GP max drops from ~5.5 to ~1.6 days/yr (25.4 → 41.9 mm) on production archive. |
+| Cliff risk | High for interpreting Stage 08 λ as literature hail-alley frequency; the historical pre-v2.3.0 snapshot dropped from ~5.5 to ~1.6 days/yr (25.4 → 41.9 mm). Refresh after the validated v2.3.0 run. |
 
 ---
 

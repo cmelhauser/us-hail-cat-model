@@ -833,13 +833,21 @@ def check_tail_dependence_pilot() -> CheckResult:
     out_df.to_csv(OUT_DIR / "tail_dependence_pilot_chi.csv", index=False)
     chi_near = out_df.loc[out_df["distance_km_lo"] == 50, "chi_u"]
     chi_far = out_df.loc[out_df["distance_km_lo"] == 300, "chi_u"]
+    def _metric_chi(series: pd.Series) -> float | None:
+        if series.empty:
+            return None
+        val = series.iloc[0]
+        if val is None or (isinstance(val, float) and not np.isfinite(val)):
+            return None
+        return float(val)
+
     metrics = {
         "threshold_mm": u,
         "years_pooled": list(years),
         "n_cells_sampled": int(len(active)),
         "p_exceed": round(p_exceed, 4),
-        "chi_50_150km": float(chi_near.iloc[0]) if len(chi_near) else None,
-        "chi_300_600km": float(chi_far.iloc[0]) if len(chi_far) else None,
+        "chi_50_150km": _metric_chi(chi_near),
+        "chi_300_600km": _metric_chi(chi_far),
     }
     status = "pass"
     msg = "Pilot extremogram: tail dependence should decay with distance (v3.0: full catalog)"

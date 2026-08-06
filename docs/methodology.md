@@ -8,7 +8,7 @@
 
 The CONUS Hail Catastrophe Model v2.3 is a radar-first probabilistic hail hazard model for the continental United States. It estimates daily hail occurrence, hail-size severity, rare-event return levels, spatially coherent event footprints, and long synthetic event catalogs on a 0.05 degree latitude-longitude grid. The model is designed for hazard research, scenario analysis, and catastrophe-model prototyping. It is not a claims-calibrated loss model.
 
-The central methodological choice is to use radar-derived Maximum Expected Size of Hail (MESH) fields as the primary hazard observation, while reserving SPC hail reports for validation and calibration support. That choice reflects the well-documented non-meteorological bias in human hail reports, including population density, road density, observation practices, report-size rounding, and historical changes in severe-hail reporting thresholds (Allen and Tippett 2015; Blair et al. 2011, 2017). Radar products have their own uncertainties, but they provide spatially continuous observations over rural and urban domains and are therefore better suited to gridded hazard estimation.
+The central methodological choice is to use radar-derived Maximum Expected Size of Hail (MESH) fields as the primary hazard observation, while reserving SPC hail reports for validation only. That choice reflects the well-documented non-meteorological bias in human hail reports, including population density, road density, observation practices, report-size rounding, and historical changes in severe-hail reporting thresholds (Allen and Tippett 2015; Blair et al. 2011, 2017). Radar products have their own uncertainties, but they provide spatially continuous observations over rural and urban domains and are therefore better suited to gridded hazard estimation.
 
 v2.2 changes the temporal definition of daily MESH rasters to **12 UTC → 12 UTC convective days** (§2.6); v2.1 calendar-UTC rasters are not comparable without full re-ingest. **v2.2.2** (§2.7) adopts **`EVENT_ACTIVE_THRESH_MM = 29.0 mm`** for event footprints and era-pooled GridRad calibration after per-cell hail-day diagnostics; **§5.5** adds range-dependent debias and GridRad artifact filtering after radar-artifact QA (2026-07). **v2.3.0** adds GridRad native QC in Stage **04c**, site remediation, refined azimuth bins, and an optional geometry-aware artifact classifier in Stage **05**. v2.1 hardening (sparse Stage 13, manifest provenance, GridRad reflectivity fix, etc.) is retained in the 14 executable pipeline stages (01–13 hazard, **Stage 14 figures**; financial loss remains future work in **methodology §14**).
 
@@ -137,7 +137,7 @@ The spatial domain is CONUS and the target hazard variable is hail size in milli
 
 ### 2.1 Radar-first hazard field
 
-SPC and Storm Data hail reports are indispensable historical records, but they are not an unbiased sampling device. Reports depend on where people are present, where road networks permit observation, how spotters estimate size, how reports are filtered operationally, and how warning criteria changed through time. Report data are therefore suitable for validation, calibration support, and qualitative comparison, but not as the primary gridded hazard field.
+SPC and Storm Data hail reports are indispensable historical records, but they are not an unbiased sampling device. Reports depend on where people are present, where road networks permit observation, how spotters estimate size, how reports are filtered operationally, and how warning criteria changed through time. Report data are therefore suitable for validation and qualitative comparison, but not as a primary gridded hazard field and never as an input that adjusts Stage 05 hazard rasters.
 
 Radar-derived MESH is also imperfect. It is sensitive to radar calibration, beam height, range, vertical sampling, hydrometeor classification, and empirical MESH-to-hail-size relationships. The advantage is that these errors are more directly physical and can be diagnosed as measurement and algorithmic uncertainty. The model therefore treats radar as the primary spatial hazard measurement and reports as a partial, biased observation of surface outcomes.
 
@@ -330,22 +330,22 @@ data/analysis/calibration/hail_filter_model.pkl
 
 If absent, Stage 05 applies deterministic safety floors. The deterministic path is not a second-class mode; it is the reproducible baseline. Hard filters are deliberately simple and should be reviewed as part of the uncertainty budget.
 
-### 5.5 Radar artifact diagnostic, range debias, and GridRad artifact filter (v2.2.2+)
+### 5.5 Radar artifact diagnostic and GridRad artifact filter (v2.2.2+)
 
 GridRad-era MESH can exhibit **NEXRAD range-dependent bias**, **isolated speckle spikes**, and **correlated range-ring/spoke geometry** that propagate into sparse event footprints and stochastic return-period maps. Published hail climatologies address these at **native volume**, **hourly**, and **daily-grid** stages before long-term aggregation (see `literature_review.md` §3.7). v2.2.2 applies automated daily-grid QC in Stage 05 after cross-source calibration.
 
 **Layers (in order within Stage 05):**
 
-1. **Era-pooled quantile mapping** (§5.2) — aligns marginal pixel distributions across sources.
-2. **Range-dependent debias** — `scripts/diagnostics/radar_artifact_diagnostic.py` fits per-era multiplicative factors from **173k+** Stage 06 SPC–MESH pairs binned by distance to the nearest CONUS WSR-88D site (~140 `K*` radars). Factors are normalized to **1.0 at 125 km** and clipped to **[0.45, 1.15]**. Applied when `data/analysis/calibration/range_debias.npz` exists (`--no-range-debias` to disable).
-3. **GridRad artifact filter** (`scripts/_radar_geometry.remove_gridrad_artifacts`) — GridRad days only; disable with `--no-speckle-filter`:
+1. **Era-pooled quantile mapping** (§5.2) — aligns marginal pixel distributions across sources. The archive has no same-day MYRORSS/GridRad overlap; Phase A maps 2005–2011 MYRORSS MESH75 against 2012–2020 GridRad MESH75. This is a versioned assumption checked by source-transition diagnostics, not a same-day overlap transfer.
+2. **GridRad artifact filter** (`scripts/_radar_geometry.remove_gridrad_artifacts`) — GridRad days only; disable with `--no-speckle-filter`:
    - **Isolated speckle** — active cells > **2.5×** local **3×3 median** (≥ 5 mm); Wendt & Jirak (2021)-style isolated-pixel removal.
    - **Radial range ring** — per (nearest radar site, **10 km** range bin), compare annulus median to ±1/±2 neighbor bins **and** the inner-range (≤ **75 km**) baseline for all bins ≥ **50 km**; zero cells above reference + margin when the annulus exceeds **>1.12×** reference (**>1.18×** for range **> 100 km**). The inner baseline catches wide mid-range plateaus (several adjacent bins jointly elevated) that neighbor-only comparison misses—common in Oklahoma / Plains overlap.
    - **Azimuthal annulus** — per (nearest radar site, **10 km** range bin), zero cells > **2.5×** annulus median; targets radial spokes and hot pixels on range rings (WSR-88D azimuth-median analogue in Cartesian space). *(v2.2.3: azimuth pass aligned to 10 km bins; was coarser 25 km edges.)*
    - **Background filament** — **21×21** background median; zero active cells > background + **20 mm** when background < **15 mm**; targets thin rings in quiet areas.
-   - **Spatiotemporal range-ring persistence** — fifth pass on GridRad days only. Stage 05 maintains a **21-day** trailing deque of pre-filter MESH rasters. For each (nearest radar site, **10 km** range bin), annuli active on ≥ **60%** of prior days are flagged; cells active on ≥ **35%** of prior days on those annuli are zeroed unless today exceeds **1.75×** the cell's historical median (burst exception) or the annulus shows a coordinated storm-day uplift (**1.5×** historical annulus median). This implements the daily-grid analogue of multi-scan ring discrimination (Chilson et al. 2018; roost-ring temporal dynamics) without requiring optional ML artifacts. **Site-specific remediation** (`site_remediation=True`, v2.2.3+) runs as a sixth pass on nine QA-flagged WSR-88D domains (KBLX, KDOX, KEMX, KGRR, KGWX, KHPX, KILN, KLRX, KTLX).
-4. **Optional geometry-aware artifact classifier (v2.3.0+)** — when `data/analysis/calibration/artifact_classifier.pkl` exists and ML is not skipped, Stage **05** applies a `GradientBoostingClassifier` trained on Stage **06** SPC weak labels (severe report at cell = positive; high-MESH no-report = negative). Features (`scripts/_artifact_features.py`): MESH, log MESH, local median ratio, range/azimuth to nearest WSR-88D, month, era flags. Cells with artifact probability ≥ **0.65** are zeroed after rule passes. Train with `scripts/train_artifact_classifier.py` or `--retrain-models`. **`--skip-ml`** bypasses; missing artifact → deterministic rules-only path (AGENTS rule #2).
-5. **Environmental filter** and `sanitize_hail_values` — applied after artifact removal.
+   - **Spatiotemporal range-ring persistence** — fifth pass on GridRad days only. Stage 05 maintains a **21-day** trailing deque of pre-filter MESH rasters and writes a resume-safe sidecar (`.tif.prefilter_history.npy`) so skipped existing outputs still rebuild history. For each (nearest radar site, **10 km** range bin), annuli active on ≥ **60%** of prior days are flagged; cells active on ≥ **35%** of prior days on those annuli are zeroed unless today exceeds **1.75×** the cell's historical median (burst exception) or the annulus shows a coordinated storm-day uplift (**1.5×** historical annulus median). This implements the daily-grid analogue of multi-scan ring discrimination (Chilson et al. 2018; roost-ring temporal dynamics) without requiring optional ML artifacts. **Site-specific remediation** (`site_remediation=True`, v2.2.3+) runs as a sixth pass on nine QA-flagged WSR-88D domains (KBLX, KDOX, KEMX, KGRR, KGWX, KHPX, KILN, KLRX, KTLX).
+3. **Environmental filter** and `sanitize_hail_values` — applied after artifact removal.
+
+**Diagnostic SPC tools (not hazard inputs):** `scripts/diagnostics/radar_artifact_diagnostic.py` may fit per-era multiplicative range-debias factors from Stage 06 SPC–MESH pairs (normalized to **1.0 at 125 km**, clipped **[0.45, 1.15]**) into `data/analysis/calibration/range_debias.npz`. `scripts/train_artifact_classifier.py` (or Stage 05 `--retrain-models`) may train a geometry-aware hail-likelihood classifier from Stage 06 weak labels after a deterministic Stage 05 → Stage 06 baseline. Features (`scripts/_artifact_features.py`): MESH, log MESH, local median ratio, range/azimuth to nearest WSR-88D, month, era flags. These artifacts support validation review only. Stage **05** never applies SPC-derived range debias or classifier inference to hazard rasters (AGENTS rule #3). Missing optional ML calibration artifacts or `--skip-ml` selects the complete deterministic rules-only path (AGENTS rule #2).
 
 **Upstream reflectivity QC (Stage 04c, v2.2.3+):** `scripts/_gridrad_qc.py` applies GridRad-native **echo-frequency filtering** (`Necho/Nobs < 0.6` when `Nradobs ≥ 3`) and a **4-step clutter removal** analogue on dense reflectivity before SHI integration (Murillo et al. 2021; Bowman & Homeyer 2017). Disable with `04c --no-gridrad-native-qc`. Re-run **04c** and **05+** after enabling.
 
@@ -521,14 +521,18 @@ Stage 09 writes:
 data/analysis/cdf/threshold_selection.csv
 ```
 
-Candidate thresholds are evaluated using:
+Candidate thresholds are evaluated using four components that are min–max
+normalized to `[0, 1]` within each region and combined with equal **0.25**
+weights:
 
-- exceedance count;
-- mean residual life behavior;
-- stability of `xi`;
-- goodness-of-fit score;
-- numerical stability;
-- selected-flag audit trail.
+- goodness-of-fit (`gof_score`);
+- mean residual life linearity (`mrl_score`);
+- shape-parameter stability (`stability_score`);
+- exceedance-count penalty (`count_penalty`).
+
+`threshold_selection.csv` records raw scores, `*_normalized` columns, the
+composite `score`, and a `selected` / `reason` audit trail
+(`selected_min_score` or `no_valid_candidate_default`).
 
 Long return periods are extrapolations from a short radar record. Even if the fitted maps are smooth and monotonic, uncertainty grows rapidly for 1,000-year and longer return periods.
 
