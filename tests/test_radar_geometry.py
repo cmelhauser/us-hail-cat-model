@@ -219,3 +219,83 @@ def test_remove_flagged_site_artifacts_only_on_remediation_domain():
     assert out[6, 2] == 0.0
     assert out[6, 8] == 50.0
     assert sum(counts.values()) >= 1
+
+
+def test_cell_center_latlon_and_nearest_grids(monkeypatch):
+    import scripts._config as cfg
+    import scripts._radar_geometry as rg
+
+    monkeypatch.setattr(cfg, "NROWS", 4)
+    monkeypatch.setattr(cfg, "NCOLS", 4)
+    monkeypatch.setattr(rg, "NROWS", 4)
+    monkeypatch.setattr(rg, "NCOLS", 4)
+
+    lat, lon = rg.cell_center_latlon()
+    assert lat.shape == (4, 4)
+    dist = rg.nearest_radar_distance_km()
+    assert dist.shape == (4, 4)
+    idx = rg.nearest_nexrad_site_index()
+    assert idx.shape == (4, 4)
+    az = rg.azimuth_to_nearest_site_deg()
+    assert az.shape == (4, 4)
+
+
+def test_ensure_grids_cache_roundtrip(tmp_path: Path):
+    from scripts._radar_geometry import ensure_nearest_site_index_grid, ensure_range_km_grid
+
+    idx_path = tmp_path / "nearest.npy"
+    range_path = tmp_path / "range.npy"
+    idx = ensure_nearest_site_index_grid(idx_path)
+    idx2 = ensure_nearest_site_index_grid(idx_path)
+    assert np.array_equal(idx, idx2)
+    rng = ensure_range_km_grid(range_path)
+    rng2 = ensure_range_km_grid(range_path)
+    assert np.allclose(rng, rng2)
+
+
+def test_write_nexrad_sites_csv(tmp_path: Path):
+    from scripts._radar_geometry import write_nexrad_sites_csv
+
+    out = tmp_path / "sites.csv"
+    write_nexrad_sites_csv(out)
+    text = out.read_text()
+    assert "site_id" in text
+    assert "KTLX" in text
+
+
+def test_fit_range_debias_skips_low_mesh_and_report():
+    from scripts._radar_geometry import fit_range_debias_factors
+
+    pairs = [
+        {"date": "20150601", "lat": 35.0, "lon": -97.0, "spc_size_in": 0.5, "mesh75_mm": 40.0},
+        {"date": "20150601", "lat": 35.0, "lon": -97.0, "spc_size_in": 1.5, "mesh75_mm": 10.0},
+    ]
+    fit = fit_range_debias_factors(pairs, min_report_in=1.0, min_mesh_mm=25.0)
+    assert fit["n_pairs"]["GridRad"] == 0
+
+
+def test_load_range_debias_missing(tmp_path: Path):
+    from scripts._radar_geometry import load_range_debias
+
+    assert load_range_debias(tmp_path / "missing.npz") is None
+
+
+def test_remove_persistent_range_bad_history_shape():
+    from scripts._radar_geometry import remove_persistent_range_artifacts
+
+    data = np.full((4, 4), 40.0, dtype=np.float32)
+    site_idx = np.zeros((4, 4), dtype=np.int16)
+    range_km = np.full((4, 4), 50.0, dtype=np.float32)
+    out, n = remove_persistent_range_artifacts(data, site_idx, range_km, history=None)
+    assert n == 0
+    assert np.all(out == data)
+
+
+def test_remove_site_polar_spokes_no_remediation_sites():
+    from scripts._radar_geometry import remove_site_polar_spokes
+
+    data = np.full((6, 6), 40.0, dtype=np.float32)
+    site_idx = np.zeros((6, 6), dtype=np.int16)
+    range_km = np.full((6, 6), 50.0, dtype=np.float32)
+    out, n = remove_site_polar_spokes(data, site_idx, range_km, site_ids=())
+    assert n == 0

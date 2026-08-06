@@ -12,7 +12,7 @@ This project builds a radar-based hail catastrophe hazard layer for the continen
 
 The model uses radar-derived Maximum Expected Size of Hail (MESH) observations from MYRORSS, GridRad / GridRad-Severe, and operational MRMS. These datasets allow the model to estimate hail hazard across both populated and rural areas, including places where human reports are sparse or absent.
 
-SPC reports remain important, but they are used only for validation and calibration support. They are not the primary hazard source because reported hail data are affected by non-meteorological factors including population density, road networks, spotter networks, time of day, and hail-size rounding.
+SPC reports remain important, but they are used only for validation. They are not a hazard input and are never applied to Stage 05 hazard rasters because reported hail data are affected by non-meteorological factors including population density, road networks, spotter networks, time of day, and hail-size rounding.
 
 ---
 
@@ -43,7 +43,7 @@ The main goal of v2.1 is not to add complexity for its own sake. The goal is to 
 
 ### Bias correction
 
-Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.2+** adds a **five-core-pass GridRad artifact filter** plus default-on site remediation (isolated speckle, inner-range radial ring, azimuthal annulus, background filament, spatiotemporal persistence) to reduce NEXRAD ring artifacts in return-period maps (see `docs/methodology.md` §5.5). SPC-collocated **range debias** and the hail-likelihood classifier are **research-only** (`--allow-spc-derived-adjustments`). Historical GridRad speckle fell from **9.7%** to **1.8%** mean after the four-pass filter (2026-07-06 diagnostic; refresh after the verified v2.3.0 run); persistence pass 5 targets chronic range rings.
+Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.2+** adds a **five-core-pass GridRad artifact filter** plus default-on site remediation (isolated speckle, inner-range radial ring, azimuthal annulus, background filament, spatiotemporal persistence) to reduce NEXRAD ring artifacts in return-period maps (see `docs/methodology.md` §5.5). SPC-collocated **range debias** fits and the hail-likelihood classifier remain **diagnostic only** — SPC is never applied to hazard rasters. Historical GridRad speckle fell from **9.7%** to **1.8%** mean after the four-pass filter (2026-07-06 diagnostic; refresh after the verified v2.3.0 run); persistence pass 5 targets chronic range rings.
 
 ### Environmental filtering
 

@@ -86,8 +86,9 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 
 try:
     from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS, N_REGIONS_DEFAULT, GPD_THRESH_MM_DEFAULT, NODATA
-    from _io import write_geotiff
     from _logging import get_logger
+    from _io import write_geotiff
+
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, RP_YEARS, N_REGIONS_DEFAULT, GPD_THRESH_MM_DEFAULT, NODATA
     from scripts._io import write_geotiff

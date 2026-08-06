@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -96,6 +99,10 @@ Methods describe configured stages without claiming run completion.
 
 Thanks.
 
+## Competing Interests
+
+None.
+
 ## References
 
 Reference.
@@ -126,11 +133,11 @@ def test_partial_publication_has_pending_state_and_no_stale_claims(
     assert "**456** sparse historical events" in text
     assert "## Author Line" in text
     assert "## AI-Assisted Development Process" in text
-    assert (
-        "optional research-only spc-derived adjustments" in text.lower()
-        or "optional research hail-likelihood classifier" in text.lower()
-        or "five core artifact-filter passes + site remediation" in text.lower()
-    )
+    assert "## Acknowledgments" in text
+    assert "## Competing Interests" in text
+    assert "SPC reports remain validation-only" in text
+    assert "random 80/20" not in text.lower()
+    assert "--allow-spc-derived-adjustments" not in text
     for stale in ("173,766", "8,798", "7,792", "303 yr", "269 yr", "11.7", "9.7%", "1.8%"):
         assert stale not in text
 
@@ -181,3 +188,111 @@ def test_renderer_source_contains_no_superseded_metric_constants():
 
     for stale in ("173,766", "8,798", "7,792", "303.4", "268.7", "11.7", "9.7%"):
         assert stale not in source
+
+
+def test_load_metrics_and_extractors(tmp_path: Path, monkeypatch, metrics: dict):
+    metrics_path = tmp_path / "metrics.json"
+    metrics_path.write_text(json.dumps(metrics))
+    draft = tmp_path / "draft.md"
+    draft.write_text(
+        "## Introduction\n\nIntro text.\n\n## Conceptual Framework\n\n"
+        "Representative AI-assisted interventions are summarized in Table 1.\n\n"
+        "| # | Issue | Evidence | Patch | Validation | Residual risk |\n"
+        "|---|---|---|---|---|---|\n| 1 | x | y | z | a | b |\n\n"
+        "## Materials and Methods\n\nMethods.\n\n## Acknowledgments\n\nThanks.\n"
+    )
+    monkeypatch.setattr(publication, "METRICS_PATH", metrics_path)
+    monkeypatch.setattr(publication, "DRAFT_PATH", draft)
+    monkeypatch.setattr(publication, "OUT_PATH", tmp_path / "out.md")
+    monkeypatch.setattr(publication, "FIG_DIR", tmp_path / "figs")
+
+    loaded = publication.load_metrics()
+    assert loaded["total_daily_rasters"] == 4
+    assert publication.extract_section(draft.read_text(), "## Missing") == ""
+    assert "Intro text" in publication.extract_section(draft.read_text(), "## Introduction", "## Conceptual")
+    assert publication.extract_heading_section(draft.read_text(), "## Acknowledgments")
+    table = publication.extract_ai_process_table(draft.read_text())
+    assert "AI-Assisted Development Process" in table
+
+
+def test_fmt_and_stochastic_branches(metrics: dict):
+    assert publication._fmt(None) == "—"
+    assert publication._fmt(True) == "True"
+    assert publication._fmt(1234.5, decimals=1) == "1,234.5"
+    assert publication._fmt("text") == "text"
+
+    metrics["stochastic"]["status"] = "not_available"
+    assert "pending" in publication._stochastic_results(metrics)
+    metrics["stochastic"]["status"] = "partial"
+    metrics["stochastic"]["available_return_period_maps"] = [100]
+    assert "partial" in publication._stochastic_results(metrics)
+
+
+def test_build_sections_with_sparse_metrics(draft: str):
+    sparse = {"generated": "2026-01-01", "stochastic": {"complete": False, "status": "pending"}}
+    assert "pending" in publication.build_abstract(sparse)
+    assert "pending" in publication.build_results(sparse)
+    assert "pending" in publication.build_discussion(sparse)
+    assert "unavailable" in publication.build_limitations(sparse)
+
+
+def test_fig_block_available(tmp_path: Path, monkeypatch):
+    fig_dir = tmp_path / "figs"
+    fig_dir.mkdir()
+    (fig_dir / "fig01.png").write_bytes(b"x")
+    monkeypatch.setattr(publication, "FIG_DIR", fig_dir)
+    block = publication.fig_block("fig01.png", "Figure 1", "Caption")
+    assert "![Figure 1]" in block
+
+
+def test_main_writes_publication(tmp_path: Path, monkeypatch, metrics: dict, draft: str):
+    metrics_path = tmp_path / "metrics.json"
+    metrics_path.write_text(json.dumps(metrics))
+    draft_path = tmp_path / "draft.md"
+    draft_path.write_text(draft)
+    out_path = tmp_path / "pub.md"
+    monkeypatch.setattr(publication, "METRICS_PATH", metrics_path)
+    monkeypatch.setattr(publication, "DRAFT_PATH", draft_path)
+    monkeypatch.setattr(publication, "OUT_PATH", out_path)
+    monkeypatch.setattr(publication, "FIG_DIR", tmp_path / "figs")
+    publication.main()
+    assert out_path.exists()
+
+
+def test_extract_helpers_edge_cases():
+    draft = "## Introduction\n\nText only.\n"
+    assert publication.extract_section(draft, "## Missing", "## Also") == ""
+    assert publication.extract_heading_section(draft, "## Missing") == ""
+    assert publication.extract_ai_process_table("no table here") == ""
+
+    broken = "Representative AI-assisted interventions are summarized in Table 1.\n\n| x |\n"
+    assert publication.extract_ai_process_table(broken) == ""
+
+
+def test_load_metrics_missing(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(publication, "METRICS_PATH", tmp_path / "missing.json")
+    with pytest.raises(FileNotFoundError):
+        publication.load_metrics()
+
+
+def test_main_invokes_review_docx(tmp_path: Path, monkeypatch, metrics: dict, draft: str):
+    metrics_path = tmp_path / "metrics.json"
+    metrics_path.write_text(json.dumps(metrics))
+    draft_path = tmp_path / "draft.md"
+    draft_path.write_text(draft)
+    out_path = tmp_path / "pub.md"
+    monkeypatch.setattr(publication, "METRICS_PATH", metrics_path)
+    monkeypatch.setattr(publication, "DRAFT_PATH", draft_path)
+    monkeypatch.setattr(publication, "OUT_PATH", out_path)
+    monkeypatch.setattr(publication, "FIG_DIR", tmp_path / "figs")
+
+    called = {"n": 0}
+
+    def fake_review():
+        called["n"] += 1
+
+    fake_mod = types.ModuleType("scripts.diagnostics.render_pnas_review_docx")
+    fake_mod.main = fake_review
+    monkeypatch.setitem(sys.modules, "scripts.diagnostics.render_pnas_review_docx", fake_mod)
+    publication.main()
+    assert called["n"] == 1

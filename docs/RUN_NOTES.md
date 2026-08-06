@@ -45,30 +45,28 @@ tail -n 100 logs/04c_fill_gridrad_gap.log
 Treat missing screen sessions or stale logs as evidence to inspect outputs, not
 as proof that a run either failed or completed.
 
-If inspection confirms that the v2.3.0 rebuild still needs to be run, use the
-two-pass classifier workflow:
+If inspection confirms that the v2.3.0 rebuild still needs to be run:
 
 1. Rebuild Stage 04c with native GridRad QC, then run a deterministic Stage 05
    baseline (`--skip-ml`) and Stage 06. Stage 05 applies **five core artifact
    passes plus site-specific remediation as a sixth layer, enabled by default**.
-2. Only after Stage 06 has produced `mesh_vs_spc_pairs.csv`, train the optional
-   research classifier with `scripts/train_artifact_classifier.py`.
-3. Review classifier diagnostics. If the classifier is accepted for the
-   research run, clean Stage 05+ outputs, rerun Stage 05 with
-   `--allow-spc-derived-adjustments` (and without `--skip-ml`), and continue
-   through Stage 14. Otherwise continue with the deterministic baseline.
+   SPC is validation-only and is **never** applied to hazard rasters.
+2. Optionally, after Stage 06 has produced `mesh_vs_spc_pairs.csv`, train a
+   diagnostic classifier with `scripts/train_artifact_classifier.py` (or
+   Stage 05 `--retrain-models`) and review diagnostics. Training does not
+   change Stage 05 hazard outputs.
+3. Continue the deterministic Stage 05 baseline through Stage 14.
 
 ```bash
 # Run only after state inspection confirms these outputs need rebuilding.
 .venv/bin/python run_pipeline.py --only 04c --clean-from 04c
 .venv/bin/python run_pipeline.py --only 05 --skip-ml
 .venv/bin/python run_pipeline.py --only 06 --skip-ml
+# Optional diagnostic only (does not feed Stage 05 hazard rasters):
 .venv/bin/python scripts/train_artifact_classifier.py
-# Optional accepted research path (SPC-derived adjustments opt-in):
-.venv/bin/python run_pipeline.py --from 05 --clean-from 05 --allow-spc-derived-adjustments
 ```
 
-After either accepted final path, run the Stage 13 sparse-safe smoke before the
+After the accepted path, run the Stage 13 sparse-safe smoke before the
 full catalog, validate all outputs, and regenerate diagnostics:
 
 ```bash
@@ -264,7 +262,7 @@ See `aws/README.md` and `docs/reproduce.md` §14. This does not replace the loca
 
 ## Current Next Actions
 
-Use only the ordered verification and two-pass workflow in **Canonical Current
+Use only the ordered verification and rebuild workflow in **Canonical Current
 Run State** above. Historical stage-completion statements in this file do not
 authorize skipping verification or deleting outputs. Refresh the canonical
 section after the next operator verifies the run state.

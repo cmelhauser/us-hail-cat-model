@@ -30,7 +30,7 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 
 **Active development branch:** `v2.3.0` on `origin` (`cmelhauser/us-hail-cat-model`). Model version **2.3.0** (`scripts/_config.py` / `pyproject.toml`). CI runs on pushes and PRs to `main` and `v*` branches.
 
-Version 2.2+ uses **12 UTC → 12 UTC convective days**. **v2.2.1** introduced literature-aligned severe-hail thresholds and era-pooled GridRad calibration (`docs/methodology.md` §2.7). **v2.2.2** added range debias and GridRad artifact filtering (§5.5). **v2.3.0** adds GridRad native QC (04c), site remediation, 10 km azimuth bins, and an optional geometry-aware artifact classifier (Stage 05 / `train_artifact_classifier.py`).
+Version 2.2+ uses **12 UTC → 12 UTC convective days**. **v2.2.1** introduced literature-aligned severe-hail thresholds and era-pooled GridRad calibration (`docs/methodology.md` §2.7). **v2.2.2** added GridRad artifact filtering and a diagnostic range-debias fit (§5.5). **v2.3.0** adds GridRad native QC (04c), site remediation, 10 km azimuth bins, and an optional diagnostic artifact classifier (`train_artifact_classifier.py`; never applied to hazard rasters). SPC remains validation-only.
 
 **Preferred thresholds (v2.3.0):**
 
@@ -39,8 +39,8 @@ Version 2.2+ uses **12 UTC → 12 UTC convective days**. **v2.2.1** introduced l
 | `EVENT_ACTIVE_THRESH_MM` | **29.0 mm** | Stage 08 event footprints; Stage 05 subtropical winter filter |
 | `DAMAGE_THRESH_MM` | 25.4 mm | Damage onset; occurrence products and Stage 13 severe-cell counts |
 | GridRad calibration | era-pooled QM | MYRORSS 2005–2011 vs GridRad 2012–2019 (median ratio ~1.10) |
-| Range debias | SPC-collocated | Per-era multiplicative factors vs nearest-radar distance (125 km reference) |
-| GridRad artifact filter | Five core passes + site remediation sixth layer (default on) + optional research classifier | GridRad days, Stage 05; see `methodology.md` §5.5 and `docs/radar_artifact_ml_plan.md` |
+| Range debias (diagnostic) | SPC-collocated pairs | Per-era factors vs nearest-radar distance; fit only — never applied to Stage 05 hazard rasters |
+| GridRad artifact filter | Five core passes + site remediation sixth layer (default on) | GridRad days, Stage 05; see `methodology.md` §5.5. Optional classifier training is diagnostic only (`docs/radar_artifact_ml_plan.md`) |
 
 The model produces:
 
@@ -210,9 +210,10 @@ python run_pipeline.py --only 05 --skip-ml --skip-calibration
 
 This deterministic baseline uses five core GridRad artifact passes plus
 site-specific remediation as a sixth layer, enabled by default. Run Stage 06
-after the baseline; only then can `train_artifact_classifier.py` use the
-resulting SPC–MESH pairs. The optional research-classifier pass requires
-reviewing its diagnostics and rerunning Stage 05+ without `--skip-ml`.
+after the baseline; only then can `train_artifact_classifier.py` (or
+`--retrain-models`) train a diagnostic classifier from SPC–MESH pairs.
+Classifier training and range-debias fits are validation/diagnostic tools —
+SPC is never applied to hazard rasters.
 
 **Stage 05 rebuild after filter or debias changes** (blocking; cleans Stages 05–14 outputs):
 

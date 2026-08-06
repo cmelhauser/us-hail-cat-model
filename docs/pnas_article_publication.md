@@ -8,10 +8,14 @@
 > `.venv/bin/python scripts/diagnostics/render_pnas_publication_md.py`.
 > Current draft methods live in `docs/pnas_article_ai_hail_model.md`.
 
-**Publication manuscript (PNAS-style)**  
-**Model version:** 2.2.2 (stale render; live codebase is 2.3.0)  
-**Metrics freeze:** 2026-07-09 11:47:13  
-**Code:** [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model)  
+**Publication manuscript (PNAS-style)**
+
+**Model version:** 2.2.2 (stale render; live codebase is 2.3.0)
+
+**Metrics freeze:** 2026-07-09 11:47:13
+
+**Code:** [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model)
+
 **Corresponding author:** Christopher Melhauser (christopher.melhauser@gmail.com)
 
 ---

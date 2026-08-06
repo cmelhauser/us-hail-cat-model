@@ -282,26 +282,26 @@ Optional probabilistic hail-realness model.
 
 ### `artifact_classifier.pkl`
 
-Optional GridRad **hail-likelihood** classifier (v2.3.0+; research-only). Path:
+Optional GridRad **hail-likelihood** classifier artifact (v2.3.0+; **diagnostic
+only**). Path:
 
 ```text
 data/analysis/calibration/artifact_classifier.pkl
 ```
 
-Trained by `scripts/train_artifact_classifier.py` from Stage **06** SPC–MESH
-pairs (GridRad-era pairs by default; year-grouped holdout). Required order:
-deterministic Stage 05 baseline (`--skip-ml`) → Stage 06 → train and review
-classifier → optional clean Stage 05+ rerun with
-`--allow-spc-derived-adjustments` (and without `--skip-ml`). Stage **05**
-applies the classifier to **GridRad days only**, after five core rule passes
-plus default-on site remediation, by multiplicatively down-weighting active
-cells with predicted hail likelihood (not a hard 0.65 zeroing). Missing file,
-`--skip-ml`, or omitting `--allow-spc-derived-adjustments` selects the complete
-deterministic path (SPC remains validation-only).
+Trained by `scripts/train_artifact_classifier.py` (or Stage 05
+`--retrain-models`) from Stage **06** SPC–MESH pairs (GridRad-era pairs by
+default; year-grouped holdout). Required order for training: deterministic
+Stage 05 baseline (`--skip-ml`) → Stage 06 → train and review. Stage **05**
+never applies this classifier to hazard rasters (AGENTS rule #3). Missing file
+or `--skip-ml` selects the complete deterministic path; SPC remains
+validation-only.
 
 ### `data/analysis/calibration/range_debias.npz`
 
-Range-dependent multiplicative debias table from SPC–MESH pairs (via `radar_artifact_diagnostic.py`).
+Range-dependent multiplicative debias table from SPC–MESH pairs (via
+`radar_artifact_diagnostic.py`). **Diagnostic artifact only** — Stage 05 never
+applies it to hazard rasters.
 
 Arrays:
 
@@ -314,9 +314,8 @@ factor_mrms
 reference_range_km
 ```
 
-Stage 05 applies only when `--allow-spc-derived-adjustments` is set and the
-file exists (`--no-range-debias` disables even then). Factors normalized to
-**1.0 at 125 km**; clipped **[0.45, 1.15]**.
+Factors are normalized to **1.0 at 125 km** and clipped **[0.45, 1.15]** for
+diagnostic review of range-dependent SPC/MESH ratios.
 
 ### `data/analysis/calibration/nearest_radar_distance_km.npy`
 
@@ -365,11 +364,19 @@ Arrays:
 
 ### `threshold_selection.csv`
 
-Recommended columns:
+Emitted columns (Stage 09):
 
 ```text
-region, candidate_threshold_mm, selected, n_exceedances, xi, sigma, mrl_score, stability_score, gof_score
+region, candidate_threshold_mm, selected, n_exceedances, xi, sigma,
+mrl_score, stability_score, gof_score, count_penalty,
+mrl_score_normalized, stability_score_normalized,
+gof_score_normalized, count_penalty_normalized, score, reason
 ```
+
+Raw components are min–max normalized to `[0, 1]` within each region; the
+composite `score` uses equal **0.25** weights. Selected row:
+`reason=selected_min_score`. Fallback when no valid candidate:
+`reason=no_valid_candidate_default` (normalized columns may be absent).
 
 ### `rp_XXXXXyr_hail.tif`
 

@@ -211,12 +211,23 @@ Results:
   50,000-year outputs require a production rerun/validation.
 - Zenodo DOI and exact manuscript commit SHA require external release actions.
 
-## Suggested Grok order
+## Remediation status (2026-08-06 close-out)
 
-1. Decide P1 SPC policy first; it controls code, docs, and manuscript claims.
-2. Fix the two Stage 04c P1 defects and add resume/failure tests.
-3. Make Stage 13 validation distinguish smoke from production.
-4. Fix the Stage 05 sidecar fallback.
-5. Correct PNAS disclosure/section retention.
-6. Synchronize operator and Stage 09 documentation.
-7. Clear Ruff and whitespace checks, then rerun the complete verification set.
+All P1–P3 findings above are **fixed** in the tree:
+
+| Finding | Resolution |
+|---------|------------|
+| P1 SPC policy | Stage 05 no longer applies SPC range debias / classifier to hazard rasters; `--allow-spc-derived-adjustments` removed; SPC remains validation-only |
+| P1 04c all-read-fail | `process_day` returns day-level `error` when every source file fails; no success GeoTIFF |
+| P1 04c provenance | Skip/rebuild with empty staging preserves prior manifest provenance or uses `unknown_after_cleanup` |
+| P1 Stage 13 smoke | `stochastic_catalog_manifest.json` + production validation require `n_years == N_SIM_YEARS` |
+| P2 Stage 05 sidecar | Reconstruct via `apply_optional_cqm`; atomic sidecar writes |
+| P2 PNAS disclosure | Year-grouped holdout text from diagnostics; no “random 80/20” |
+| P2 Acknowledgments | Publication renderer emits Acknowledgments + Competing Interests |
+| P2 operator docs | Opt-in SPC hazard path instructions removed |
+| P2 Stage 09 docs | Normalized equal-weight score + schema documented |
+| P3 Ruff / whitespace | Clean `ruff check .` and `git diff --check` |
+
+Coverage gates: `scripts` + `run_pipeline` **100%**; AWS `hail_aws` **100%**.
+External blockers (verified 04c→14 rebuild, metrics JSON, Zenodo) remain unchanged.
+

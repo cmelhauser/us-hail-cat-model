@@ -54,8 +54,9 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 
 try:
     from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, EVENT_ACTIVE_THRESH_MM, MAX_CENTROID_KM_DAY, MAX_INTENSITY_RATIO
-    from _io import haversine_km
     from _logging import get_logger
+    from _io import haversine_km
+
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, DAMAGE_THRESH_MM, EVENT_ACTIVE_THRESH_MM, MAX_CENTROID_KM_DAY, MAX_INTENSITY_RATIO
     from scripts._io import haversine_km

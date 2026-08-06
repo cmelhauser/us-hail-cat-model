@@ -129,9 +129,9 @@ def build_training_sets(
 
     med_cache: dict[str, np.ndarray] = {}
     for datestr, row, col in pos_keys:
-        if datestr not in cache:
-            cache[datestr] = _load_raster(datestr)
-        raster = cache[datestr]
+        # Dates in pos_keys are always visited in the negative loop above, so the
+        # raster is already cached (including None for missing files).
+        raster = cache.get(datestr)
         if raster is None:
             continue
         cell_mesh = float(raster[row, col])

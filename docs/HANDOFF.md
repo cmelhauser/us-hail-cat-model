@@ -62,7 +62,7 @@ scripts/_radar_geometry.py                       ← NEXRAD sites, debias, five 
 scripts/_gridrad_qc.py                            ← native GridRad echo-frequency/clutter QC
 scripts/_artifact_features.py                     ← optional classifier geometry features
 scripts/_pipeline_cleanup.py                     ← delete Stage N+ outputs (--clean-from / rerun)
-scripts/train_artifact_classifier.py              ← train after deterministic Stage 05 + Stage 06
+scripts/train_artifact_classifier.py              ← diagnostic train after Stage 05 + 06 (not a hazard path)
 scripts/rerun_stage05.py                         ← blocking Stage 05 rebuild (wait, clean 05+, run)
 
 scripts/_config.py   ← all grid constants, paths, EVT defaults (wired into all stage scripts)
@@ -71,7 +71,7 @@ scripts/_io.py       ← shared write_geotiff (optional GDAL tags), haversine_km
 scripts/_mapping.py  ← Lambert Conformal CONUS maps, admin_0/admin_1 boundaries (Stage 14 + diagnostics)
 ```
 
-Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--allow-spc-derived-adjustments] [--skip-calibration] [--clean-from N] [--retrain-models]`
+Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [--validate] [--skip-ml] [--skip-calibration] [--clean-from N] [--retrain-models]`
 
 ---
 
@@ -79,7 +79,7 @@ Runner: `python run_pipeline.py [--from N] [--only N] [--skip N,N] [--dry-run] [
 
 1. **Stage 13 must be sparse-safe.** No `(n_events, 520, 1180)` arrays. Translation, scaling, and perturbation operate on `rows, cols, vals` only.
 2. **Stage 05 must have a deterministic fallback.** `--skip-ml` must produce complete valid output with no ML artifacts.
-3. **SPC = validation only.** Never a hazard input.
+3. **SPC = validation only.** Never a hazard input; never applied to Stage 05 hazard rasters.
 4. **`event_peaks.npz`** (rows/cols/vals per event_id) is the authoritative event store.
 5. **0.05° grid is fixed.** Convective-day definition (12 UTC start) is versioned in v2.2; see `docs/methodology.md` §2.6.
 6. **Never commit data files.** `.tif`, `.npy`, `.npz`, `.grib2`, `.parquet`, diagnostic CSV/PNG outputs, and all of `data/` are gitignored.
@@ -166,14 +166,14 @@ reuse the historical 28-file inventory.
 ## Current Pipeline Run Status
 
 Status is **unverified since 2026-07-09**. The canonical state, verification
-commands, and two-pass deterministic-baseline → Stage 06 → optional-classifier
-workflow live only in
+commands, and Stage 05 → Stage 06 workflow live only in
 [`RUN_NOTES.md`](RUN_NOTES.md#canonical-current-run-state). Do not resume a
 historical screen command or infer completion from the snapshots below.
 
 Stage 05 terminology: five core GridRad artifact passes plus site-specific
-remediation as a sixth layer, enabled by default; the geometry-aware classifier
-is optional research functionality trained only after Stage 06 pairs exist.
+remediation as a sixth layer, enabled by default. SPC is never applied to
+hazard rasters. Optional `train_artifact_classifier.py` / `--retrain-models`
+training after Stage 06 is diagnostic only.
 
 ---
 

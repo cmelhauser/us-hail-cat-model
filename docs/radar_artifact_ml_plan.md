@@ -26,11 +26,11 @@ Stages **09–13**.
 | Item | Location |
 |------|----------|
 | Geometry feature builder | `scripts/_artifact_features.py` |
-| SPC weak-label trainer | `scripts/train_artifact_classifier.py` |
-| Optional Stage **05** classifier | `data/analysis/calibration/artifact_classifier.pkl` |
+| SPC weak-label trainer (diagnostic) | `scripts/train_artifact_classifier.py` |
+| Diagnostic classifier artifact | `data/analysis/calibration/artifact_classifier.pkl` |
 | Ring metric on RP maps | `literature_validation_suite.py` → `rp_ring_energy` |
 
-**Training** (after Stage **06**):
+**Training** (after Stage **06**; diagnostic only — never applied to hazard rasters):
 
 ```bash
 .venv/bin/python scripts/train_artifact_classifier.py
@@ -38,11 +38,10 @@ Stages **09–13**.
 .venv/bin/python scripts/05_apply_mesh_bias_correction.py --retrain-models
 ```
 
-**Inference:** pass `--allow-spc-derived-adjustments` on Stage **05** (and omit
-`--skip-ml`) when `artifact_classifier.pkl` exists. The classifier is GridRad-only
-and multiplicatively down-weights by predicted hail likelihood. Default Stage 05
-keeps SPC validation-only. `--skip-ml` remains the deterministic reproducible
-baseline (AGENTS.md rule #2).
+**Inference:** Stage **05** does **not** apply the classifier (or SPC-derived
+range debias) to hazard rasters. SPC remains validation-only (AGENTS.md rule
+#3). `--skip-ml` remains the deterministic reproducible baseline (AGENTS.md
+rule #2).
 
 ### Tier 2 (v3.0 research)
 
@@ -69,7 +68,7 @@ Labels: SPC severe reports (positive); high-MESH no-report cells (negative).
 ## Ablation plan (manuscript)
 
 1. Rules only (`--skip-ml`, pre–v2.2.3 archive)
-2. Rules + Tier 0 (v2.2.3, no classifier)
-3. Rules + Tier 0 + classifier (v2.3.0 research path with `--allow-spc-derived-adjustments`)
+2. Rules + Tier 0 (v2.2.3 / v2.3.0 production path; no SPC hazard adjustments)
+3. Diagnostic classifier trained and reviewed separately (does not alter Stage 05 rasters)
 
 Compare ring maps, validation metrics, and RP peaks under fixed 0–10″ color scale.

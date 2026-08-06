@@ -258,10 +258,10 @@ After Stage 05 and Stage 06 validation pairs exist:
 ```
 
 Writes `data/analysis/radar_artifacts/` (range maps, speckle scores, source-era
-comparisons) and fits `data/analysis/calibration/range_debias.npz` from SPC
-collocated pairs. Stage 05 applies range debias only with
-`--allow-spc-derived-adjustments` when that file exists (`--no-range-debias` to
-disable even then). Its deterministic GridRad QC is five core passes—isolated
+comparisons) and may fit `data/analysis/calibration/range_debias.npz` from SPC
+collocated pairs for **diagnostic review only**. Stage 05 does **not** apply
+range debias or any SPC-derived adjustment to hazard rasters (AGENTS rule #3).
+Its deterministic GridRad QC is five core passes—isolated
 speckle, radial range ring, azimuthal annulus, quiet-background filament, and
 spatiotemporal range-ring persistence—plus site-specific remediation as a sixth
 layer, enabled by default (`--no-speckle-filter` disables the full rule-based
@@ -269,17 +269,14 @@ layer). Persistence history is resume-safe via per-day prefilter sidecars.
 
 The 2026-07-08 metrics were historical, pre-v2.3.0 snapshots and require
 post-run refresh. After the deterministic Stage 05 baseline and Stage 06,
-rerun this diagnostic to refit `range_debias.npz`; if factors change materially
-and SPC-derived adjustments are accepted for a research path, clean Stage 05+
-outputs and rerun with `--allow-spc-derived-adjustments` before downstream
-stages.
+rerun this diagnostic to refresh range-debias factor tables and ring maps for
+QA; do not treat those factors as a Stage 05 hazard-input path.
 
 ## 6. Stage 05 Modes
 
 **v2.3.0 rerun:** Stage 05 skips days whose corrected GeoTIFF already exists.
-To apply era-pooled GridRad calibration, the 29 mm winter filter, updated
-`range_debias.npz`, site-remediation changes, or a reviewed classifier, clean
-Stage 05+ outputs first.
+To apply era-pooled GridRad calibration, the 29 mm winter filter, or
+site-remediation changes, clean Stage 05+ outputs first.
 
 ```bash
 rm -rf data/historical/mesh_0.05deg_corrected/
@@ -297,16 +294,15 @@ Force deterministic fallback:
 python run_pipeline.py --only 05 --skip-ml
 ```
 
-Use `--skip-ml` for the deterministic baseline. Run Stage 06 next; only then
-train the optional geometry-aware research classifier from
-`mesh_vs_spc_pairs.csv`:
+Use `--skip-ml` for the deterministic baseline. Run Stage 06 next; optionally
+train a diagnostic classifier from `mesh_vs_spc_pairs.csv` (never applied to
+hazard rasters):
 
 ```bash
 python run_pipeline.py --only 05 --skip-ml
 python run_pipeline.py --only 06 --skip-ml
 python scripts/train_artifact_classifier.py
-# After reviewing classifier diagnostics, optional research path:
-python run_pipeline.py --from 05 --clean-from 05 --allow-spc-derived-adjustments
+# or: python run_pipeline.py --only 05 --retrain-models
 ```
 
 External model retraining workflow:

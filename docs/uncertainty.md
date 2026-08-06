@@ -55,17 +55,18 @@ days in that snapshot):**
 | GridRad / MYRORSS mid-range ratio | ~2× | ~1.7× | ~1.7× |
 
 **Current treatment:** Stage 05 applies **five core GridRad artifact passes**
-and site-specific remediation as a sixth layer, enabled by default. SPC-collocated
-**range debias** (`range_debias.npz`) and the optional geometry-aware
-hail-likelihood classifier are **research-only** and off unless
-`--allow-spc-derived-adjustments` is passed (and `--skip-ml` is not). The
-classifier is trained only after a deterministic Stage 05 baseline and Stage 06,
-and is applied to GridRad days only. Run status is unverified since 2026-07-09;
-refresh `radar_artifact_diagnostic.py` difference maps and every quantitative
-value in the table after the v2.3.0 run is verified. The 1.8% mean applies only
-to the historical pre–eastern-fix archive.
+and site-specific remediation as a sixth layer, enabled by default.
+SPC-collocated **range debias** (`range_debias.npz`) and the optional
+geometry-aware hail-likelihood classifier are **diagnostic artifacts only**;
+Stage 05 never applies them to hazard rasters (AGENTS rule #3). Classifier
+training (`train_artifact_classifier.py` / `--retrain-models`) may follow a
+deterministic Stage 05 baseline and Stage 06 for review, but is not a
+hazard-input path. Run status is unverified since 2026-07-09; refresh
+`radar_artifact_diagnostic.py` difference maps and every quantitative value in
+the table after the v2.3.0 run is verified. The 1.8% mean applies only to the
+historical pre–eastern-fix archive.
 Residual broad GridRad−MYRORSS climatological offsets may remain in era-comparison
-diagnostics. Re-run Stages 06–14 after debias / MYRORSS fixes.
+diagnostics. Re-run Stages 06–14 after MYRORSS / filter fixes as needed.
 
 ### 1.3 MESH75 formula residuals
 
@@ -255,16 +256,28 @@ the bootstrap CIs.
 
 ### 4.2 GPD threshold selection
 
-Stage 09 selects the GPD threshold using a composite score of KS goodness-of-fit,
-MRL stability, exceedance count, and shape parameter stability. The four
-components have different units and are summed without normalisation. This means
-the relative weight of each component depends on regional sample size.
+Stage 09 selects the GPD threshold using a composite score of four components:
+KS goodness-of-fit (`gof_score`), MRL linearity (`mrl_score`), shape-parameter
+stability (`stability_score`), and exceedance-count penalty (`count_penalty`).
+Within each region, each raw component is min–max normalized to `[0, 1]`
+(non-finite values receive the worst score 1.0). The composite is:
 
-**Current treatment:** Unweighted composite score. Threshold diagnostics are
-written to `threshold_selection.csv` for manual review.
+```text
+score = 0.25 * (
+    gof_score_normalized
+  + mrl_score_normalized
+  + stability_score_normalized
+  + count_penalty_normalized
+)
+```
 
-**Recommended improvement (v2.3.x):** Normalize all components to [0, 1] before
-summing; document the resulting weights in `docs/methodology.md §09`.
+The selected threshold minimizes `score`. Diagnostics (including all raw,
+`*_normalized`, and `score` columns) are written to `threshold_selection.csv`.
+
+**Current treatment:** Equal-weight normalized composite as implemented in
+`scripts/09_fit_cdf_regional.py`. Residual risk: equal weights are a modeling
+choice and may still deserve sensitivity review across regions with very
+different sample sizes.
 
 ### 4.3 Regional ξ pooling (K-means, k=6)
 

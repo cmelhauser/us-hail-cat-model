@@ -159,9 +159,8 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --validate         # re-run output validation for all stages
 --skip-ml          # force deterministic fallback in Stage 05
 --skip-calibration # Stage 05: skip ML calibration (with --skip-ml)
---allow-spc-derived-adjustments  # Stage 05 research-only SPC range debias + classifier
 --clean-from N     # delete outputs from stage N onward before run (e.g. 05)
---retrain-models   # retrain optional ML artifacts in Stage 05
+--retrain-models   # train diagnostic artifact classifier only (never applied to hazard rasters)
 
 # Stage 05 deterministic baseline — blocking; do not background from agents
 python scripts/rerun_stage05.py
@@ -201,9 +200,10 @@ PYTHONPATH=aws pytest -q aws/tests -m 'not localstack' \
   --cov=hail_aws --cov=run_pipeline_aws --cov-fail-under=100
 ```
 
-**Coverage policy:** AWS adapter = 100% gate. Pipeline `scripts/` remain on the
-`pyproject.toml` floor (`fail_under = 35`) — stages are I/O-heavy and not covered
-at 100% by unit tests alone.
+**Coverage policy:** AWS adapter = 100% gate. Pipeline `scripts/` + `run_pipeline.py`
+also gate at **100%** statement coverage in `pyproject.toml` (`fail_under = 100`;
+`scripts/archive/*` and `aws/cdk/*` omitted). Stages remain I/O-heavy; unit tests
+use mocks for network/filesystem paths.
 
 LocalStack Community image pin: `localstack/localstack:4.14.0` (ECS is **Pro**;
 Community does not validate Fargate spend). Laptop stub E2E:
@@ -327,11 +327,12 @@ assert completion or reuse historical archive counts as current. The one
 canonical run-state section, verification steps, and ordered next actions are
 in [`docs/RUN_NOTES.md`](docs/RUN_NOTES.md#canonical-current-run-state).
 
-The Stage 05 deterministic path is five core artifact passes plus
-site-specific remediation as a sixth layer, enabled by default. SPC-derived
-range debias and the geometry-aware hail-likelihood classifier are
-**research-only** (`--allow-spc-derived-adjustments`); they are trained from
-Stage 06 pairs and must follow a deterministic Stage 05 → Stage 06 baseline.
+The Stage 05 path is five core artifact passes plus site-specific remediation
+as a sixth layer, enabled by default. SPC reports are validation-only and are
+**never** applied to hazard rasters (AGENTS rule #3). Optional
+`train_artifact_classifier.py` / `--retrain-models` may train a diagnostic
+classifier from Stage 06 pairs after a deterministic Stage 05 → Stage 06
+baseline; that artifact is not a hazard-input path.
 
 ## Production Run Summary (v2.2.1, 2026-06-30 — superseded)
 

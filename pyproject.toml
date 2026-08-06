@@ -132,6 +132,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py"   = ["S101"]   # allow assert in tests
+"tests/**"     = ["RUF012"] # mutable class attrs in mock Dataset/response classes
 
 [tool.ruff.format]
 quote-style = "double"
@@ -149,14 +150,14 @@ warn_redundant_casts = true
 
 # ── Coverage ─────────────────────────────────────────────────────────────────
 [tool.coverage.run]
-source = ["scripts", "aws/hail_aws", "aws/run_pipeline_aws"]
+source = ["scripts", "run_pipeline"]
 omit   = ["scripts/archive/*", "aws/cdk/*"]
 branch = false
 
 [tool.coverage.report]
-# Full pipeline scripts are I/O-heavy; CI uses a modest floor on unit tests.
+# Statement coverage gate for scripts/ + run_pipeline.py (unit tests with mocks).
 # The aws/hail_aws adapter is gated separately at 100% in aws/tests.
-fail_under = 35
+fail_under = 100
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
@@ -165,7 +166,7 @@ exclude_lines = [
 ]
 
 [tool.coverage.paths]
-source = ["scripts", "aws/hail_aws"]
+source = ["scripts", "run_pipeline"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "aws/tests"]

@@ -170,7 +170,7 @@ than shifted over oceans, Mexico, or Canada by grid-orientation error.
 **Input:** SPC daily hail report CSVs
 **Output:** `data/historical/spc/YYYY/YYMMDD_rpts_hail.csv`
 
-SPC reports are validation and calibration-support data. They are not the primary hazard field.
+SPC reports are validation-only data. They are not a hazard input and are never applied to Stage 05 hazard rasters.
 
 ### 5.1 Validation
 
@@ -418,41 +418,38 @@ Site-specific remediation is the sixth deterministic layer for nine QA-flagged
 WSR-88D radars. It is **enabled by default**
 (`site_remediation=True` in `remove_gridrad_artifacts`).
 
-SPC-derived research adjustments (opt-in; AGENTS rule #3):
+SPC reports are **validation-only** (AGENTS rule #3). Stage 05 never applies
+SPC-derived range debias or classifier inference to hazard rasters.
+`scripts/diagnostics/radar_artifact_diagnostic.py` may still fit
+`range_debias.npz` for diagnostic review; `scripts/train_artifact_classifier.py`
+(or `--retrain-models`) may train `artifact_classifier.pkl` for diagnostics
+after Stage 06. Neither artifact is a hazard-input path.
+
+Optional ML path (when calibration artifacts exist and `--skip-ml` is false):
 
 ```text
-require --allow-spc-derived-adjustments (ignored with --skip-ml)
-range debias: multiply by per-era factor(range_km) when range_debias.npz exists
-hail-likelihood classifier: GridRad days only; multiplicative down-weight
-```
-
-Optional ML path (when artifacts exist and `--skip-ml` is false):
-
-```text
-if geometry-aware artifact classifier exists:
-    apply it after the five core passes + site-remediation layer
 if hail-filter artifact exists:
     apply probabilistic filter instead of deterministic winter threshold
 ```
 
-The geometry-aware classifier is research functionality, not a prerequisite.
-Its training labels come from Stage 06. Therefore the required ordering is:
-deterministic Stage 05 baseline (`--skip-ml`) → Stage 06 → train and review
-`artifact_classifier.pkl` → optionally clean and rerun Stage 05+ with
-`--allow-spc-derived-adjustments` (and without `--skip-ml`).
+The geometry-aware classifier is a diagnostic research tool, not a Stage 05
+hazard step. Its training labels come from Stage 06. Required ordering for
+diagnostic training: deterministic Stage 05 baseline (`--skip-ml`) → Stage 06
+→ train and review `artifact_classifier.pkl`.
 
 ### 9.2 Optional artifacts
 
 ```text
 data/analysis/calibration/gridrad_cqm_model.pkl
 data/analysis/calibration/hail_filter_model.pkl
-data/analysis/calibration/artifact_classifier.pkl      # trained after Stage 06
-data/analysis/calibration/range_debias.npz          # from radar_artifact_diagnostic.py
+data/analysis/calibration/artifact_classifier.pkl      # diagnostic; trained after Stage 06
+data/analysis/calibration/range_debias.npz             # diagnostic; from radar_artifact_diagnostic.py
 data/analysis/calibration/nearest_radar_distance_km.npy
 ```
 
-CLI flags: `--allow-spc-derived-adjustments`, `--no-range-debias`, `--no-speckle-filter` (disables the five core
-GridRad passes and default-on site-remediation layer).
+CLI flags: `--no-speckle-filter` (disables the five core GridRad passes and
+default-on site-remediation layer), `--retrain-models` (diagnostic classifier
+training only).
 
 ### 9.3 Hard requirement
 
@@ -605,7 +602,7 @@ Review:
 **Helpers:** `scripts/_radar_geometry.py`  
 **Output:** `data/analysis/radar_artifacts/`; fit `data/analysis/calibration/range_debias.npz`
 
-Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Stage 05 applies `range_debias.npz` only when `--allow-spc-derived-adjustments` is set (research-only; ignored with `--skip-ml`).
+Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Fitted `range_debias.npz` is a **diagnostic** artifact only; Stage 05 never applies it to hazard rasters (AGENTS rule #3).
 
 **Historical 2026-07-06 snapshot:** four-pass filter with inner-range radial
 ring baseline (≤75 km for bins ≥50 km; 1.12× / 1.18×). The documented process
@@ -677,19 +674,44 @@ estimate cell-specific scale where possible
 
 ### 13.3 Threshold diagnostics
 
-`threshold_selection.csv` should contain:
+`threshold_selection.csv` contains (emitted field names):
 
 ```text
-region_id
+region
 candidate_threshold_mm
-exceedance_count
+selected
+n_exceedances
 xi
 sigma
 mrl_score
 stability_score
 gof_score
-selected
+count_penalty
+mrl_score_normalized
+stability_score_normalized
+gof_score_normalized
+count_penalty_normalized
+score
+reason
 ```
+
+Each candidate is scored after min–max normalizing the four raw components
+(`gof_score`, `mrl_score`, `stability_score`, `count_penalty`) to `[0, 1]`
+within the region, then combining with equal weights:
+
+```text
+score = 0.25 * (
+    gof_score_normalized
+  + mrl_score_normalized
+  + stability_score_normalized
+  + count_penalty_normalized
+)
+```
+
+The selected threshold is the candidate with minimum `score`
+(`reason=selected_min_score`). Non-finite diagnostics receive the worst
+normalized value (1.0). Fallback rows with no valid candidate use
+`reason=no_valid_candidate_default` and may omit the normalized columns.
 
 Threshold selection is a model-risk control. Long return-period maps should not be interpreted without reviewing these diagnostics.
 

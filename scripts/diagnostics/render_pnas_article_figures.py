@@ -527,19 +527,43 @@ def _validation_metrics() -> dict:
     if ARTIFACT_CLASSIFIER_DIAGNOSTICS.is_file():
         diagnostics = json.loads(ARTIFACT_CLASSIFIER_DIAGNOSTICS.read_text())
         split = diagnostics.get("metrics", {})
+        split_name = str(
+            diagnostics.get("split")
+            or split.get("split")
+            or "unknown"
+        )
+        train_years = diagnostics.get("train_years") or split.get("train_years")
+        holdout_years = diagnostics.get("holdout_years") or split.get("holdout_years")
+        if split_name == "grouped_by_year":
+            year_bits = []
+            if train_years:
+                year_bits.append(f"train years {train_years}")
+            if holdout_years:
+                year_bits.append(f"holdout years {holdout_years}")
+            year_txt = f" ({'; '.join(year_bits)})" if year_bits else ""
+            disclosure = (
+                "SPC-collocated pairs supply weak labels for the optional research "
+                "artifact classifier; its reported score uses a year-grouped holdout"
+                f"{year_txt}, not an independent external validation dataset."
+            )
+        else:
+            disclosure = (
+                "SPC-collocated pairs supply weak labels for the optional research "
+                f"artifact classifier; its reported score uses split={split_name!r}, "
+                "not an independent external validation dataset."
+            )
         result.update(
             {
                 "holdout_tuning_disclosure_required": True,
-                "holdout_tuning_disclosure": (
-                    "SPC-collocated pairs supply weak labels for the optional research "
-                    "artifact classifier; its reported score uses a random 80/20 split, "
-                    "not an independent validation dataset."
-                ),
+                "holdout_tuning_disclosure": disclosure,
                 "artifact_classifier_split": {
                     key: split[key]
-                    for key in ("n_train", "n_test", "roc_auc")
+                    for key in ("n_train", "n_test", "roc_auc", "split")
                     if key in split
                 },
+                "artifact_classifier_split_name": split_name,
+                "artifact_classifier_train_years": train_years,
+                "artifact_classifier_holdout_years": holdout_years,
             }
         )
     elif ARTIFACT_CLASSIFIER.is_file():

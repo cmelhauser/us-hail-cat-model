@@ -41,8 +41,9 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 
 try:
     from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN
-    from _io import latlon_to_grid
     from _logging import get_logger
+    from _io import latlon_to_grid
+
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN
     from scripts._io import latlon_to_grid

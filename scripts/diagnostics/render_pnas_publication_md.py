@@ -70,7 +70,7 @@ def fig_block(
         available = path.is_file()
     if not available or not path.is_file():
         return (
-            f"\n> **{label} pending.** {caption}  \n"
+            f"\n> **{label} pending.** {caption}\n"
             f"> Reason: {pending_reason}. Expected file: `{filename}`.\n"
         )
     rel = f"figures/pnas/{filename}"
@@ -328,7 +328,7 @@ def build_discussion(m: dict) -> str:
     )
     return f"""## Discussion
 
-This work contributes a public-data hail hazard model and a case study in AI-assisted scientific software development. The radar-first pipeline combines source provenance, era calibration, five core artifact-filter passes, site remediation, and optional research-only SPC-derived adjustments (range debias + hail-likelihood classifier) with sparse event storage and regional extreme-value analysis.
+This work contributes a public-data hail hazard model and a case study in AI-assisted scientific software development. The radar-first pipeline combines source provenance, era calibration, five core artifact-filter passes, and site remediation with sparse event storage and regional extreme-value analysis. SPC reports remain validation-only and are never applied to hazard rasters.
 
 Separating radar hazard from report validation remains the central scientific design choice: MESH provides a physically motivated spatial field, while SPC reports test consistency with independent human observations. Sparse event storage is the central computational choice—localized footprints are resampled without dense `(n_events, n_rows, n_cols)` arrays.
 
@@ -357,7 +357,7 @@ def build_limitations(m: dict) -> str:
 
 The model is hazard-only and does not include exposure, vulnerability curves, or financial loss. Tail estimates are point estimates and do not yet include bootstrap confidence intervals. The model assumes stationarity over the radar record, and source transitions among MYRORSS, GridRad, and MRMS remain key uncertainties. {dispersion}{stochastic}
 
-SPC reports are spatially and socially biased, and the optional research artifact classifier uses SPC-collocated weak labels. Its random train/test split is not an independent scientific holdout and must be disclosed when classifier results are reported.
+SPC reports are spatially and socially biased. When an optional research artifact classifier is present, disclose its holdout protocol from diagnostics (year-grouped holdout is not an independent scientific validation dataset).
 
 The AI-process analysis is a case study rather than a randomized comparison of human-only and AI-assisted development. All AI-generated outputs require human review and remain under human scientific responsibility.
 """
@@ -367,6 +367,8 @@ def build_publication(metrics: dict, draft: str) -> str:
     """Build manuscript text from one frozen metrics object and source draft."""
     intro = extract_section(draft, "## Introduction", "## Conceptual Framework")
     methods_tail = extract_section(draft, "## Materials and Methods", "## Acknowledgments")
+    acknowledgments = extract_heading_section(draft, "## Acknowledgments")
+    competing = extract_heading_section(draft, "## Competing Interests")
     refs = extract_section(draft, "## References")
     front_matter = "\n\n---\n\n".join(
         section
@@ -379,6 +381,13 @@ def build_publication(metrics: dict, draft: str) -> str:
     )
     ai_process_table = extract_ai_process_table(draft)
     stochastic_complete = _stochastic_complete(metrics)
+    validation = metrics.get("validation") or {}
+    disclosure = validation.get("holdout_tuning_disclosure")
+    disclosure_sentence = (
+        f" Holdout/tuning disclosure: {disclosure}"
+        if disclosure
+        else ""
+    )
 
     fig_section = "## Figures\n"
     for fname, label, cap in FIGURES:
@@ -406,12 +415,22 @@ def build_publication(metrics: dict, draft: str) -> str:
         else "with 50,000-year sparse stochastic resampling configured but publication outputs pending"
     )
 
+    trailing = "\n\n---\n\n".join(
+        section
+        for section in (acknowledgments, competing, refs)
+        if section
+    )
+
     body = f"""# {MANUSCRIPT_TITLE}
 
-**Publication manuscript (PNAS-style)**  
-**Model version:** {MODEL_VERSION}  
-**Metrics freeze:** {metrics.get('generated', date.today().isoformat())}  
-**Code:** [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model)  
+**Publication manuscript (PNAS-style)**
+
+**Model version:** {MODEL_VERSION}
+
+**Metrics freeze:** {metrics.get('generated', date.today().isoformat())}
+
+**Code:** [github.com/cmelhauser/us-hail-cat-model](https://github.com/cmelhauser/us-hail-cat-model)
+
 **Corresponding author:** Christopher Melhauser (christopher.melhauser@gmail.com)
 
 ---
@@ -442,7 +461,7 @@ Catastrophe models are usually built by specialized teams over long development 
 
 *(Summary; full methodological detail in `docs/pnas_article_ai_hail_model.md` and `docs/methodology.md`.)*
 
-The model uses a fixed **0.05°** CONUS grid (520 × 1180), convective-day MESH rasters (12 UTC → 12 UTC), era-pooled quantile mapping to a GridRad anchor, five core radar artifact-filter passes plus site remediation, optional research-only SPC-derived range debias and hail-likelihood classifier (`--allow-spc-derived-adjustments`), sparse historical events at **29 mm**, regional GPD tails with L-moment pooling, **150 km** spatial CDF smoothing, CONUS masking with freezing-level-aware topographic correction, {stochastic_method}.
+The model uses a fixed **0.05°** CONUS grid (520 × 1180), convective-day MESH rasters (12 UTC → 12 UTC), era-pooled quantile mapping to a GridRad anchor, five core radar artifact-filter passes plus site remediation, sparse historical events at **29 mm**, regional GPD tails with L-moment pooling, **150 km** spatial CDF smoothing, CONUS masking with freezing-level-aware topographic correction, {stochastic_method}. SPC reports remain validation-only and are never used as hazard inputs.{disclosure_sentence}
 
 ---
 
@@ -466,7 +485,7 @@ The model uses a fixed **0.05°** CONUS grid (520 × 1180), convective-day MESH 
 
 ---
 
-{refs}
+{trailing}
 """
     return body
 

@@ -65,6 +65,7 @@ try:
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LAT_MIN,
         LON_MIN, LON_MAX, NODATA, MAX_HAIL_MM, MESH75_A, MESH75_B,
     )
+    from _logging import get_logger
     from _io import (
         classify_mesh_source_day,
         convective_day_window_tag,
@@ -76,13 +77,14 @@ try:
         observation_times_from_paths,
         observation_utc_to_convective_day,
         parse_observation_utc_from_name,
+        read_mesh_manifest_rows_by_date,
         sanitize_hail_values,
         staged_nc_files_for_convective_day,
         summarize_mesh_output_raster,
         upsert_mesh_manifest_row,
         write_geotiff,
     )
-    from _logging import get_logger
+
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LAT_MIN,
@@ -99,6 +101,7 @@ except ImportError:  # pragma: no cover - pytest importlib fallback
         observation_times_from_paths,
         observation_utc_to_convective_day,
         parse_observation_utc_from_name,
+        read_mesh_manifest_rows_by_date,
         sanitize_hail_values,
         staged_nc_files_for_convective_day,
         summarize_mesh_output_raster,
@@ -593,6 +596,47 @@ def rebuild_gridrad_days_from_geotiffs(
     return discovered
 
 
+_PROVENANCE_FIELDS = (
+    "source_files",
+    "plain_netcdf_files",
+    "gz_netcdf_files",
+    "source_first_utc",
+    "source_last_utc",
+    "source_max_gap_minutes",
+    "temporal_coverage_status",
+    "source_valid_pixels",
+    "read_errors",
+    "status",
+)
+
+
+def _prior_manifest_row(convective_day: date) -> dict | None:
+    """Return the existing Stage 04c manifest row for a convective day, if any."""
+    rows = read_mesh_manifest_rows_by_date(MANIFEST_FILE)
+    return rows.get(convective_day.isoformat())
+
+
+def _preserve_provenance_fields(row: dict, prior: dict | None) -> dict:
+    """Keep immutable source-coverage fields when staged inputs are gone."""
+    out = dict(row)
+    if prior is not None:
+        for field in _PROVENANCE_FIELDS:
+            if field in prior and prior[field] not in ("", None):
+                out[field] = prior[field]
+        return out
+    out["status"] = "unknown_after_cleanup"
+    out["source_files"] = ""
+    out["plain_netcdf_files"] = ""
+    out["gz_netcdf_files"] = ""
+    out["source_valid_pixels"] = ""
+    out["read_errors"] = ""
+    out["source_first_utc"] = ""
+    out["source_last_utc"] = ""
+    out["source_max_gap_minutes"] = ""
+    out["temporal_coverage_status"] = "unknown_after_cleanup"
+    return out
+
+
 def manifest_row_for_day(
     convective_day: date,
     out_path: Path,
@@ -604,13 +648,14 @@ def manifest_row_for_day(
     read_errors: int | None = None,
     skipped: bool = False,
     temporal_coverage: dict[str, str | float | None] | None = None,
+    prior_row: dict | None = None,
 ) -> dict:
     plain_count, gz_count = summarize_gridrad_formats(nc_files)
     status = classify_mesh_source_day(
         len(nc_files), active_cells, read_errors or 0
     )
     coverage = temporal_coverage or {}
-    return mesh_manifest_row(
+    row = mesh_manifest_row(
         convective_day,
         out_path,
         REPO_ROOT,
@@ -628,6 +673,10 @@ def manifest_row_for_day(
         source_max_gap_minutes=coverage.get("source_max_gap_minutes"),
         temporal_coverage_status=coverage.get("temporal_coverage_status"),
     )
+    # After normal input cleanup, empty staging is not evidence of missing source.
+    if skipped and not nc_files:
+        return _preserve_provenance_fields(row, prior_row)
+    return row
 
 
 def process_day(convective_day: date, *, native_qc: bool | None = None):
@@ -651,6 +700,7 @@ def process_day(convective_day: date, *, native_qc: bool | None = None):
             max_mesh_mm=max_mesh_mm,
             skipped=True,
             temporal_coverage=temporal_coverage,
+            prior_row=_prior_manifest_row(convective_day),
         ))
         return {"skipped": True, "active_cells": active_cells, "max_mesh_mm": max_mesh_mm}
 
@@ -681,6 +731,27 @@ def process_day(convective_day: date, *, native_qc: bool | None = None):
             errors += 1
             if errors <= 3:
                 log(f"    WARN: {nc_path.name}: {e}")
+
+    if errors >= len(nc_files):
+        upsert_manifest_row(manifest_row_for_day(
+            convective_day,
+            out_path,
+            nc_files,
+            source_pixels=0,
+            active_cells=0,
+            max_mesh_mm=0.0,
+            read_errors=errors,
+            temporal_coverage=temporal_coverage,
+        ))
+        return {
+            "files": len(nc_files),
+            "source": source,
+            "errors": errors,
+            "error": (
+                f"all {len(nc_files)} GridRad source file(s) failed to read "
+                f"for {convective_day.isoformat()}"
+            ),
+        }
 
     out_data, n_repaired = sanitize_hail_values(
         daily_max,
@@ -752,6 +823,7 @@ def rebuild_manifest_from_outputs(d_start: date, d_end: date) -> int:
                 max_mesh_mm=max_mesh_mm,
                 skipped=True,
                 temporal_coverage=temporal_coverage,
+                prior_row=_prior_manifest_row(day),
             ))
         elif not nc_files:
             upsert_manifest_row(manifest_row_for_day(

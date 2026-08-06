@@ -83,9 +83,10 @@ try:
         NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM, RNG_SEED, MESH75_A,
         MESH75_B, WITT_INCH_TO_CM,
     )
-    from _io import sanitize_hail_values, write_geotiff
     from _logging import get_logger
     from _pipeline_cleanup import STAGE05_PID
+    from _io import sanitize_hail_values, write_geotiff
+
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,

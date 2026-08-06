@@ -31,10 +31,11 @@ counts, classifier scores, and stage outputs in this work log must not be
 presented as current v2.3.0 results until refreshed.
 
 Stage 05 uses five core GridRad artifact passes plus site-specific remediation
-as a sixth layer, enabled by default. SPC-derived range debias and the
-geometry-aware hail-likelihood classifier are optional research functionality
-(`--allow-spc-derived-adjustments`) and are trained only after a deterministic
-Stage 05 baseline and Stage 06 create the required SPC–MESH pairs.
+as a sixth layer, enabled by default. SPC reports are validation-only and are
+never applied to hazard rasters. Optional `train_artifact_classifier.py` /
+`--retrain-models` may train a diagnostic classifier after a deterministic
+Stage 05 baseline and Stage 06 create SPC–MESH pairs; that path does not feed
+Stage 05 hazard outputs.
 
 **Infrastructure complete.** All project metadata, CI, docs, and code-helper files have been written. Stage scripts now import shared constants from `_config.py`, shared logging from `_logging.py`, and shared I/O helpers from `_io.py` where needed.
 

@@ -92,6 +92,7 @@ try:
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
         NODATA, MAX_HAIL_MM, RNG_SEED,
     )
+    from _logging import get_logger
     from _io import (
         classify_mesh_source_day,
         convective_day_window_tag,
@@ -105,7 +106,7 @@ try:
         upsert_mesh_manifest_row,
         write_geotiff,
     )
-    from _logging import get_logger
+
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,

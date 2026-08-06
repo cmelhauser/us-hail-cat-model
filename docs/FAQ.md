@@ -36,7 +36,7 @@ SPC reports are spatially and temporally biased. They depend on where people are
 
 **Q: Can I use SPC reports for anything in this model?**
 
-Yes — validation. SPC reports are used in Stage 06 to check that corrected MESH75 fields are directionally consistent with surface reports, and in Stage 07 to diagnose regional biases. They are never used as the hazard surface.
+Yes — validation. SPC reports are used in Stage 06 to check that corrected MESH75 fields are directionally consistent with surface reports, and in Stage 07 to diagnose regional biases. They are never used as the hazard surface and are never applied to Stage 05 hazard rasters.
 
 **Q: Why are three different radar sources used?**
 
@@ -147,7 +147,7 @@ Many CONUS grid cells have only a few decades of observations. Fitting a GPD sep
 
 **Q: What is the GPD threshold?**
 
-The damage threshold below which tail fitting begins. The default is 50.8 mm (2.0 inches). Stage 09 runs automated Mean Residual Life (MRL) diagnostics and produces `threshold_selection.csv` with per-region KS, MRL-linearity, stability, and count-penalty scores. The automated threshold is preferred over the fixed default where data support it.
+The damage threshold below which tail fitting begins. The default is 50.8 mm (2.0 inches). Stage 09 runs automated Mean Residual Life (MRL) diagnostics and produces `threshold_selection.csv` with per-region KS, MRL-linearity, stability, and count-penalty scores. The four components are min–max normalized to `[0, 1]` and combined with equal **0.25** weights; the automated threshold is preferred over the fixed default where data support it.
 
 **Q: What are the two RP products?**
 
@@ -232,10 +232,10 @@ python scripts/diagnostics/radar_artifact_diagnostic.py
 
 Review `data/analysis/radar_artifacts/map_gridrad_minus_myrorss_mean_annual_max.png`
 before restarting downstream stages. Stage 05 logs
-`SPC-derived adjustments: OFF` by default and
+`SPC role: validation/diagnostics only (never applied to hazard rasters)` and
 `GridRad artifact filter: ON (five core passes + site remediation)` when active.
-Optional research-only SPC range debias / hail-likelihood classifier requires
-`--allow-spc-derived-adjustments` (and omitting `--skip-ml`). See
+Optional `train_artifact_classifier.py` / `--retrain-models` may train a
+diagnostic classifier after Stage 06; it is not a hazard-input path. See
 `docs/methodology.md` §5.5.
 
 **Q: Stage 01 produces all-zero GeoTIFFs for some days.**

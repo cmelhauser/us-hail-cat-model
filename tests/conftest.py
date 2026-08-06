@@ -24,7 +24,11 @@ def dense_footprint_to_cells(fp: np.ndarray, peak: np.ndarray) -> dict:
 
 def load_stage(filename: str):
     path = REPO_ROOT / filename if filename == "run_pipeline.py" else SCRIPTS / filename
-    module_name = "stage_" + filename.replace(".py", "").replace("-", "_").replace(".", "_")
+    # Use the real import name for run_pipeline so --cov=run_pipeline collects data.
+    if filename == "run_pipeline.py":
+        module_name = "run_pipeline"
+    else:
+        module_name = "stage_" + filename.replace(".py", "").replace("-", "_").replace(".", "_").replace("/", "_")
     spec = importlib.util.spec_from_file_location(module_name, path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = mod
