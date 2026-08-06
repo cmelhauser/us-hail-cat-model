@@ -124,7 +124,7 @@ GEOTIFF_PROFILE: dict = {
     "tiled": True,
     "blockxsize": 256,
     "blockysize": 256,
-    "nodata": -1.0,
+    "nodata": NODATA,
 }
 
 # ── Public API ────────────────────────────────────────────────────────────────

@@ -210,9 +210,14 @@ Run with `--skip-ml`. The ML artifacts (`gridrad_cqm_model.pkl`, `hail_filter_mo
 
 **Q: Stochastic return-period maps show radar rings or spokes. What do I do?**
 
-This is a known GridRad-era artifact (speckle, uniform range rings, and range-dependent bias). Rebuild the corrected archive with range debias and the five-pass artifact filter (including spatiotemporal persistence):
+This is a known GridRad-era artifact (speckle, uniform range rings, and
+range-dependent bias). Rebuild the corrected archive with the deterministic
+GridRad artifact filter (five core passes + site remediation, including
+spatiotemporal persistence). Keep SPC validation-only unless you explicitly
+accept the research path:
 
 ```bash
+# Deterministic baseline (recommended first):
 python run_pipeline.py --clean-from 05 --from 05 --skip 08,09,10,11,11b,12,13,14 --skip-ml --skip-calibration
 # or blocking Stage 05 only:
 python scripts/rerun_stage05.py
@@ -226,9 +231,12 @@ python scripts/diagnostics/radar_artifact_diagnostic.py
 ```
 
 Review `data/analysis/radar_artifacts/map_gridrad_minus_myrorss_mean_annual_max.png`
-before restarting downstream stages. Stage 05 logs `Range debias: ON` and
-`GridRad artifact filter: ON (isolated + radial ring + azimuthal + filament)` when active.
-See `docs/methodology.md` §5.5.
+before restarting downstream stages. Stage 05 logs
+`SPC-derived adjustments: OFF` by default and
+`GridRad artifact filter: ON (five core passes + site remediation)` when active.
+Optional research-only SPC range debias / hail-likelihood classifier requires
+`--allow-spc-derived-adjustments` (and omitting `--skip-ml`). See
+`docs/methodology.md` §5.5.
 
 **Q: Stage 01 produces all-zero GeoTIFFs for some days.**
 

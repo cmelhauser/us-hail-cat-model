@@ -61,11 +61,17 @@ def test_manifest_csv_roundtrip(tmp_path: Path):
         status="ok",
         skipped=False,
         read_errors=0,
+        source_first_utc="2020-10-14T12:00:00+00:00",
+        source_last_utc="2020-10-15T11:00:00+00:00",
+        source_max_gap_minutes=60.0,
+        temporal_coverage_status="complete",
     )
     upsert_mesh_manifest_row(manifest, row)
     rows = read_mesh_manifest_rows_by_date(manifest)
     assert rows["2020-10-14"]["source_files"] == "12"
     assert rows["2020-10-14"]["status"] == "ok"
+    assert rows["2020-10-14"]["source_max_gap_minutes"] == "60.0"
+    assert rows["2020-10-14"]["temporal_coverage_status"] == "complete"
     assert list(rows["2020-10-14"].keys()) == MESH_SOURCE_MANIFEST_FIELDS
 
     write_mesh_manifest_rows(manifest, {})

@@ -1,9 +1,35 @@
 import numpy as np
+import pandas as pd
 from conftest import dense_footprint_to_cells, load_stage
 
 
 def _dense_to_cells(fp: np.ndarray, peak: np.ndarray) -> dict:
     return dense_footprint_to_cells(fp, peak)
+
+
+def _write_event_outputs(path, csv_ids, npz_ids, *, omit_key=None):
+    path.mkdir(exist_ok=True)
+    pd.DataFrame(
+        {
+            "event_id": csv_ids,
+            "peak_hail_mm": np.full(len(csv_ids), 40.0),
+            "duration_days": np.ones(len(csv_ids), dtype=int),
+        }
+    ).to_csv(path / "event_catalog.csv", index=False)
+    arrays = {
+        "n_events": np.array([len(npz_ids)]),
+        "event_ids": np.asarray(npz_ids, dtype=np.int32),
+    }
+    for eid in npz_ids:
+        for prefix, value in (
+            ("rows", np.array([1], dtype=np.int16)),
+            ("cols", np.array([2], dtype=np.int16)),
+            ("vals", np.array([40.0], dtype=np.float32)),
+        ):
+            key = f"{prefix}_{eid}"
+            if key != omit_key:
+                arrays[key] = value
+    np.savez(path / "event_peaks.npz", **arrays)
 
 
 def test_stage08_group_events_rejects_large_centroid_jump(monkeypatch):
@@ -59,3 +85,25 @@ def test_stage08_footprint_centroid_sparse_empty():
         np.empty(0, dtype=np.int16),
     )
     assert np.isnan(lat) and np.isnan(lon)
+
+
+def test_stage08_validation_rejects_csv_npz_event_id_mismatch(
+    tmp_path, monkeypatch
+):
+    s = load_stage("08_build_event_catalog.py")
+    _write_event_outputs(tmp_path, [*range(99), 100], list(range(100)))
+    monkeypatch.setattr(s, "OUT_DIR", tmp_path)
+    assert s.validate_outputs() is False
+
+
+def test_stage08_validation_rejects_missing_per_event_npz_key(
+    tmp_path, monkeypatch
+):
+    s = load_stage("08_build_event_catalog.py")
+    ids = list(range(100))
+    monkeypatch.setattr(s, "OUT_DIR", tmp_path)
+    _write_event_outputs(tmp_path, ids, ids)
+    assert s.validate_outputs() is True
+
+    _write_event_outputs(tmp_path, ids, ids, omit_key="vals_99")
+    assert s.validate_outputs() is False

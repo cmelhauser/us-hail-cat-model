@@ -282,15 +282,22 @@ Optional probabilistic hail-realness model.
 
 ### `artifact_classifier.pkl`
 
-Optional geometry-aware GridRad artifact classifier (v2.3.0+). Path:
+Optional GridRad **hail-likelihood** classifier (v2.3.0+; research-only). Path:
 
 ```text
 data/analysis/calibration/artifact_classifier.pkl
 ```
 
-Trained by `scripts/train_artifact_classifier.py` from Stage **06** SPC–MESH pairs.
-Stage **05** zeros cells with artifact probability ≥ **0.65** after rule passes.
-Bypass with `--skip-ml`; missing file → rules-only deterministic path.
+Trained by `scripts/train_artifact_classifier.py` from Stage **06** SPC–MESH
+pairs (GridRad-era pairs by default; year-grouped holdout). Required order:
+deterministic Stage 05 baseline (`--skip-ml`) → Stage 06 → train and review
+classifier → optional clean Stage 05+ rerun with
+`--allow-spc-derived-adjustments` (and without `--skip-ml`). Stage **05**
+applies the classifier to **GridRad days only**, after five core rule passes
+plus default-on site remediation, by multiplicatively down-weighting active
+cells with predicted hail likelihood (not a hard 0.65 zeroing). Missing file,
+`--skip-ml`, or omitting `--allow-spc-derived-adjustments` selects the complete
+deterministic path (SPC remains validation-only).
 
 ### `data/analysis/calibration/range_debias.npz`
 
@@ -307,7 +314,9 @@ factor_mrms
 reference_range_km
 ```
 
-Stage 05 applies automatically when present (`--no-range-debias` to disable). Factors normalized to **1.0 at 125 km**; clipped **[0.45, 1.15]**.
+Stage 05 applies only when `--allow-spc-derived-adjustments` is set and the
+file exists (`--no-range-debias` disables even then). Factors normalized to
+**1.0 at 125 km**; clipped **[0.45, 1.15]**.
 
 ### `data/analysis/calibration/nearest_radar_distance_km.npy`
 

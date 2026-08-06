@@ -90,7 +90,7 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 try:
     from _config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
-        NODATA, MAX_HAIL_MM,
+        NODATA, MAX_HAIL_MM, RNG_SEED,
     )
     from _io import (
         classify_mesh_source_day,
@@ -109,7 +109,7 @@ try:
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
-        NODATA, MAX_HAIL_MM,
+        NODATA, MAX_HAIL_MM, RNG_SEED,
     )
     from scripts._io import (
         classify_mesh_source_day,
@@ -508,7 +508,7 @@ def validate_outputs() -> bool:
             log(f"  Found {len(tifs):,} MRMS daily MESH GeoTIFFs")
 
         # Spot-check
-        sample = random.sample(tifs, min(20, len(tifs)))
+        sample = random.Random(RNG_SEED).sample(tifs, min(20, len(tifs)))
         for p in sample:
             try:
                 with rasterio.open(p) as src:

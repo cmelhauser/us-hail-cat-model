@@ -82,7 +82,7 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 try:
     from _config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
-        NODATA, MAX_HAIL_IN, MAX_HAIL_MM,
+        NODATA, MAX_HAIL_IN, MAX_HAIL_MM, RNG_SEED,
     )
     from _io import (
         MESH_SOURCE_MANIFEST_FIELDS,
@@ -104,7 +104,7 @@ try:
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import (
         REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
-        NODATA, MAX_HAIL_IN, MAX_HAIL_MM,
+        NODATA, MAX_HAIL_IN, MAX_HAIL_MM, RNG_SEED,
     )
     from scripts._io import (
         MESH_SOURCE_MANIFEST_FIELDS,
@@ -559,7 +559,7 @@ def validate_outputs() -> bool:
         # Spot-check metadata, then scan every raster for value QA. The full
         # value scan is deliberately cheap relative to download time and keeps
         # non-finite or physically implausible cells out of downstream stages.
-        sample = random.sample(tifs, min(20, len(tifs)))
+        sample = random.Random(RNG_SEED).sample(tifs, min(20, len(tifs)))
         for p in sample:
             try:
                 with rasterio.open(p) as src:

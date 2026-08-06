@@ -19,3 +19,11 @@ def test_stage09_threshold_selection_returns_positive_threshold(tmp_path, monkey
     u = s.compute_mrl_and_threshold(data.astype(np.float32), region_id=0)
     assert u > 0
     assert (tmp_path / "threshold_selection.csv").exists()
+    candidates = [
+        row for row in s.THRESHOLD_DIAGNOSTICS if row.get("reason") != "too_few_observations_default"
+    ]
+    assert candidates
+    for row in candidates:
+        assert 0.0 <= row["score"] <= 1.0
+        assert 0.0 <= row["gof_score_normalized"] <= 1.0
+        assert 0.0 <= row["count_penalty_normalized"] <= 1.0

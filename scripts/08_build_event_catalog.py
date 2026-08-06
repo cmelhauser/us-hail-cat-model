@@ -407,6 +407,8 @@ def validate_outputs() -> bool:
     errors = []
     csv_path = OUT_DIR / "event_catalog.csv"
     npz_path = OUT_DIR / "event_peaks.npz"
+    csv_event_ids = None
+    npz_event_ids = None
 
     if not csv_path.exists():
         errors.append("Missing event_catalog.csv")
@@ -414,21 +416,92 @@ def validate_outputs() -> bool:
         errors.append("Empty event_catalog.csv")
     else:
         import pandas as pd
-        df = pd.read_csv(csv_path)
-        if len(df) < 100:
-            errors.append(f"Too few events: {len(df)}")
-        if df["peak_hail_mm"].max() > 300:
-            errors.append(f"Implausible peak hail: {df['peak_hail_mm'].max()} mm")
-        if df["duration_days"].max() > MAX_DURATION_DAYS:
-            errors.append(f"Duration cap violated: max={df['duration_days'].max()}")
+
+        try:
+            df = pd.read_csv(csv_path)
+            if len(df) < 100:
+                errors.append(f"Too few events: {len(df)}")
+            required = {"event_id", "peak_hail_mm", "duration_days"}
+            missing = required - set(df.columns)
+            if missing:
+                errors.append(f"Missing event catalog columns: {sorted(missing)}")
+            else:
+                event_ids = pd.to_numeric(df["event_id"], errors="coerce")
+                if event_ids.isna().any():
+                    errors.append("Invalid event_id values in event_catalog.csv")
+                else:
+                    csv_event_ids = [int(eid) for eid in event_ids]
+                    if len(set(csv_event_ids)) != len(csv_event_ids):
+                        errors.append("Duplicate event_id values in event_catalog.csv")
+                if df["peak_hail_mm"].max() > 300:
+                    errors.append(f"Implausible peak hail: {df['peak_hail_mm'].max()} mm")
+                if df["duration_days"].max() > MAX_DURATION_DAYS:
+                    errors.append(
+                        f"Duration cap violated: max={df['duration_days'].max()}"
+                    )
+        except Exception as e:
+            errors.append(f"Cannot read event_catalog.csv: {e}")
 
     if not npz_path.exists():
         errors.append("Missing event_peaks.npz")
     else:
-        data = np.load(npz_path)
-        n = int(data["n_events"][0])
-        if n < 100:
-            errors.append(f"Too few events in npz: {n}")
+        try:
+            with np.load(npz_path) as data:
+                files = set(data.files)
+                missing_meta = {"n_events", "event_ids"} - files
+                if missing_meta:
+                    errors.append(f"Missing event_peaks metadata: {sorted(missing_meta)}")
+                else:
+                    n = int(data["n_events"][0])
+                    npz_event_ids = [int(eid) for eid in data["event_ids"]]
+                    npz_id_set = set(npz_event_ids)
+                    if n < 100:
+                        errors.append(f"Too few events in npz: {n}")
+                    if n != len(npz_event_ids):
+                        errors.append(
+                            f"NPZ n_events={n} but event_ids has {len(npz_event_ids)} entries"
+                        )
+                    if len(npz_id_set) != len(npz_event_ids):
+                        errors.append("Duplicate event_ids in event_peaks.npz")
+
+                    for prefix in ("rows_", "cols_", "vals_"):
+                        keyed_ids = set()
+                        invalid_keys = []
+                        for key in files:
+                            if not key.startswith(prefix):
+                                continue
+                            try:
+                                keyed_ids.add(int(key.removeprefix(prefix)))
+                            except ValueError:
+                                invalid_keys.append(key)
+                        if invalid_keys:
+                            errors.append(
+                                f"Invalid {prefix.rstrip('_')} event keys: "
+                                f"{sorted(invalid_keys)}"
+                            )
+                        if keyed_ids != npz_id_set:
+                            errors.append(
+                                f"{prefix.rstrip('_')} event keys do not match event_ids"
+                            )
+
+                    for eid in npz_id_set:
+                        keys = (f"rows_{eid}", f"cols_{eid}", f"vals_{eid}")
+                        if all(key in files for key in keys):
+                            lengths = {len(data[key]) for key in keys}
+                            if len(lengths) != 1:
+                                errors.append(
+                                    f"Event {eid} rows/cols/vals length mismatch"
+                                )
+        except Exception as e:
+            errors.append(f"Cannot read event_peaks.npz: {e}")
+
+    if csv_event_ids is not None and npz_event_ids is not None:
+        if set(csv_event_ids) != set(npz_event_ids):
+            errors.append("CSV event_ids do not match NPZ event_ids")
+        if len(csv_event_ids) != len(npz_event_ids):
+            errors.append(
+                f"Event count mismatch: CSV={len(csv_event_ids)} NPZ={len(npz_event_ids)}"
+            )
 
     if errors:
         log("Validation FAILED:")

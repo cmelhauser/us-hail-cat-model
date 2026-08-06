@@ -1,6 +1,10 @@
 # Pre-Run Review and Hardening Report
 
-**CONUS Hail Catastrophe Model v2.1**
+**CONUS Hail Catastrophe Model v2.3.0**
+
+**Historical scope:** findings originated in the v2.1 hardening pass. Current
+pre-run execution applies to v2.3.0; run status is unverified since 2026-07-09
+and must be checked in `docs/RUN_NOTES.md` before resuming.
 
 ---
 
@@ -191,6 +195,9 @@ The following are tracked but not blockers for v2.1:
 
 - Confirm calibration mode in logs.
 - Confirm `--skip-ml` behavior.
+- Confirm five core artifact passes plus default-on site remediation.
+- Run the deterministic Stage 05 baseline and Stage 06 before training the
+  optional research classifier.
 - Review pixel counts before and after filtering.
 - Check GridRad correction ratios.
 
@@ -237,7 +244,7 @@ The following are tracked but not blockers for v2.1:
 - Confirm no dense event cube is created.
 - Review stochastic RP maps and PET tables.
 
-### Stage 14
+### Historical vulnerability stage (removed)
 
 **Removed (2026-07).** Hazard-only repository; vulnerability/loss is future work (`docs/methodology.md` §14).
 
@@ -289,6 +296,9 @@ The test suite should include:
 - GPD threshold diagnostics;
 - return-period monotonicity;
 - topographic correction bounds;
+- Stage 11b ETOPO preparation and resampling;
+- native GridRad QC (`_gridrad_qc.py`);
+- optional classifier geometry features (`_artifact_features.py`);
 - sparse stochastic translation/scaling;
 - figure-render smoke tests;
 - run_pipeline selection/dry-run tests.

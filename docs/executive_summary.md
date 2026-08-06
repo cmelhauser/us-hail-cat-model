@@ -1,7 +1,7 @@
 # Hail Catastrophe Model — Executive Summary
 
 **Version:** 2.3.0 (active branch `v2.3.0`; sole remote `cmelhauser/us-hail-cat-model`)  
-**Status:** Stage 01 MYRORSS coordinate-fix re-ingest **complete**; **v2.3.0** rebuild from Stage **04c** through **14** (native QC + optional artifact classifier) — see `docs/RUN_NOTES.md`  
+**Status:** Stage 01 MYRORSS coordinate-fix re-ingest **complete**; **v2.3.0** rebuild from Stage **04c** through **14** remains **unverified since 2026-07-09** — see `docs/RUN_NOTES.md#canonical-current-run-state`
 **Primary use:** CONUS hail hazard modeling, stochastic event simulation, validation, and model-risk diagnostics
 
 ---
@@ -43,7 +43,7 @@ The main goal of v2.1 is not to add complexity for its own sake. The goal is to 
 
 ### Bias correction
 
-Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.2+** adds SPC-collocated **range debias** and a **five-pass GridRad artifact filter** (isolated speckle, inner-range radial ring, azimuthal annulus, background filament, spatiotemporal persistence) to reduce NEXRAD ring artifacts in return-period maps (see `docs/methodology.md` §5.5). GridRad speckle fell from **9.7%** to **1.8%** mean after the four-pass filter (2026-07-06 diagnostic); persistence pass 5 targets chronic range rings.
+Stage 05 supports optional conditional GridRad calibration while preserving deterministic quantile-mapping fallback. **v2.2.2+** adds a **five-core-pass GridRad artifact filter** plus default-on site remediation (isolated speckle, inner-range radial ring, azimuthal annulus, background filament, spatiotemporal persistence) to reduce NEXRAD ring artifacts in return-period maps (see `docs/methodology.md` §5.5). SPC-collocated **range debias** and the hail-likelihood classifier are **research-only** (`--allow-spc-derived-adjustments`). Historical GridRad speckle fell from **9.7%** to **1.8%** mean after the four-pass filter (2026-07-06 diagnostic; refresh after the verified v2.3.0 run); persistence pass 5 targets chronic range rings.
 
 ### Environmental filtering
 
@@ -141,4 +141,4 @@ For underwriting or regulatory use, the model should be accompanied by:
 
 ## 8. Bottom Line
 
-v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. The raw convective-day archive holds **9,797** MESH days after the **2026-07-08** MYRORSS coordinate-fix re-ingest. Final v2.2.2 hazard products (corrected archive, event catalog, analytical/stochastic RP maps) are rebuilding in Stages **05–14**; the prior **v2.2.1** snapshot (**8,798** events at **29 mm**, **50,000-year** catalog) is superseded pending that rebuild. It is a strong transparent **hazard-only** modeling framework; exposure and vulnerability are documented as future work (methodology §14).
+v2.2 preserves the successful radar-based v2.0 architecture and makes it more defensible, testable, memory-safe, and operationally ready. The raw convective-day archive held **9,797** MESH days after the **2026-07-08** MYRORSS coordinate-fix re-ingest; treat that count as historical until the verified v2.3.0 rebuild confirms current inventory. Final v2.3.0 hazard products (corrected archive, event catalog, analytical/stochastic RP maps) are **not** asserted complete in this summary—follow `docs/RUN_NOTES.md`. The prior **v2.2.1** snapshot (**8,798** events at **29 mm**, **50,000-year** catalog) is superseded. It is a strong transparent **hazard-only** modeling framework; exposure and vulnerability are documented as future work (methodology §14).

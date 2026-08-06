@@ -6,7 +6,11 @@
 
 ## 1. Purpose
 
-This literature review documents the scientific basis for the v2.2 hail catastrophe model methodology. It covers report bias, radar-based hail climatology, MESH correction, environmental filtering, extreme-value theory, spatial extremes, stochastic event simulation, topography, vulnerability, and non-stationarity.
+This literature review documents the scientific basis for the v2.3.0 hail
+catastrophe model methodology. It covers report bias, radar-based hail
+climatology, MESH correction, environmental filtering, extreme-value theory,
+spatial extremes, stochastic event simulation, topography, vulnerability, and
+non-stationarity.
 
 The review is intentionally applied rather than exhaustive. Each citation is tied to a model decision: whether a data source is used as hazard input or validation, why a calibration step exists, why a statistical model is defensible, and which assumptions require disclosure.
 
@@ -82,7 +86,8 @@ Objective MESH climatology on a ~0.88° grid: with ≥ five pixels at 29 mm, the
 
 Stage 08 groups **CONUS-wide** active days into sparse events at **`EVENT_ACTIVE_THRESH_MM` (29.0 mm)** from v2.2.2. The optional diagnostic `scripts/diagnostics/hail_day_climatology.py` benchmarks per-cell hail days at six thresholds on the corrected archive.
 
-**Diagnostic-driven v2.2.2 parameters (9,797 convective days, 1998–2026):**
+**Historical diagnostic snapshot (v2.2.2; 9,797 convective days, 1998–2026;
+requires post-v2.3.0-run refresh):**
 
 | Threshold | GP max days/yr | National any-cell days/yr |
 |-----------|---------------:|--------------------------:|
@@ -129,7 +134,7 @@ Published hail climatologies remove radar rings, speckle, and range-dependent er
 
 | Reference | QC practice | Relevance to this model |
 |-----------|-------------|-------------------------|
-| Bowman and Homeyer (2017); GridRad software | Native `GRIDRAD_FILTER` and `GRIDRAD_REMOVE_CLUTTER` on 3-D reflectivity before analysis | **Upstream ideal** — Stage **04c** computes MESH from GridRad dBZ but does not yet apply full native clutter removal on reflectivity before SHI |
+| Bowman and Homeyer (2017); GridRad software | Native `GRIDRAD_FILTER` and `GRIDRAD_REMOVE_CLUTTER` on 3-D reflectivity before analysis | Stage **04c** applies native echo-frequency and clutter QC through `scripts/_gridrad_qc.py` before SHI unless explicitly disabled |
 | Murillo et al. (2021) | Low-confidence echo removal; **manual exclusion** of failed radar scans (range-linear reflectivity ramps); subjective review of annual-max MESH | Explains ring/spoke geometry; ~0.5% of GridRad volumes excluded at source |
 | Cintineo et al. (2012) | Daily MESH maxima **hand-examined**; anomalous propagation and radial fragments **cropped manually** before climatology | Stage **05** automates daily-grid QC on the unified 0.05° archive (substitute for manual crop) |
 | Wendt and Jirak (2021) | Gaussian smooth (σ ≈ 3 cells) masks **isolated** MESH pixels; NLDN lightning within 40 km; cap MESH > 127 mm | Isolated speckle pass in Stage **05** follows the smooth-and-mask logic; lightning mask not implemented |
@@ -142,7 +147,19 @@ Published hail climatologies remove radar rings, speckle, and range-dependent er
 
 **Model implication:** Run `scripts/diagnostics/literature_validation_suite.py` after Stages 05–13 to aggregate literature benchmarks (source transitions, SPC detection and rural–urban bias, seasonality, Mann–Kendall stationarity, Poisson and negative-binomial dispersion, GPD thresholds, bootstrap RP CIs, RP monotonicity, analytical vs stochastic divergence, pilot tail dependence, GridRad manifest QC, Murillo/Cintineo hail-day rates, optional ML filter Brier). Missing inputs warn-and-skip via `scripts/diagnostics/_diagnostic_io.py`. See `docs/technical_documentation.md` §12.7.
 
-**Model implication (Stage 05):** Stage **05** applies a five-pass GridRad artifact filter (`remove_gridrad_artifacts`: isolated speckle, inner-range radial ring, azimuthal annulus, quiet-background filament, **spatiotemporal range-ring persistence** from a 21-day trailing window) plus optional SPC-collocated range debias. Persistence discriminates stationary NEXRAD annuli from episodic hail using daily time series at fixed (site, range)—the daily-grid analogue of multi-scan ring detection (Chilson et al. 2019). Optional site-specific remediation on nine WSR-88D radars remains in code but is off by default. **Stage 01 (v2.2.2):** MYRORSS `pixel_x`/`pixel_y` sparse-grid axes were corrected per WDSS-II; full re-ingest completed **2026-07-08** (eastern CONUS restored). Stages 05–14 rebuild on that archive for final hazard maps.
+**Model implication (Stage 05):** Stage **05** applies five core GridRad
+artifact passes (`remove_gridrad_artifacts`: isolated speckle, inner-range
+radial ring, azimuthal annulus, quiet-background filament, and
+**spatiotemporal range-ring persistence** from a 21-day trailing window), plus
+site-specific remediation as a sixth layer for nine WSR-88D radars. Site
+remediation is enabled by default. Persistence discriminates stationary NEXRAD
+annuli from episodic hail using daily time series at fixed (site, range)—a
+daily-grid analogue of the radar-ring imagery discussed by Chilson et al.
+(2019). The optional geometry-aware classifier is research functionality:
+first run deterministic Stage 05 and Stage 06, then train it from Stage 06
+pairs and review diagnostics before any classifier-enabled Stage 05+ rerun.
+The Stage 01 axis fix and the filter metrics cited above are historical inputs;
+final quantitative statements require refresh after the v2.3.0 run is verified.
 
 ---
 
@@ -284,7 +301,8 @@ IBHS testing supports different vulnerability by roof material and impact resist
 
 Hail-size hazard alone is insufficient for insured loss estimation. Claims-calibrated vulnerability must account for construction, roof material, age, impact resistance, repair-cost inflation, deductible structure, and reporting thresholds.
 
-**Model implication:** Hazard-only v2.2.2; vulnerability and loss are future work, not production damage functions in this repository.
+**Model implication:** Hazard-only v2.3.0; vulnerability and loss are future
+work, not production damage functions in this repository.
 
 ---
 
@@ -380,7 +398,10 @@ Bowman, K.P., and C.R. Homeyer, 2017: GridRad: Three-dimensional gridded NEXRAD 
 
 Brown, T.M., et al., 2015: Evaluating hail damage using property insurance claims data. *Weather, Climate, and Society*, 7(3), 197–210.
 
-Chilson, C., K. Avery, A. McGovern, E. Bridge, D. Sheldon, and J. Kelly, 2019: Automated detection of bird roosts using NEXRAD radar data and convolutional neural networks. *Remote Sensing in Ecology and Conservation*, 5(1), 20–32.
+Chilson, C., K. Avery, A. McGovern, E. S. Bridge, D. Sheldon, and J. F. Kelly,
+2019: Automated detection of bird roosts using NEXRAD radar data and
+convolutional neural networks. *Remote Sensing in Ecology and Conservation*,
+5(1), 20–32. https://doi.org/10.1002/rse2.92.
 
 Coles, S., 2001: *An Introduction to Statistical Modeling of Extreme Values.* Springer.
 

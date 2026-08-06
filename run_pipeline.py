@@ -195,6 +195,7 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
     env.setdefault("PYTHONUNBUFFERED", "1")
     env.setdefault("MPLCONFIGDIR", str(LOGS / "mplconfig"))
 
+    proc = None
     try:
         with open(log_path, "w") as log_fh:
             log_fh.write(f"[{datetime.now().isoformat()}] Starting {script} ({mode})\n\n")
@@ -217,7 +218,8 @@ def run_stage(stage_id: str, script: str, desc: str, eta: str,
             elapsed = time.time() - t0
             log_fh.write(f"\n[{datetime.now().isoformat()}] Exit code: {proc.returncode} ({fmt_duration(elapsed)})\n")
     except KeyboardInterrupt:
-        proc.terminate()
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
         print(f"\n       {YELLOW}⚠ Interrupted{RESET}")
         sys.exit(1)
     except Exception as e:
@@ -327,8 +329,10 @@ def main():
     results = []
 
     for stage_id, script, desc, eta in stages_to_run:
-        ok = run_stage(stage_id, script, desc, eta, args.dry_run, args.validate_only,
-                       args.retrain_models, args.skip_ml, args.skip_calibration)
+        ok = run_stage(
+            stage_id, script, desc, eta, args.dry_run, args.validate_only,
+            args.retrain_models, args.skip_ml, args.skip_calibration,
+        )
         results.append((stage_id, desc, ok))
         if not ok and not args.dry_run:
             print(f"{RED}{BOLD}Pipeline stopped at stage {stage_id}.{RESET}")

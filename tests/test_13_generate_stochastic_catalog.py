@@ -65,3 +65,37 @@ def test_stage13_compute_empirical_rps_chunked():
     assert 10 in rp_maps
     assert rp_maps[10][10, 20] > 0
 
+
+def test_stage13_validation_requires_streamed_event_parquet(
+    tmp_path, monkeypatch
+):
+    import pandas as pd
+
+    s = load_stage("13_generate_stochastic_catalog.py")
+    cat_dir = tmp_path / "catalog"
+    map_dir = tmp_path / "maps"
+    pet_dir = tmp_path / "pet"
+    cat_dir.mkdir()
+    map_dir.mkdir()
+    pet_dir.mkdir()
+    monkeypatch.setattr(s, "CAT_DIR", cat_dir)
+    monkeypatch.setattr(s, "MAP_DIR", map_dir)
+    monkeypatch.setattr(s, "PET_DIR", pet_dir)
+    monkeypatch.setattr(s, "RP_YEARS", [10])
+    (map_dir / "rp_00010yr_stochastic.tif").touch()
+    (pet_dir / "pet_occurrence.csv").touch()
+    (pet_dir / "pet_aggregate.csv").touch()
+
+    assert s.validate_outputs() is False
+    empty = cat_dir / "stochastic_event_summary.parquet"
+    empty.touch()
+    assert s.validate_outputs() is False
+    pd.DataFrame(
+        {
+            "sim_year": [1],
+            "event_idx": [0],
+            "peak_hail_mm": [40.0],
+        }
+    ).to_parquet(cat_dir / "stochastic_event_summary.parquet", index=False)
+    assert s.validate_outputs() is True
+

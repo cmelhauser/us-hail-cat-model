@@ -9,8 +9,8 @@ under the pseudonym **theonlymuffinbot** (not a separate GitHub repository).
 Scientific direction and accountability remain with Christopher Melhauser.
 The sole code remote is `origin` → `cmelhauser/us-hail-cat-model`.
 
-Last updated: 2026-07-31 (AWS secrets injection + 100% CI gate + operator guide;
-origin-only remotes; **theonlymuffinbot** AI credit on **`v2.3.0`**).
+Last updated: 2026-08-05 (documentation synchronized; run status unverified
+since 2026-07-09; canonical state in `docs/RUN_NOTES.md`).
 
 ## What This Project Is
 
@@ -19,13 +19,13 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: **2.3.0** (Tier 0 radar QC + geometry-aware artifact classifier)
+- Version: **2.3.0** (Tier 0 radar QC + optional geometry-aware research classifier)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
 - Pipeline: 14 stages (01–13 hazard + 14 figures), all written and tested
-- Python: 3.10+ for project support; the active long run is still on the
-  existing Python 3.9.6 `.venv` and should be upgraded only after that run
+- Python: 3.10+ for project support; the historical long-run environment used
+  Python 3.9.6. Verify that no run is active before replacing that `.venv`.
 
 Current operating branch: **`v2.3.0`** (push/PR to `origin` only; CI on `main` and
 `v*`). Model release **2.3.0**. `origin/main` already carries the 2.3.0 codebase tip
@@ -159,10 +159,11 @@ python scripts/13_generate_stochastic_catalog.py --n-years 1000
 --validate         # re-run output validation for all stages
 --skip-ml          # force deterministic fallback in Stage 05
 --skip-calibration # Stage 05: skip ML calibration (with --skip-ml)
+--allow-spc-derived-adjustments  # Stage 05 research-only SPC range debias + classifier
 --clean-from N     # delete outputs from stage N onward before run (e.g. 05)
 --retrain-models   # retrain optional ML artifacts in Stage 05
 
-# Stage 05 rebuild (five-pass filter) — blocking; do not background from agents
+# Stage 05 deterministic baseline — blocking; do not background from agents
 python scripts/rerun_stage05.py
 python run_pipeline.py --only 05 --clean-from 05 --skip-ml --skip-calibration
 
@@ -320,22 +321,17 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-As of 2026-07-30:
+Repository identity is **v2.3.0** on branch **`v2.3.0`**, with `origin` as the
+sole remote. Pipeline run status is **unverified since 2026-07-09**; do not
+assert completion or reuse historical archive counts as current. The one
+canonical run-state section, verification steps, and ordered next actions are
+in [`docs/RUN_NOTES.md`](docs/RUN_NOTES.md#canonical-current-run-state).
 
-| Area | Status |
-|---|---|
-| Active branch | **`v2.3.0`** (sole write remote: `origin`) |
-| Model version | **2.3.0** (`MODEL_VERSION` / `pyproject.toml`) |
-| `origin/main` | Carries 2.3.0 codebase; may lag this branch by docs/CI tip commits |
-| All stage scripts (01–14) | Written, tested; CI green on Python 3.10/3.11/3.12 + integration |
-| Tests | pytest modules under `tests/`; AWS adapter tests under `aws/tests/` |
-| Mesh archive | **9,797** convective-day `mesh_*.tif` (5,023 MYRORSS + 2,714 GridRad + 2,060 MRMS) |
-| Tier 0 (v2.2.3 lineage) | 04c native QC, site remediation, 10 km azimuth bins — in **2.3.0** |
-| Tier 1 (v2.3.0) | Geometry artifact classifier + `train_artifact_classifier.py` |
-| **v2.3.0 full rebuild** | From **04c** through **14** — see `docs/RUN_NOTES.md` / `docs/HANDOFF.md` |
-| `artifact_classifier.pkl` | Optional; trained from Stage 06 pairs; gitignored |
-| Regression / golden tests | Pending frozen checksums after v2.3.0 run |
-| Bootstrap CIs on RP maps | Pending |
+The Stage 05 deterministic path is five core artifact passes plus
+site-specific remediation as a sixth layer, enabled by default. SPC-derived
+range debias and the geometry-aware hail-likelihood classifier are
+**research-only** (`--allow-spc-derived-adjustments`); they are trained from
+Stage 06 pairs and must follow a deterministic Stage 05 → Stage 06 baseline.
 
 ## Production Run Summary (v2.2.1, 2026-06-30 — superseded)
 
@@ -351,46 +347,13 @@ do not cite as final v2.2.2 hazard results.
 | 13 | 50k-yr stochastic catalog (~5.4 h) |
 | 14 | Figures + validation report |
 
-## Current Run Watch
+## Run Operations
 
-**v2.3.0 full rebuild (2026-07-09)** — Tier 0 (04c native QC, site remediation, 10 km
-azimuth bins) + Tier 1 (optional `artifact_classifier.pkl`). Requires **04c** re-run for
-GridRad days, then **05–14**.
-
-```bash
-screen -r hail_v230
-# or:
-tail -f logs/pipeline_v230.run.log
-tail -f logs/04c_fill_gridrad_gap.log
-tail -f logs/05_apply_mesh_bias_correction.log
-```
-
-Command:
-
-```bash
-.venv/bin/python scripts/train_artifact_classifier.py   # once, after Stage 06 exists
-.venv/bin/python run_pipeline.py --from 04c --clean-from 04c
-```
-
-Stage 05: six rule passes + site remediation + optional classifier (no `--skip-ml` when
-classifier should apply). After Stage 06:
-
-```bash
-.venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
-.venv/bin/python scripts/diagnostics/literature_validation_suite.py
-```
-
-Success metrics: `map_gridrad_minus_myrorss_mean_annual_max.png` ring visibility ↓;
-GridRad speckle P95 < **5%**; SPC POD @ ≥1″ not degraded > **3%** absolute;
-`rp_ring_energy` ↓; analytical vs stochastic 100-yr median ratio ~**1.1**.
-
-After the rebuild completes:
-
-1. `python run_pipeline.py --validate`
-2. `.venv/bin/python scripts/diagnostics/render_pnas_article_figures.py`
-3. Refresh manuscript Results from `data/analysis/pnas_article_metrics.json`
-4. Ablation: rules-only (`--skip-ml`) vs rules+ML vs GridRad native 04c QC — see `docs/radar_artifact_ml_plan.md`
-5. Merge **`v2.3.0`** to `main` when RP maps pass artifact QA
+Do not use a stale screen-session name as evidence of current state. Before
+resuming, follow the checks in
+[`docs/RUN_NOTES.md`](docs/RUN_NOTES.md#canonical-current-run-state). That
+section also owns the two-pass baseline → Stage 06 → optional classifier
+workflow and all current next actions.
 
 ## Documentation Quick Reference
 
@@ -407,9 +370,10 @@ After the rebuild completes:
 | Data / Zenodo archival | `docs/DATA_AVAILABILITY.md` |
 | Uncertainty disclosures | `docs/uncertainty.md` |
 | Extended AI operating rules | `docs/ai_instructions.md` |
-| Canonical project state | `docs/project_memory.md` |
+| Stable identity and historical work log | `docs/project_memory.md` |
 | Full review findings | `docs/REVIEW_2026-05-01.md` |
 | Pre-run audit | `docs/REVIEW_PRE_RUN.md` |
+| 2026-08-05 agent audit + reaudit | `docs/AGENT_AUDIT_2026-08-05.md` |
 | Contribution workflow | `CONTRIBUTING.md` |
 | Version history | `CHANGELOG.md` |
 

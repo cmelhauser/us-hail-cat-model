@@ -38,8 +38,11 @@ Stages **09–13**.
 .venv/bin/python scripts/05_apply_mesh_bias_correction.py --retrain-models
 ```
 
-**Inference:** omit `--skip-ml` on Stage **05** when `artifact_classifier.pkl` exists.
-`--skip-ml` remains the deterministic reproducible baseline (AGENTS.md rule #2).
+**Inference:** pass `--allow-spc-derived-adjustments` on Stage **05** (and omit
+`--skip-ml`) when `artifact_classifier.pkl` exists. The classifier is GridRad-only
+and multiplicatively down-weights by predicted hail likelihood. Default Stage 05
+keeps SPC validation-only. `--skip-ml` remains the deterministic reproducible
+baseline (AGENTS.md rule #2).
 
 ### Tier 2 (v3.0 research)
 
@@ -67,6 +70,6 @@ Labels: SPC severe reports (positive); high-MESH no-report cells (negative).
 
 1. Rules only (`--skip-ml`, pre–v2.2.3 archive)
 2. Rules + Tier 0 (v2.2.3, no classifier)
-3. Rules + Tier 0 + classifier (v2.3.0, full pipeline)
+3. Rules + Tier 0 + classifier (v2.3.0 research path with `--allow-spc-derived-adjustments`)
 
 Compare ring maps, validation metrics, and RP peaks under fixed 0–10″ color scale.

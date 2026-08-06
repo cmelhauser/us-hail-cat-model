@@ -330,11 +330,14 @@ def compute_mrl_and_threshold(exceedances: np.ndarray, region_id: int) -> float:
         else:
             mrl_score = 1.0
 
-        stability = 0.0 if prev_xi is None or not np.isfinite(prev_xi) or not np.isfinite(xi) else abs(xi - prev_xi)
+        stability = (
+            np.nan
+            if prev_xi is None or not np.isfinite(prev_xi) or not np.isfinite(xi)
+            else abs(xi - prev_xi)
+        )
         prev_xi = xi
         # Penalize very high thresholds through small sample size.
         count_penalty = 1.0 / np.sqrt(max(n_exc, 1))
-        score = ks + mrl_score + stability + count_penalty
         rows.append({
             "region": region_id,
             "candidate_threshold_mm": round(float(u), 3),
@@ -343,9 +346,11 @@ def compute_mrl_and_threshold(exceedances: np.ndarray, region_id: int) -> float:
             "xi": round(float(xi), 6) if np.isfinite(xi) else np.nan,
             "sigma": round(float(sigma), 6) if np.isfinite(sigma) else np.nan,
             "mrl_score": round(float(mrl_score), 6),
-            "stability_score": round(float(stability), 6),
+            "stability_score": (
+                round(float(stability), 6) if np.isfinite(stability) else np.nan
+            ),
             "gof_score": round(float(ks), 6) if np.isfinite(ks) else np.inf,
-            "score": round(float(score), 6),
+            "count_penalty": round(float(count_penalty), 6),
             "reason": "candidate",
         })
 
@@ -358,6 +363,39 @@ def compute_mrl_and_threshold(exceedances: np.ndarray, region_id: int) -> float:
             "score": np.nan, "reason": "no_valid_candidate_default",
         }]
     else:
+        # Components have different natural scales, so normalize each to [0, 1]
+        # before applying documented equal weights. Non-finite diagnostics are
+        # assigned the worst normalized score rather than silently winning.
+        components = (
+            ("gof_score", "gof_score_normalized"),
+            ("mrl_score", "mrl_score_normalized"),
+            ("stability_score", "stability_score_normalized"),
+            ("count_penalty", "count_penalty_normalized"),
+        )
+        for raw_name, normalized_name in components:
+            values = np.asarray([r.get(raw_name, np.nan) for r in rows], dtype=float)
+            finite = np.isfinite(values)
+            normalized = np.ones(values.shape, dtype=float)
+            if np.any(finite):
+                lo = float(np.min(values[finite]))
+                hi = float(np.max(values[finite]))
+                if hi > lo:
+                    normalized[finite] = (values[finite] - lo) / (hi - lo)
+                else:
+                    normalized[finite] = 0.0
+            for row, value in zip(rows, normalized):
+                row[normalized_name] = round(float(value), 6)
+        for row in rows:
+            row["score"] = round(
+                0.25
+                * (
+                    row["gof_score_normalized"]
+                    + row["mrl_score_normalized"]
+                    + row["stability_score_normalized"]
+                    + row["count_penalty_normalized"]
+                ),
+                6,
+            )
         best_i = int(np.nanargmin([r["score"] for r in rows]))
         rows[best_i]["selected"] = 1
         rows[best_i]["reason"] = "selected_min_score"

@@ -1,14 +1,18 @@
 # Benchmarks — Published RP Comparison Framework
 
-**CONUS Hail Catastrophe Model v2.1**
-**Status:** Framework document — comparisons to be executed after first full run produces RP maps.
+**CONUS Hail Catastrophe Model v2.3.0**
+**Status:** Framework document — comparisons require refreshed, validated
+v2.3.0 outputs.
 **Related:** `docs/methodology.md`, `docs/uncertainty.md`, `docs/sensitivity.md`, `docs/REVIEW_2026-05-01.md §B.6`
 
 ---
 
 ## Overview
 
-This document defines the post-run benchmarking framework for v2.1. Benchmarking answers a different question from sensitivity analysis: not "are outputs stable near the default parameters?" but "are outputs plausible in absolute terms, given what the literature reports?"
+This document defines the post-run benchmarking framework for v2.3.0.
+Benchmarking answers a different question from sensitivity analysis: not "are
+outputs stable near the default parameters?" but "are outputs plausible in
+absolute terms, given what the literature reports?"
 
 The benchmark suite does not require a published dataset with identical return periods and grid resolution. It requires that the model's outputs be comparable in direction, order of magnitude, and regional pattern to independently derived estimates.
 
@@ -27,13 +31,16 @@ All comparison figures are saved to `docs/figures/analysis/benchmarks/`.
 **Benchmark metric:** Annual probability of exceeding MESH ≥ 25 mm (≈ 1 inch) per 0.5° grid cell.
 
 **Comparison approach:**
-1. Aggregate v2.1 Stage 11 exceedance probabilities from 0.05° to 0.5° using cell-area-weighted mean.
+1. Aggregate v2.3.0 Stage 11 exceedance probabilities from 0.05° to 0.5° using cell-area-weighted mean.
 2. Visually compare the resulting map to Figure 3 or equivalent in Cintineo et al.
-3. Flag any region where v2.1 annual exceedance rate differs by more than a factor of 2 from the published climatology.
+3. Flag any region where v2.3.0 annual exceedance rate differs by more than a factor of 2 from the published climatology.
 
 **Expected pattern:** Peak activity in the central Great Plains (Kansas, Nebraska, eastern Colorado, Oklahoma), secondary maximum in Midwest corridor, lower probabilities in Southeast and Northwest.
 
-**Known differences:** Cintineo et al. (2012) uses NEXRAD MESH without the Murillo-Homeyer correction and covers a different period. Expect v2.1 to report lower values for equivalent size thresholds after the MESH75 correction, which compresses the extreme tail of the raw-MESH distribution.
+**Known differences:** Cintineo et al. (2012) uses NEXRAD MESH without the
+Murillo-Homeyer correction and covers a different period. Expect v2.3.0 to
+report lower values for equivalent size thresholds after the MESH75 correction,
+which compresses the extreme tail of the raw-MESH distribution.
 
 ---
 
@@ -44,13 +51,17 @@ All comparison figures are saved to `docs/figures/analysis/benchmarks/`.
 **Benchmark metric:** Annual severe hail day frequency (days with MESH ≥ 25 mm) per 1° grid cell, 1998–2019.
 
 **Comparison approach:**
-1. Compute v2.1 annual severe-hail-day frequency from Stage 07 climatology output at 1° aggregation.
+1. Compute v2.3.0 annual severe-hail-day frequency from Stage 07 climatology output at 1° aggregation.
 2. Compare to Figure 1 or Table 1 in Murillo et al. (2021).
 3. Report mean absolute error (MAE) across the High Plains and central US core, where coverage is most complete.
 
 **Expected pattern:** Broad hail maximum across the Great Plains and central US, 5–15 hail days per year at the climatological core. Reduced frequency along western mountain ranges and coastlines.
 
-**Known differences:** GridRad is one of three sources in v2.1; the other two (MYRORSS, MRMS) are not part of the Murillo (2021) climatology. The comparison is most meaningful for the **2012–2019** overlap with Murillo et al. (2021); v2.1 gap-fill extends through **2020-10-13** before MRMS begins **2020-10-14**.
+**Known differences:** GridRad is one of three sources in v2.3.0; the other two
+(MYRORSS, MRMS) are not part of the Murillo (2021) climatology. The comparison
+is most meaningful for the **2012–2019** overlap with Murillo et al. (2021);
+v2.3.0 gap-fill extends through **2020-10-13** before MRMS begins
+**2020-10-14**.
 
 ---
 
@@ -61,11 +72,12 @@ All comparison figures are saved to `docs/figures/analysis/benchmarks/`.
 **Benchmark metric:** Annual frequency of MRMS MESH ≥ 50 mm (significant severe hail) per 0.1° grid cell, 2015–2019.
 
 **Comparison approach:**
-1. Aggregate v2.1 Stage 07 MRMS-only annual frequency to 0.1° for the 2020–present period.
+1. Aggregate v2.3.0 Stage 07 MRMS-only annual frequency to 0.1° for the 2020–present period.
 2. Compare regional pattern of Stage 11 exceedance probabilities for the 50 mm threshold.
-3. Confirm that the MRMS-era v2.1 outputs are directionally consistent with the Wendt-Jirak pattern.
+3. Confirm that the MRMS-era v2.3.0 outputs are directionally consistent with the Wendt-Jirak pattern.
 
-**Caveat:** The v2.1 MRMS record starts October 2020, which is shorter than the Wendt-Jirak analysis period. Treat as directional validation only.
+**Caveat:** The v2.3.0 MRMS record starts October 2020, which is shorter than
+the Wendt-Jirak analysis period. Treat as directional validation only.
 
 ---
 
@@ -75,7 +87,11 @@ All comparison figures are saved to `docs/figures/analysis/benchmarks/`.
 
 Published commercial model outputs are proprietary and cannot be directly compared. However, industry presentations and academic partner papers occasionally report aggregate annual hail losses or indicative RP maps for the US.
 
-**Benchmark approach:** After first run, solicit informal comparison with industry practitioners to verify that v2.1 RP100 hail sizes in the Great Plains core (e.g., central Kansas) are in the range of 60–90 mm. This range is derived from literature-consistent extrapolation, not a single authoritative source.
+**Benchmark approach:** After the validated v2.3.0 run, solicit informal
+comparison with industry practitioners to verify that RP100 hail sizes in the
+Great Plains core (e.g., central Kansas) are in the range of 60–90 mm. This
+range is derived from literature-consistent extrapolation, not a single
+authoritative source.
 
 **Cliff test:** If RP100 at any non-coastal CONUS cell exceeds 150 mm or is below 25 mm, that cell is a candidate for diagnostic review.
 
@@ -83,9 +99,14 @@ Published commercial model outputs are proprietary and cannot be directly compar
 
 ### 2.2 Spatial extent and shape plausibility
 
-**Benchmark:** Visually compare v2.1 RP50, RP100, and RP500 maps to the hail-day frequency climatology from Cintineo et al. (2012) and Murillo et al. (2021). The high-return-period contours should approximately follow the climatological high-frequency zones, not appear as disconnected islands.
+**Benchmark:** Visually compare v2.3.0 RP50, RP100, and RP500 maps to the
+hail-day frequency climatology from Cintineo et al. (2012) and Murillo et al.
+(2021). The high-return-period contours should approximately follow the
+climatological high-frequency zones, not appear as disconnected islands.
 
-**Diagnostic:** Compute the Spearman rank correlation between the v2.1 RP100 map and the Stage 07 annual exceedance frequency map. Expected value: ≥ 0.70. Values below 0.50 suggest spatial anomalies in the EVT fitting or smoothing.
+**Diagnostic:** Compute the Spearman rank correlation between the v2.3.0 RP100
+map and the Stage 07 annual exceedance frequency map. Expected value: ≥ 0.70.
+Values below 0.50 suggest spatial anomalies in the EVT fitting or smoothing.
 
 ---
 
@@ -145,7 +166,12 @@ Divergence above the flag threshold at RP ≤ 500 yr is a P0 model-risk item req
 
 **Benchmark:** The corrected annual 90th-percentile MESH75 in the CONUS core should not jump by more than 15% between the final MYRORSS year (2011) and the first GridRad year (2012).
 
-**Diagnostic:** Stage 06 produces a year-by-year source-stratified summary. Extract the annual P90 MESH75 series and run a Kolmogorov-Smirnov test on the two-year windows bracketing 2012. Flag if p < 0.05.
+**Diagnostic:** Build year-by-year source-era summaries from corrected daily
+peaks, and compare windows bracketing 2012 with both effect sizes and an
+optional Kolmogorov-Smirnov test. The assembled MYRORSS and GridRad records do
+not overlap, so this comparison confounds source changes with climate and
+sampling variability; a KS result is a warning signal, not a source-bias
+estimate or a Stage 06 correction.
 
 ### 4.2 2020-10-14 transition (GridRad → MRMS)
 
@@ -160,7 +186,7 @@ Same as 4.1 for the **2020-10-13** (last GridRad gap day) vs **2020-10-14** (fir
 | Cintineo frequency comparison | After Stage 07 runs | `hail_climo.tif` exists |
 | Murillo frequency comparison | After Stage 07 runs | `hail_climo.tif` exists |
 | Wendt-Jirak MRMS check | After Stage 07 runs | MRMS-era outputs exist |
-| Source-transition KS test | After Stage 06 runs | `validation_mesh_vs_spc.csv` exists |
+| Source-transition distribution check | After Stage 06 runs | corrected daily peaks and source labels exist |
 | Regional sanity checks (RP) | After Stage 12 runs | `rp_*yr_hail_final.tif` exist |
 | Analytical vs stochastic RP divergence | After Stage 13 full run | Both RP map sets exist |
 | Stage 14 divergence flag count | After Stage 14 runs | `rp_divergence_summary.csv` exists |

@@ -257,16 +257,29 @@ After Stage 05 and Stage 06 validation pairs exist:
 .venv/bin/python scripts/diagnostics/radar_artifact_diagnostic.py
 ```
 
-Writes `data/analysis/radar_artifacts/` (range maps, speckle scores, source-era comparisons) and fits `data/analysis/calibration/range_debias.npz` from SPC collocated pairs. Stage 05 applies range debias automatically when that file exists (`--no-range-debias` to disable) and runs the five-pass GridRad artifact filter by default (`--no-speckle-filter` to disable): isolated speckle, radial range ring, azimuthal annulus, quiet-background filament, spatiotemporal range-ring persistence (`methodology.md` §5.5; `literature_review.md` §3.7).
+Writes `data/analysis/radar_artifacts/` (range maps, speckle scores, source-era
+comparisons) and fits `data/analysis/calibration/range_debias.npz` from SPC
+collocated pairs. Stage 05 applies range debias only with
+`--allow-spc-derived-adjustments` when that file exists (`--no-range-debias` to
+disable even then). Its deterministic GridRad QC is five core passes—isolated
+speckle, radial range ring, azimuthal annulus, quiet-background filament, and
+spatiotemporal range-ring persistence—plus site-specific remediation as a sixth
+layer, enabled by default (`--no-speckle-filter` disables the full rule-based
+layer). Persistence history is resume-safe via per-day prefilter sidecars.
 
-**2026-07-08:** Stage 01 MYRORSS re-ingest complete; Stages 05–14 rebuild with five-pass
-filter (persistence pass 5). After Stage 06 completes, run this diagnostic to refit
-`range_debias.npz`; if factors change materially, delete `mesh_0.05deg_corrected/` and
-rerun Stage 05 before downstream stages.
+The 2026-07-08 metrics were historical, pre-v2.3.0 snapshots and require
+post-run refresh. After the deterministic Stage 05 baseline and Stage 06,
+rerun this diagnostic to refit `range_debias.npz`; if factors change materially
+and SPC-derived adjustments are accepted for a research path, clean Stage 05+
+outputs and rerun with `--allow-spc-derived-adjustments` before downstream
+stages.
 
 ## 6. Stage 05 Modes
 
-**v2.2.2 rerun:** Stage 05 skips days whose corrected GeoTIFF already exists. To apply era-pooled GridRad calibration, the 29 mm winter filter, or updated `range_debias.npz`, delete the corrected archive first:
+**v2.3.0 rerun:** Stage 05 skips days whose corrected GeoTIFF already exists.
+To apply era-pooled GridRad calibration, the 29 mm winter filter, updated
+`range_debias.npz`, site-remediation changes, or a reviewed classifier, clean
+Stage 05+ outputs first.
 
 ```bash
 rm -rf data/historical/mesh_0.05deg_corrected/
@@ -284,8 +297,17 @@ Force deterministic fallback:
 python run_pipeline.py --only 05 --skip-ml
 ```
 
-Use `--skip-ml` for the first full production pass unless the optional
-calibration artifacts have already been reviewed.
+Use `--skip-ml` for the deterministic baseline. Run Stage 06 next; only then
+train the optional geometry-aware research classifier from
+`mesh_vs_spc_pairs.csv`:
+
+```bash
+python run_pipeline.py --only 05 --skip-ml
+python run_pipeline.py --only 06 --skip-ml
+python scripts/train_artifact_classifier.py
+# After reviewing classifier diagnostics, optional research path:
+python run_pipeline.py --from 05 --clean-from 05 --allow-spc-derived-adjustments
+```
 
 External model retraining workflow:
 
@@ -298,6 +320,7 @@ Optional artifacts:
 ```text
 data/analysis/calibration/gridrad_cqm_model.pkl
 data/analysis/calibration/hail_filter_model.pkl
+data/analysis/calibration/artifact_classifier.pkl
 ```
 
 If artifacts are absent, the deterministic workflow should still run.
@@ -427,14 +450,19 @@ Example:
 1. Run syntax and tests.
 2. Run `--dry-run`.
 3. Run Stage 01 and inspect `manifest_stage01_myrorss.csv`.
-4. Run stages 02, 03, 04a, and 04b.
-5. Run Stage 05 with `--skip-ml` first.
+4. Run Stages 02, 03, and 04a, then run Stage 04c with its embedded Stage 04b
+   download path (`run_pipeline.py --only 04c`). Use standalone 04b only for
+   the legacy two-stage download workflow.
+5. Run deterministic Stage 05 with `--skip-ml`.
 6. Run Stage 06 validation.
-7. Run stages 07–12. Stage 11b downloads NOAA/NCEI ETOPO 2022 surface elevation and writes `data/analysis/topography/elevation_0.05deg.tif` before Stage 12.
-8. Run Stage 13 with 1,000 years.
-9. Run Stage 13 with 50,000 years.
-10. Run Stage 14 (figures).
-11. Archive logs and manifest.
+7. Optionally train and review `artifact_classifier.pkl`; if accepted, clean
+   and rerun Stage 05+ without `--skip-ml`.
+8. Run Stages 07–12. Stage 11b downloads NOAA/NCEI ETOPO 2022 surface elevation
+   and writes `data/analysis/topography/elevation_0.05deg.tif` before Stage 12.
+9. Run Stage 13 with 1,000 years.
+10. Run Stage 13 with 50,000 years.
+11. Run Stage 14 (figures).
+12. Archive logs and manifest.
 
 ---
 
@@ -445,9 +473,14 @@ long-term access, archive externally following
 [`DATA_AVAILABILITY.md`](DATA_AVAILABILITY.md):
 
 - **ORCID:** [0009-0000-4234-5419](https://orcid.org/0009-0000-4234-5419) (Christopher Melhauser)
-- **Code DOI:** publish GitHub Release `v2.2.2` with Zenodo–GitHub integration enabled
+- **Code DOI:** after v2.3.0 outputs are verified, publish GitHub Release
+  `v2.3.0` with Zenodo–GitHub integration enabled
 - **Figures + diagnostics DOI:** upload the generated-outputs tarball described in `DATA_AVAILABILITY.md`
 - **Local machine transfer:** copy `data/` and `docs/figures/` via external drive (see `DATA_AVAILABILITY.md` §3)
+
+The DOI and exact manuscript commit SHA are external release/submission
+blockers. Do not invent placeholders that look like real identifiers; record
+them only after the release and submission snapshot exist.
 
 ---
 

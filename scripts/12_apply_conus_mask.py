@@ -34,7 +34,10 @@ Usage
 from __future__ import annotations
 
 import argparse
+import os
+import stat
 import sys
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -158,6 +161,29 @@ def build_topo_correction():
     return correction
 
 
+def _write_raster_atomic(
+    tif_path: Path, data: np.ndarray, profile: dict
+) -> None:
+    """Write a replacement GeoTIFF beside the target, then atomically replace it."""
+    import rasterio
+
+    target_mode = stat.S_IMODE(tif_path.stat().st_mode)
+    fd, temp_name = tempfile.mkstemp(
+        dir=tif_path.parent,
+        prefix=f".{tif_path.name}.",
+        suffix=".tmp",
+    )
+    os.close(fd)
+    temp_path = Path(temp_name)
+    try:
+        with rasterio.open(temp_path, "w", **profile) as dst:
+            dst.write(data.astype(np.float32), 1)
+        os.chmod(temp_path, target_mode)
+        os.replace(temp_path, tif_path)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 def _mask_one(tif_path: Path, outside_mask: np.ndarray, topo_correction: np.ndarray) -> None:
     import rasterio
 
@@ -171,8 +197,7 @@ def _mask_one(tif_path: Path, outside_mask: np.ndarray, topo_correction: np.ndar
 
     data[outside_mask] = 0.0
     profile.update(compress="lzw")
-    with rasterio.open(tif_path, "w", **profile) as dst:
-        dst.write(data.astype(np.float32), 1)
+    _write_raster_atomic(tif_path, data, profile)
 
 
 def apply_mask_to_rasters(conus_mask, topo_correction, workers: int = 4):

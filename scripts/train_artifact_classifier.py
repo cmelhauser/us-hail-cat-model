@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Train optional geometry-aware artifact classifier for Stage 05.
+Train an optional research geometry-aware hail-likelihood classifier.
 
-Uses Stage 06 SPC–MESH pairs as positive labels (severe reports) and samples
-high-MESH no-report cells as negatives. Writes ``artifact_classifier.pkl`` and
-diagnostics CSV under ``data/analysis/calibration/``.
+Uses Stage 06 SPC–MESH pairs as weak positive hail labels and samples high-MESH
+no-report cells as weak negatives. A no-report cell is not established ground
+truth for an artifact. The model is therefore research-only, trained on GridRad
+days by default, and evaluated with whole years held out. It must not be treated
+as independent SPC validation.
 
 Usage (repo root, after Stage 06):
   .venv/bin/python scripts/train_artifact_classifier.py
@@ -31,7 +33,6 @@ if str(REPO) not in sys.path:
 
 from scripts._artifact_features import (
     ARTIFACT_FEATURE_NAMES,
-    apply_classifier_weights,
     build_feature_matrix,
     build_single_cell_features,
     local_median_3x3,
@@ -70,7 +71,8 @@ def build_training_sets(
     *,
     max_neg_per_day: int,
     rng: np.random.Generator,
-) -> tuple[np.ndarray, np.ndarray]:
+    gridrad_only: bool = True,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     reported_by_date: dict[str, set[tuple[int, int]]] = defaultdict(set)
     pos_keys: list[tuple[str, int, int]] = []
     for row in pairs.itertuples(index=False):
@@ -85,6 +87,7 @@ def build_training_sets(
 
     X_parts: list[np.ndarray] = []
     y_parts: list[np.ndarray] = []
+    group_parts: list[np.ndarray] = []
     dates = sorted(reported_by_date.keys())
     cache: dict[str, np.ndarray | None] = {}
 
@@ -96,6 +99,8 @@ def build_training_sets(
             continue
         doy = datetime.strptime(datestr, "%Y%m%d").timetuple().tm_yday
         source = classify_mesh_source_from_yyyymmdd(datestr)
+        if gridrad_only and source != "GridRad":
+            continue
         feats, active = build_feature_matrix(
             raster,
             range_km=range_km,
@@ -120,6 +125,7 @@ def build_training_sets(
             neg_idx_arr = rng.choice(neg_idx_arr, size=max_neg_per_day, replace=False)
         X_parts.append(feats[neg_idx_arr])
         y_parts.append(np.zeros(neg_idx_arr.size, dtype=np.int8))
+        group_parts.append(np.full(neg_idx_arr.size, datestr, dtype="U8"))
 
     med_cache: dict[str, np.ndarray] = {}
     for datestr, row, col in pos_keys:
@@ -135,6 +141,8 @@ def build_training_sets(
             med_cache[datestr] = local_median_3x3(raster)
         doy = datetime.strptime(datestr, "%Y%m%d").timetuple().tm_yday
         source = classify_mesh_source_from_yyyymmdd(datestr)
+        if gridrad_only and source != "GridRad":
+            continue
         X_parts.append(
             build_single_cell_features(
                 cell_mesh,
@@ -146,22 +154,30 @@ def build_training_sets(
             ).reshape(1, -1)
         )
         y_parts.append(np.ones(1, dtype=np.int8))
+        group_parts.append(np.array([datestr], dtype="U8"))
 
     if not X_parts:
         raise RuntimeError("No training samples built; run Stage 06 and ensure corrected rasters exist.")
     X = np.vstack(X_parts)
     y = np.concatenate(y_parts)
-    return X, y
+    groups = np.concatenate(group_parts)
+    return X, y, groups
 
 
-def train_classifier(X: np.ndarray, y: np.ndarray):
+def train_classifier(X: np.ndarray, y: np.ndarray, groups: np.ndarray):
     from sklearn.ensemble import GradientBoostingClassifier
     from sklearn.metrics import roc_auc_score
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import GroupShuffleSplit
 
-    X_tr, X_te, y_tr, y_te = train_test_split(
-        X, y, test_size=0.2, random_state=RNG_SEED, stratify=y,
-    )
+    years = np.asarray([str(group)[:4] for group in groups])
+    if len(np.unique(years)) < 2:
+        raise RuntimeError("Classifier evaluation requires samples from at least two years.")
+    splitter = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=RNG_SEED)
+    train_idx, test_idx = next(splitter.split(X, y, groups=years))
+    X_tr, X_te = X[train_idx], X[test_idx]
+    y_tr, y_te = y[train_idx], y[test_idx]
+    if len(np.unique(y_tr)) < 2 or len(np.unique(y_te)) < 2:
+        raise RuntimeError("Year holdout must contain both weak-label classes.")
     model = GradientBoostingClassifier(
         random_state=RNG_SEED,
         max_depth=4,
@@ -172,14 +188,28 @@ def train_classifier(X: np.ndarray, y: np.ndarray):
     model.fit(X_tr, y_tr)
     prob = model.predict_proba(X_te)[:, 1]
     auc = float(roc_auc_score(y_te, prob)) if len(np.unique(y_te)) > 1 else float("nan")
-    return model, {"n_train": int(len(y_tr)), "n_test": int(len(y_te)), "roc_auc": auc}
+    return model, {
+        "n_train": int(len(y_tr)),
+        "n_test": int(len(y_te)),
+        "roc_auc": auc,
+        "split": "grouped_by_year",
+        "train_years": sorted(set(years[train_idx].tolist())),
+        "holdout_years": sorted(set(years[test_idx].tolist())),
+    }
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Train Stage 05 artifact classifier.")
+    parser = argparse.ArgumentParser(
+        description="Train research SPC-weak-label hail-likelihood classifier."
+    )
     parser.add_argument("--pairs", type=Path, default=PAIRS_PATH)
     parser.add_argument("--max-neg-per-day", type=int, default=150)
     parser.add_argument("--output", type=Path, default=OUT_MODEL)
+    parser.add_argument(
+        "--include-all-sources",
+        action="store_true",
+        help="Research only: include MYRORSS/MRMS in addition to default GridRad samples.",
+    )
     args = parser.parse_args(argv)
 
     if not args.pairs.is_file():
@@ -187,8 +217,13 @@ def main(argv: list[str] | None = None) -> None:
 
     pairs = pd.read_csv(args.pairs)
     rng = np.random.default_rng(RNG_SEED)
-    X, y = build_training_sets(pairs, max_neg_per_day=args.max_neg_per_day, rng=rng)
-    model, metrics = train_classifier(X, y)
+    X, y, groups = build_training_sets(
+        pairs,
+        max_neg_per_day=args.max_neg_per_day,
+        rng=rng,
+        gridrad_only=not args.include_all_sources,
+    )
+    model, metrics = train_classifier(X, y, groups)
 
     CAL_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -199,6 +234,9 @@ def main(argv: list[str] | None = None) -> None:
         "metrics": metrics,
         "n_samples": int(len(y)),
         "positive_rate": float(y.mean()),
+        "label_semantics": "1=SPC-collocated likely hail; 0=no-report weak negative",
+        "data_role": "research_tuning_not_independent_validation",
+        "sources": "all" if args.include_all_sources else "GridRad",
     }
     with open(args.output, "wb") as f:
         pickle.dump(payload, f)

@@ -29,10 +29,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 try:
-    from _config import DATA_ROOT, LOG_ROOT
+    from _config import DATA_ROOT, LOG_ROOT, RNG_SEED
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import DATA_ROOT, LOG_ROOT
+    from scripts._config import DATA_ROOT, LOG_ROOT, RNG_SEED
     from scripts._logging import get_logger
 
 
@@ -73,12 +73,14 @@ def validate_outputs() -> bool:
     if not OUT_DIR.exists():
         errors.append(f"Missing directory: {OUT_DIR}")
     else:
-        csv_files = list(OUT_DIR.rglob("*.csv"))
+        csv_files = sorted(OUT_DIR.rglob("*.csv"))
         if len(csv_files) <= 1000:
             errors.append(f"Too few CSV files: {len(csv_files)} (expected >1000)")
         else:
             log(f"  Found {len(csv_files):,} SPC report files")
-            sample = random.sample(csv_files, min(5, len(csv_files)))
+            sample = random.Random(RNG_SEED).sample(
+                csv_files, min(5, len(csv_files))
+            )
             for p in sample:
                 try:
                     with open(p, newline="") as f:

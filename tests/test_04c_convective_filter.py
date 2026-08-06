@@ -95,6 +95,31 @@ def test_find_gridrad_files_hourly_v42_label(load_script, tmp_path, monkeypatch)
     assert len(files) == 2
 
 
+def test_temporal_coverage_summary_flags_sparse_hourly_input(load_script):
+    s = load_script("04c_fill_gridrad_gap.py")
+    day = date(2018, 4, 15)
+    files = [
+        Path("nexrad_3d_v4_2_20180415T120000Z.nc"),
+        Path("nexrad_3d_v4_2_20180415T180000Z.nc"),
+    ]
+    summary = s.temporal_coverage_summary(files, "gridrad-hourly-v42", day)
+    assert summary["temporal_coverage_status"] == "partial"
+    assert summary["source_max_gap_minutes"] == 360.0
+
+
+def test_temporal_coverage_summary_accepts_complete_hourly_input(load_script):
+    s = load_script("04c_fill_gridrad_gap.py")
+    day = date(2018, 4, 15)
+    start = datetime(2018, 4, 15, 12, 0, tzinfo=timezone.utc)
+    files = [
+        Path(f"nexrad_3d_v4_2_{(start + timedelta(hours=i)).strftime('%Y%m%dT%H%M%SZ')}.nc")
+        for i in range(24)
+    ]
+    summary = s.temporal_coverage_summary(files, "gridrad-hourly-v42", day)
+    assert summary["temporal_coverage_status"] == "complete"
+    assert summary["source_max_gap_minutes"] == 60.0
+
+
 def test_find_gridrad_files_hourly_fill_when_severe_sparse(load_script, tmp_path, monkeypatch):
     s = load_script("04c_fill_gridrad_gap.py")
     sev = tmp_path / "gridrad_severe"

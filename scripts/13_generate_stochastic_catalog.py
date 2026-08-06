@@ -40,7 +40,6 @@ Output
   data/stochastic/maps/rp_*yr_stochastic.tif (empirical RP GeoTIFFs)
   data/stochastic/pet/pet_occurrence.csv
   data/stochastic/pet/pet_aggregate.csv
-  data/stochastic/ann_max_hail.npy (50,000 × nrows × ncols, active-cell sparse)
 
 Usage
 -----
@@ -460,6 +459,26 @@ def load_conus_mask():
 
 def validate_outputs() -> bool:
     errors = []
+    catalog_path = CAT_DIR / "stochastic_event_summary.parquet"
+    if not catalog_path.exists():
+        errors.append(f"Missing: {catalog_path.name}")
+    else:
+        try:
+            import pyarrow.parquet as pq
+
+            pf = pq.ParquetFile(catalog_path)
+            if pf.metadata is None or pf.metadata.num_rows < 1:
+                errors.append(f"{catalog_path.name}: empty Parquet catalog")
+            else:
+                names = set(pf.schema_arrow.names)
+                required = {"sim_year", "event_idx", "peak_hail_mm"}
+                missing_cols = sorted(required - names)
+                if missing_cols:
+                    errors.append(
+                        f"{catalog_path.name}: missing columns {missing_cols}"
+                    )
+        except Exception as exc:
+            errors.append(f"{catalog_path.name}: unreadable Parquet ({exc})")
     for rp in RP_YEARS:
         p = MAP_DIR / f"rp_{rp:05d}yr_stochastic.tif"
         if not p.exists():

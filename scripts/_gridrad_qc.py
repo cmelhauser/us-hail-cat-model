@@ -13,6 +13,8 @@ import numpy as np
 # GridRad v3.1 recommendation: Necho/Nobs < 0.6 when Nobs >= 3 → missing.
 FILTER_MIN_ECHO_FREQ = 0.6
 FILTER_MIN_NRADOBS = 3
+# GridRad v4.2 recommendation: total reflectivity weight W < 1.5 → missing.
+FILTER_MIN_WEIGHT = 1.5
 
 # Clutter removal: minimum 3×3×3 neighborhood echo coverage (32%).
 CLUTTER_MIN_COVERAGE = 0.32
@@ -24,8 +26,10 @@ def gridrad_filter_reflectivity(
     nradobs: np.ndarray,
     nradecho: np.ndarray,
     *,
+    total_weight: np.ndarray | None = None,
     min_freq: float = FILTER_MIN_ECHO_FREQ,
     min_nobs: int = FILTER_MIN_NRADOBS,
+    min_weight: float = FILTER_MIN_WEIGHT,
 ) -> np.ndarray:
     """
     Remove low-confidence GridRad reflectivity using Necho/Nobs echo frequency.
@@ -38,6 +42,9 @@ def gridrad_filter_reflectivity(
     with np.errstate(divide="ignore", invalid="ignore"):
         freq = necho / np.maximum(nobs, 1.0)
     low_conf = (nobs >= float(min_nobs)) & np.isfinite(freq) & (freq < min_freq)
+    if total_weight is not None and total_weight.shape == out.shape:
+        weight = total_weight.astype(np.float32, copy=False)
+        low_conf |= np.isfinite(weight) & (weight < min_weight)
     out[low_conf] = np.nan
     return out
 
@@ -47,7 +54,7 @@ def gridrad_remove_clutter(
     *,
     z_threshold: float = CLUTTER_Z_THRESHOLD_DBZ,
     min_coverage: float = CLUTTER_MIN_COVERAGE,
-    skip_weak_shallow_echo: bool = True,
+    skip_weak_shallow_echo: bool = False,
 ) -> np.ndarray:
     """
   4-step GridRad clutter removal analogue on dense reflectivity.
@@ -104,10 +111,16 @@ def apply_gridrad_native_qc(
     nradobs: np.ndarray | None,
     nradecho: np.ndarray | None,
     *,
-    skip_weak_shallow_echo: bool = True,
+    total_weight: np.ndarray | None = None,
+    skip_weak_shallow_echo: bool = False,
 ) -> np.ndarray:
     """Apply filter (when obs/echo present) then clutter removal."""
     out = reflectivity
     if nradobs is not None and nradecho is not None and nradobs.shape == out.shape:
-        out = gridrad_filter_reflectivity(out, nradobs, nradecho)
+        out = gridrad_filter_reflectivity(
+            out,
+            nradobs,
+            nradecho,
+            total_weight=total_weight,
+        )
     return gridrad_remove_clutter(out, skip_weak_shallow_echo=skip_weak_shallow_echo)

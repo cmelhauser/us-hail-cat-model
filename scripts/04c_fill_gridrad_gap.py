@@ -62,8 +62,8 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
 
 try:
     from _config import (
-        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
-        NODATA, MAX_HAIL_MM,
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LAT_MIN,
+        LON_MIN, LON_MAX, NODATA, MAX_HAIL_MM, MESH75_A, MESH75_B,
     )
     from _io import (
         classify_mesh_source_day,
@@ -85,8 +85,8 @@ try:
     from _logging import get_logger
 except ImportError:  # pragma: no cover - pytest importlib fallback
     from scripts._config import (
-        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
-        NODATA, MAX_HAIL_MM,
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LAT_MIN,
+        LON_MIN, LON_MAX, NODATA, MAX_HAIL_MM, MESH75_A, MESH75_B,
     )
     from scripts._io import (
         classify_mesh_source_day,
@@ -123,10 +123,6 @@ OUT_LAT_MAX = LAT_MAX
 OUT_LON_MIN = LON_MIN
 OUT_NODATA  = NODATA
 QA_MAX_HAIL_MM = MAX_HAIL_MM
-
-# MESH75 coefficients (corrected 2021 corrigendum)
-MESH75_A = 15.096
-MESH75_B = 0.206
 
 # SHI constants
 Z_THRESHOLD = 40.0     # dBZ minimum
@@ -230,16 +226,32 @@ def delete_gridrad_inputs_for_day(convective_day: date) -> None:
 
 def compute_shi_column(z_profile, heights_km, h_0c, h_m20c):
     """Compute SHI for a single vertical column (Witt et al. 1998)."""
-    shi = 0.0
-    dh = 1000.0  # 1 km vertical step in meters
+    z = np.asarray(z_profile, dtype=np.float64)
+    heights = np.asarray(heights_km, dtype=np.float64)
+    valid_heights = np.isfinite(heights)
+    if z.shape != heights.shape or np.count_nonzero(valid_heights) == 0:
+        return 0.0
 
-    for z_dbz, h_km in zip(z_profile, heights_km):
+    z = z[valid_heights]
+    heights = heights[valid_heights]
+    order = np.argsort(heights)
+    z = z[order]
+    heights = heights[order]
+    if heights.size == 1:
+        layer_depth_m = np.array([1000.0], dtype=np.float64)
+    else:
+        # GridRad levels are usually 1-km spaced, but use the actual coordinate
+        # spacing so non-uniform levels do not bias the SHI vertical integral.
+        layer_depth_m = np.abs(np.gradient(heights)) * 1000.0
+
+    shi = 0.0
+    for z_dbz, h_km, dh_m in zip(z, heights, layer_depth_m):
         if np.isnan(z_dbz) or z_dbz < Z_THRESHOLD or h_km < h_0c:
             continue
 
         wt = 1.0 if h_km >= h_m20c else max(0.0, (h_km - h_0c) / max(h_m20c - h_0c, 0.1))
-        e = E_COEFF * (10.0 ** (E_EXPONENT * z_dbz)) * wt
-        shi += wt * e * dh
+        e = E_COEFF * (10.0 ** (E_EXPONENT * z_dbz))
+        shi += wt * e * dh_m
 
     return 0.1 * shi
 
@@ -311,27 +323,56 @@ def find_gridrad_files(convective_day: date) -> tuple:
     return [], "none"
 
 
+def temporal_coverage_summary(
+    nc_files: list[Path],
+    source: str,
+    convective_day: date,
+) -> dict[str, str | float | None]:
+    """Summarize source timing and classify convective-window completeness."""
+    times = sorted(set(observation_times_from_paths(nc_files, convective_day)))
+    if not times:
+        return {
+            "source_first_utc": None,
+            "source_last_utc": None,
+            "source_max_gap_minutes": None,
+            "temporal_coverage_status": "missing",
+        }
+
+    max_gap = max(
+        ((b - a).total_seconds() / 60.0 for a, b in zip(times, times[1:])),
+        default=0.0,
+    )
+    severe_only = source == "gridrad-severe-5min"
+    complete = convective_window_coverage_ok(
+        times,
+        convective_day,
+        min_files=6 if severe_only else 12,
+        edge_tolerance_minutes=30.0 if severe_only else 65.0,
+        max_gap_minutes=15.0 if severe_only else 65.0,
+    )
+    return {
+        "source_first_utc": times[0].isoformat(),
+        "source_last_utc": times[-1].isoformat(),
+        "source_max_gap_minutes": max_gap,
+        "temporal_coverage_status": "complete" if complete else "partial",
+    }
+
+
 def _read_var_array(ds, name: str) -> np.ndarray:
     data = ds.variables[name][:]
     return data.filled(np.nan) if hasattr(data, "filled") else np.asarray(data)
 
 
-def _load_reflectivity_3d(ds) -> np.ndarray | None:
-    """
-    Load reflectivity (dBZ) on (altitude, lat, lon).
-
-    GridRad v3/v4 store the physical field as sparse ``Reflectivity(Index)``.
-    ``Nradecho`` is a 3-D mask/count (typically 0–35), not dBZ — do not use it here.
-    """
-    if "Reflectivity" in ds.variables:
-        dense = _read_var_array(ds, "Reflectivity")
-        if dense.ndim == 3:
-            return dense
-
-    if "Reflectivity" not in ds.variables or "index" not in ds.variables:
+def _load_indexed_3d(ds, name: str) -> np.ndarray | None:
+    """Load a dense or ``index``-sparse GridRad field on (altitude, lat, lon)."""
+    if name not in ds.variables:
         return None
 
-    sparse = _read_var_array(ds, "Reflectivity")
+    sparse = _read_var_array(ds, name)
+    if sparse.ndim == 3:
+        return sparse.astype(np.float32)
+    if "index" not in ds.variables:
+        return None
     if sparse.ndim != 1:
         return None
 
@@ -360,6 +401,16 @@ def _load_reflectivity_3d(ds) -> np.ndarray | None:
     grid[~np.isfinite(grid)] = np.nan
     grid[grid == -np.inf] = np.nan
     return grid
+
+
+def _load_reflectivity_3d(ds) -> np.ndarray | None:
+    """
+    Load reflectivity (dBZ) on (altitude, lat, lon).
+
+    GridRad v3/v4 store the physical field as sparse ``Reflectivity(Index)``.
+    ``Nradecho`` is a 3-D mask/count (typically 0–35), not dBZ — do not use it here.
+    """
+    return _load_indexed_3d(ds, "Reflectivity")
 
 
 def _load_dense_3d(ds, name: str) -> np.ndarray | None:
@@ -408,6 +459,7 @@ def process_gridrad_file(nc_path, daily_max, month, *, native_qc: bool = True):
             return 0
         nradobs = _load_dense_3d(ds, "Nradobs")
         nradecho = _load_dense_3d(ds, "Nradecho")
+        reflectivity_weight = _load_indexed_3d(ds, "wReflectivity")
     finally:
         ds.close()
 
@@ -416,7 +468,12 @@ def process_gridrad_file(nc_path, daily_max, month, *, native_qc: bool = True):
             from _gridrad_qc import apply_gridrad_native_qc
         except ImportError:
             from scripts._gridrad_qc import apply_gridrad_native_qc
-        refl = apply_gridrad_native_qc(refl, nradobs, nradecho)
+        refl = apply_gridrad_native_qc(
+            refl,
+            nradobs,
+            nradecho,
+            total_weight=reflectivity_weight,
+        )
 
     max_refl = np.nanmax(refl, axis=0)
     active = np.argwhere(max_refl >= Z_THRESHOLD)
@@ -429,7 +486,7 @@ def process_gridrad_file(nc_path, daily_max, month, *, native_qc: bool = True):
         if lon > 180.0:
             lon -= 360.0
 
-        if not (24.0 <= lat <= 50.0 and -125.0 <= lon <= -66.0):
+        if not (LAT_MIN <= lat <= LAT_MAX and LON_MIN <= lon <= LON_MAX):
             continue
 
         h_0c, h_m20c = get_freezing_levels_era5(lat, lon, month)
@@ -546,11 +603,13 @@ def manifest_row_for_day(
     max_mesh_mm: float,
     read_errors: int | None = None,
     skipped: bool = False,
+    temporal_coverage: dict[str, str | float | None] | None = None,
 ) -> dict:
     plain_count, gz_count = summarize_gridrad_formats(nc_files)
     status = classify_mesh_source_day(
         len(nc_files), active_cells, read_errors or 0
     )
+    coverage = temporal_coverage or {}
     return mesh_manifest_row(
         convective_day,
         out_path,
@@ -564,6 +623,10 @@ def manifest_row_for_day(
         status=status,
         skipped=skipped,
         read_errors=read_errors,
+        source_first_utc=coverage.get("source_first_utc"),
+        source_last_utc=coverage.get("source_last_utc"),
+        source_max_gap_minutes=coverage.get("source_max_gap_minutes"),
+        temporal_coverage_status=coverage.get("temporal_coverage_status"),
     )
 
 
@@ -573,6 +636,7 @@ def process_day(convective_day: date, *, native_qc: bool | None = None):
 
     out_path = mesh_path_for_convective_day(OUT_DIR, convective_day)
     nc_files, _source = find_gridrad_files(convective_day)
+    temporal_coverage = temporal_coverage_summary(nc_files, _source, convective_day)
 
     if out_path.exists():
         active_cells, max_mesh_mm = summarize_mesh_output_raster(
@@ -586,6 +650,7 @@ def process_day(convective_day: date, *, native_qc: bool | None = None):
             active_cells=active_cells,
             max_mesh_mm=max_mesh_mm,
             skipped=True,
+            temporal_coverage=temporal_coverage,
         ))
         return {"skipped": True, "active_cells": active_cells, "max_mesh_mm": max_mesh_mm}
 
@@ -598,6 +663,7 @@ def process_day(convective_day: date, *, native_qc: bool | None = None):
             active_cells=0,
             max_mesh_mm=0.0,
             read_errors=0,
+            temporal_coverage=temporal_coverage,
         ))
         return {"files": 0, "no_data": True}
 
@@ -637,6 +703,10 @@ def process_day(convective_day: date, *, native_qc: bool | None = None):
             "MAX_MESH75_MM": f"{peak:.2f}",
             "MAX_MESH75_IN": f"{peak / 25.4:.3f}",
             "ACTIVE_CELLS": str(n_active),
+            "TEMPORAL_COVERAGE": str(temporal_coverage["temporal_coverage_status"]),
+            "SOURCE_FIRST_UTC": str(temporal_coverage["source_first_utc"] or ""),
+            "SOURCE_LAST_UTC": str(temporal_coverage["source_last_utc"] or ""),
+            "SOURCE_MAX_GAP_MIN": str(temporal_coverage["source_max_gap_minutes"] or ""),
         },
     )
     max_mesh_mm = round(peak, 1)
@@ -648,6 +718,7 @@ def process_day(convective_day: date, *, native_qc: bool | None = None):
         active_cells=n_active,
         max_mesh_mm=max_mesh_mm,
         read_errors=errors,
+        temporal_coverage=temporal_coverage,
     ))
     return {
         "files": len(nc_files),
@@ -656,6 +727,7 @@ def process_day(convective_day: date, *, native_qc: bool | None = None):
         "active_cells": n_active,
         "peak_mesh75_mm": max_mesh_mm,
         "errors": errors,
+        "temporal_coverage_status": temporal_coverage["temporal_coverage_status"],
         "tif": str(out_path),
     }
 
@@ -664,7 +736,8 @@ def rebuild_manifest_from_outputs(d_start: date, d_end: date) -> int:
     """Upsert manifest rows from staged GridRad files and existing GeoTIFFs."""
     n = 0
     for day in iter_dates(d_start, d_end):
-        nc_files, _ = find_gridrad_files(day)
+        nc_files, source = find_gridrad_files(day)
+        temporal_coverage = temporal_coverage_summary(nc_files, source, day)
         out_path = mesh_path_for_convective_day(OUT_DIR, day)
         if out_path.exists():
             active_cells, max_mesh_mm = summarize_mesh_output_raster(
@@ -678,6 +751,7 @@ def rebuild_manifest_from_outputs(d_start: date, d_end: date) -> int:
                 active_cells=active_cells,
                 max_mesh_mm=max_mesh_mm,
                 skipped=True,
+                temporal_coverage=temporal_coverage,
             ))
         elif not nc_files:
             upsert_manifest_row(manifest_row_for_day(
@@ -688,6 +762,7 @@ def rebuild_manifest_from_outputs(d_start: date, d_end: date) -> int:
                 active_cells=0,
                 max_mesh_mm=0.0,
                 read_errors=0,
+                temporal_coverage=temporal_coverage,
             ))
         else:
             continue
@@ -986,13 +1061,18 @@ def main(argv: list[str] | None = None) -> None:
         list(iter_dates(d_start, d_end)),
         missing_only=args.missing_only,
     )
-    done = skipped = no_data = 0
+    done = skipped = no_data = failed = 0
     peak_mesh = 0.0
     sev_count = hr_count = 0
     t0 = time.time()
 
     log(f"\n  Processing {len(all_days):,} days ...\n")
     if args.missing_only and not all_days:
+        labels = rebuild_gridrad_days_from_geotiffs(OUT_DIR, d_start, d_end)
+        log(
+            f"  gridrad_days.txt labels in window: {len(labels):,} → "
+            f"{gridrad_days_file}"
+        )
         log("  No missing-output days in range; nothing to do.")
         sys.exit(0)
 
@@ -1029,11 +1109,12 @@ def main(argv: list[str] | None = None) -> None:
             return 0.0, 0
 
     def _finalize_day(day: date, ymd: str, result: dict) -> None:
-        nonlocal done, skipped, no_data, peak_mesh, sev_count, hr_count
+        nonlocal done, skipped, no_data, failed, peak_mesh, sev_count, hr_count
         tif_path = OUT_DIR / f"{day.year}" / f"mesh_{ymd}.tif"
         if result.get("skipped"):
             skipped += 1
             if tif_path.exists():
+                gridrad_days.append(ymd)
                 peak, n_active = _peak_from_tif(tif_path)
                 peak_mesh = max(peak_mesh, peak)
                 log(
@@ -1047,7 +1128,7 @@ def main(argv: list[str] | None = None) -> None:
             log(f"  [{ymd}] no_data (no GridRad inputs)")
         elif result.get("error"):
             log(f"  [{ymd}] ERROR: {result['error']}")
-            no_data += 1
+            failed += 1
         else:
             done += 1
             src = result.get("source", "")
@@ -1119,16 +1200,25 @@ def main(argv: list[str] | None = None) -> None:
             b_sess.close()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    n_labels = merge_gridrad_days_labels(gridrad_days_file, gridrad_days)
-    log(f"  gridrad_days.txt labels (union): {n_labels:,} → {gridrad_days_file}")
+    merge_gridrad_days_labels(gridrad_days_file, gridrad_days)
+    labels = rebuild_gridrad_days_from_geotiffs(OUT_DIR, d_start, d_end)
+    log(
+        f"  gridrad_days.txt labels in window: {len(labels):,} → "
+        f"{gridrad_days_file}"
+    )
 
     elapsed = time.time() - t0
     log(f"\n{'='*60}")
     log(f"  Complete in {elapsed/3600:.1f} hours")
     log(f"  Days processed: {done:,} (Severe-5min: {sev_count}, Hourly: {hr_count})")
-    log(f"  Days skipped: {skipped:,}  |  No data: {no_data:,}")
+    log(f"  Days skipped: {skipped:,}  |  No data: {no_data:,}  |  Failed: {failed:,}")
     log(f"  Peak MESH75: {peak_mesh:.1f} mm ({peak_mesh/25.4:.1f} in)")
     log(f"{'='*60}\n")
+    if failed:
+        raise RuntimeError(
+            f"Stage 04c completed with {failed} failed convective day(s); "
+            "inspect the log and rerun the failed dates."
+        )
 
 
 if __name__ == "__main__":

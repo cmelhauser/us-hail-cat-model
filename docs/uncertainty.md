@@ -9,7 +9,7 @@
 ## Overview
 
 Every probabilistic hazard estimate carries uncertainty. This document catalogues
-the sources of uncertainty in the v2.2 model, characterises their expected
+the sources of uncertainty in the v2.3.0 model, characterises their expected
 magnitude, and records the current treatment of each. It serves both as a
 disclosure document for model users and as a roadmap for future uncertainty
 quantification work.
@@ -45,7 +45,8 @@ GridRad-era products can exhibit **range-dependent bias** and **isolated speckle
 spikes** aligned with WSR-88D site geometry. These propagate into sparse event
 footprints and stochastic return-period maps if uncorrected.
 
-**Diagnostic progression (9,797 corrected days):**
+**Historical diagnostic progression (pre-v2.3.0 final run; 9,797 corrected
+days in that snapshot):**
 
 | Metric | Pre-debias | Three-pass (2026-07-05) | Four-pass (2026-07-06) |
 |--------|----------:|------------------------:|-----------------------:|
@@ -53,17 +54,20 @@ footprints and stochastic return-period maps if uncorrected.
 | GridRad P95 speckle fraction | 50% | 33% | **9.1%** |
 | GridRad / MYRORSS mid-range ratio | ~2× | ~1.7× | ~1.7× |
 
-**Current treatment:** Stage 05 applies SPC-collocated **range debias**
-(`range_debias.npz`) and a **five-pass GridRad artifact filter** (isolated speckle,
-inner-range radial ring, azimuthal annulus, background filament, spatiotemporal
-persistence; `methodology.md` §5.5). **Stage 01 MYRORSS re-ingest completed 2026-07-08**;
-**Stages 05–14** rebuilding **2026-07-08**. Refresh `radar_artifact_diagnostic.py`
-diff maps after Stage 06 before trusting RP figures. Prior GridRad speckle numbers
-(1.8% mean) apply to the pre–eastern-fix corrected archive.
+**Current treatment:** Stage 05 applies **five core GridRad artifact passes**
+and site-specific remediation as a sixth layer, enabled by default. SPC-collocated
+**range debias** (`range_debias.npz`) and the optional geometry-aware
+hail-likelihood classifier are **research-only** and off unless
+`--allow-spc-derived-adjustments` is passed (and `--skip-ml` is not). The
+classifier is trained only after a deterministic Stage 05 baseline and Stage 06,
+and is applied to GridRad days only. Run status is unverified since 2026-07-09;
+refresh `radar_artifact_diagnostic.py` difference maps and every quantitative
+value in the table after the v2.3.0 run is verified. The 1.8% mean applies only
+to the historical pre–eastern-fix archive.
 Residual broad GridRad−MYRORSS climatological offsets may remain in era-comparison
 diagnostics. Re-run Stages 06–14 after debias / MYRORSS fixes.
 
-### 1.2 MESH75 formula residuals
+### 1.3 MESH75 formula residuals
 
 The Murillo & Homeyer (2021) MESH75 formula (`MESH75 = 15.096 × SHI^0.206`) was
 fitted against observed hail reports. The paper reports RMS residuals of
@@ -75,10 +79,10 @@ They contribute to the uncertainty in annual maximum MESH75 at any given cell.
 A formal propagation would require the joint distribution of (SHI error,
 formula residual) across all active radar days.
 
-**Recommended improvement (v2.2):** Apply bootstrapped uncertainty from Murillo
+**Recommended improvement (v2.3.x):** Apply bootstrapped uncertainty from Murillo
 & Homeyer (2021) Fig. 8 to quantify formula-induced uncertainty on RP maps.
 
-### 1.3 ERA5 isotherm interpolation error
+### 1.4 ERA5 isotherm interpolation error
 
 ERA5 monthly 0°C and −20°C isotherm heights are used to compute the SHI
 temperature weighting for GridRad days (Stage 04a). ERA5 horizontal resolution
@@ -115,20 +119,22 @@ isolated convective cells dominate (e.g., Pacific coast, high plains).
 
 Stages 01–05 merge three radar sources (MYRORSS 1998–2011, GridRad 2012–2020-10-13,
 MRMS 2020–present). Despite quantile-mapping calibration in Stage 05, residual
-bias at the transition boundaries may exist. Stage 06 performs a source-
-homogeneity check (KS test between MYRORSS and calibrated GridRad distributions
-in the 2005–2011 overlap), but KS rejection does not automatically correct the
+bias at the transition boundaries may exist. There is no 2005–2011
+MYRORSS/GridRad observational overlap in this assembled source record, and
+Stage 06 does not create one. Source-era distribution or KS comparisons use
+non-overlapping periods and therefore confound source effects with climate and
+sampling variability; rejection cannot by itself diagnose or correct source
 bias.
 
-**Current treatment:** Quantile mapping calibration. KS diagnostic (Stage 06)
-is advisory.
+**Current treatment:** Quantile mapping calibration. Stage 06 source-stratified
+validation and any post-run KS diagnostic are advisory.
 
 **Impact:** If residual bias is present at the MYRORSS→GridRad boundary (2012),
 annual maxima from the two eras will be drawn from slightly different
 distributions. This would inflate or deflate tail estimates depending on the
 direction of the residual bias.
 
-### 2.2.1 GridRad product calendar coverage
+### 2.3 GridRad product calendar coverage
 
 NCAR publishes three GridRad products used in Stage 04c: **GridRad-Severe**
 (~100 severe events per year), **V3.1 hourly** (through 2017, all months), and
@@ -144,7 +150,7 @@ outside the V4.2 calendar). The Stage 04c manifest records these as
 conditional on NCAR product availability. Sparse rural areas on non-severe
 warm-season days may be underrepresented relative to the MRMS era.
 
-### 2.3 Topographic correction coefficient
+### 2.4 Topographic correction coefficient
 
 Stage 12 applies a freezing-level-aware topographic correction:
 
@@ -161,7 +167,7 @@ involves complex microphysical processes not reducible to a simple linear factor
 **Current treatment:** Fixed empirical coefficient, bounded to a maximum 25%
 enhancement. Applied only within CONUS mask.
 
-**Recommended improvement (v2.2):** Sensitivity analysis over coefficient range
+**Recommended improvement (v2.3.x):** Sensitivity analysis over coefficient range
 [0.1, 0.4]; cite Rasmussen & Heymsfield (1987) for physical bound.
 
 ---
@@ -193,7 +199,7 @@ individually.
 
 **Current output:** Point estimates only. No confidence intervals on RP maps.
 
-**Priority improvement (v2.2 — recommended P0):** Bootstrap 95% CIs on
+**Priority improvement (v2.3.x — recommended P0):** Bootstrap 95% CIs on
 cell-level RP estimates using block bootstrap by year (preserves temporal
 dependence). Output companion rasters `rp_XXXXXyr_hail_q05.tif` and
 `rp_XXXXXyr_hail_q95.tif`.
@@ -243,7 +249,7 @@ a sufficiently high threshold (Pickands–Balkema–de Haan theorem; Coles 2001
 **Current treatment:** GPD tail + lognormal body. GEV sensitivity is not
 currently performed.
 
-**Recommended improvement (v2.2):** GEV-vs-GPD comparison at the five benchmark
+**Recommended improvement (v2.3.x):** GEV-vs-GPD comparison at the five benchmark
 cells in `docs/benchmarks.md`. Report whether RP100 estimates agree within
 the bootstrap CIs.
 
@@ -257,7 +263,7 @@ the relative weight of each component depends on regional sample size.
 **Current treatment:** Unweighted composite score. Threshold diagnostics are
 written to `threshold_selection.csv` for manual review.
 
-**Recommended improvement (v2.2):** Normalize all components to [0, 1] before
+**Recommended improvement (v2.3.x):** Normalize all components to [0, 1] before
 summing; document the resulting weights in `docs/methodology.md §09`.
 
 ### 4.3 Regional ξ pooling (K-means, k=6)
@@ -269,7 +275,7 @@ compared to published hail climatological regions (Allen et al. 2015).
 **Current treatment:** k=6 fixed default. `--n-regions N` CLI flag allows
 experimentation.
 
-**Recommended improvement (v2.2):** Report silhouette scores for k∈{4,6,8,10}
+**Recommended improvement (v2.3.x):** Report silhouette scores for k∈{4,6,8,10}
 and select the elbow or maximum. Compare against Allen et al. (2015) Fig. 5
 hail regions.
 
@@ -283,7 +289,7 @@ between spatial coherence and local accuracy.
 smoothing will underestimate RP values at local maxima (e.g., hail alleys) and
 overestimate them at local minima (e.g., mountain gaps).
 
-**Recommended improvement (v2.2):** Sensitivity analysis over POOL_RADIUS_KM ∈
+**Recommended improvement (v2.3.x):** Sensitivity analysis over POOL_RADIUS_KM ∈
 {100, 150, 200} and DECAY_KM ∈ {50, 75, 100}.
 
 ---
@@ -323,7 +329,7 @@ structure than the Southeast or Northeast.
 
 **Current treatment:** Global σ_perturb applied uniformly to all events.
 
-**Recommended improvement (v2.2):** Region-stratified σ_perturb (one value per
+**Recommended improvement (v2.3.x):** Region-stratified σ_perturb (one value per
 EVT region); document derivation with explicit equation.
 
 ### 5.2 Event frequency: Poisson vs Negative Binomial
@@ -336,7 +342,7 @@ cluster during active synoptic patterns, leading to over-dispersion
 
 **Current treatment:** Poisson. Diagnostic not yet implemented.
 
-**Recommended improvement (v2.2):** Compute index of dispersion on annual event
+**Recommended improvement (v2.3.x):** Compute index of dispersion on annual event
 counts from Stage 08. If index of dispersion significantly > 1 (one-sample
 Poisson test, α = 0.05), switch to Negative Binomial with the fitted dispersion
 parameter.
@@ -394,7 +400,7 @@ six categories simultaneously. This is deferred to v3.0.
 
 ## 8. Current Uncertainty Disclosures
 
-The following disclosures must accompany any publication of v2.2 model outputs:
+The following disclosures must accompany any publication of v2.3.0 model outputs:
 
 1. Return-period maps are **point estimates**. Confidence intervals are not yet
    computed. For RP > 500 years, uncertainty likely exceeds ±50% of the point

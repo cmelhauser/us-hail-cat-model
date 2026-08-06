@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 
 def test_mesh75_correction_monotonic(load_script):
     import numpy as np
@@ -26,3 +28,29 @@ def test_stage05_accepts_v21_cli_flags():
     source = script.read_text()
     assert "--skip-ml" in source
     assert "--retrain-models" in source
+    assert "--allow-spc-derived-adjustments" not in source
+
+
+def test_stage05_retrainer_failure_aborts(load_script, tmp_path, monkeypatch):
+    import subprocess
+
+    s = load_script("05_apply_mesh_bias_correction.py")
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "train_artifact_classifier.py").write_text("")
+    monkeypatch.setattr(s, "REPO_ROOT", tmp_path)
+
+    def fail(*_args, **kwargs):
+        assert kwargs["check"] is True
+        raise subprocess.CalledProcessError(2, "trainer")
+
+    monkeypatch.setattr(s.subprocess, "run", fail)
+    with pytest.raises(subprocess.CalledProcessError):
+        s.retrain_artifact_classifier()
+
+
+def test_stage05_retrainer_missing_script_aborts(load_script, tmp_path, monkeypatch):
+    s = load_script("05_apply_mesh_bias_correction.py")
+    monkeypatch.setattr(s, "REPO_ROOT", tmp_path)
+    with pytest.raises(FileNotFoundError, match="trainer not found"):
+        s.retrain_artifact_classifier()

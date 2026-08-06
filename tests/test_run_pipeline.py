@@ -1,3 +1,5 @@
+import pytest
+
 from conftest import load_stage
 
 
@@ -26,3 +28,59 @@ def test_apply_streaming_gridrad_skip_defaults():
     assert "04b" in f(set(), only_stage=None, from_stage="04a", all_ids=ids)
     assert "04b" not in f(set(), only_stage=None, from_stage="04b", all_ids=ids)
     assert "04b" not in f(set(), only_stage=None, from_stage="04c", all_ids=ids)
+
+
+def test_run_stage_handles_interrupt_before_process_initialization(
+    tmp_path, monkeypatch
+):
+    p = load_stage("run_pipeline.py")
+    monkeypatch.setattr(p, "LOGS", tmp_path)
+
+    def interrupt(*_args, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("builtins.open", interrupt)
+    with pytest.raises(SystemExit) as exc_info:
+        p.run_stage("01", "01_download_myrorss.py", "test", "unknown", False)
+    assert exc_info.value.code == 1
+
+
+def test_run_stage_never_forwards_spc_hazard_adjustments(tmp_path, monkeypatch):
+    p = load_stage("run_pipeline.py")
+    monkeypatch.setattr(p, "LOGS", tmp_path)
+    monkeypatch.setattr(p, "SCRIPTS", tmp_path)
+    script = tmp_path / "05_apply_mesh_bias_correction.py"
+    script.write_text("#!/usr/bin/env python3\n")
+    captured = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = iter([])
+
+        def wait(self):
+            return 0
+
+        def poll(self):
+            return 0
+
+        def terminate(self):
+            return None
+
+    def fake_popen(cmd, **_kwargs):
+        captured["cmd"] = list(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr(p.subprocess, "Popen", fake_popen)
+    ok = p.run_stage(
+        "05",
+        "05_apply_mesh_bias_correction.py",
+        "test",
+        "1m",
+        False,
+        retrain_models=True,
+        skip_ml=True,
+    )
+    assert ok is True
+    assert "--retrain-models" in captured["cmd"]
+    assert "--skip-ml" in captured["cmd"]
+    assert "--allow-spc-derived-adjustments" not in captured["cmd"]

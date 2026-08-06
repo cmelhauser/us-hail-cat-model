@@ -5,19 +5,19 @@
 Applies source-specific corrections to all daily MESH rasters, producing
 a homogeneous MESH75 record across three input sources:
 
-  MYRORSS (1998–2011):     Witt MESH → MESH75 recalibration + env filter
-  GridRad (2012–2019):     Quantile-mapping cross-calibration + env filter
-  Operational MRMS (2020+): Witt MESH → MESH75 recalibration + env filter
+  MYRORSS (1998–2011):         Witt MESH → MESH75 recalibration + env filter
+  GridRad (2012–2020-10-13):   Quantile-mapping cross-calibration + env filter
+  Operational MRMS (2020+):    Witt MESH → MESH75 recalibration + env filter
 
 This stage ensures that downstream CDF fitting and stochastic generation
 operate on a consistent, source-independent MESH75 field.
 
 Internal Phases (run automatically in order)
 ---------------------------------------------
-  Phase A — Build cross-calibration from overlap period (2005–2011)
-    Both MYRORSS and GridRad outputs exist for these years. Phase A
-    applies Witt→MESH75 to MYRORSS data, then builds a quantile-mapping
-    transfer function aligning GridRad MESH75 to the MYRORSS distribution.
+  Phase A — Build era-pooled cross-calibration
+    The archive has no same-day MYRORSS/GridRad overlap. Phase A applies
+    Witt→MESH75 to MYRORSS data from 2005–2011 and builds a quantile-mapping
+    transfer function against GridRad MESH75 from 2012–2020.
     Saved to: data/analysis/calibration/gridrad_quantile_map.npz
 
   Phase B — Apply source-specific corrections to ALL rasters
@@ -25,11 +25,13 @@ Internal Phases (run automatically in order)
     - MYRORSS/MRMS → Witt→MESH75 recalibration
     - GridRad → quantile-mapping cross-calibration
     Then apply environmental filter to all sources.
-  Optional range-dependent debias (when ``data/analysis/calibration/range_debias.npz``
-  exists from ``scripts/diagnostics/radar_artifact_diagnostic.py``).
-  GridRad days also pass through a five-pass radar artifact filter (isolated speckle, radial
-  range rings, azimuthal spokes, quiet-background filaments, and spatiotemporal range-ring
-  persistence from a 21-day trailing window; disable with ``--no-speckle-filter``).
+  GridRad days also pass through five core radar artifact passes (isolated
+  speckle, radial range rings, azimuthal spokes, quiet-background filaments,
+  and spatiotemporal range-ring persistence) plus site-specific remediation
+  (sixth pass, default on). Disable all rule passes with ``--no-speckle-filter``.
+  SPC-derived range debias and weak-label classifier inference are diagnostic
+  research artifacts only. They are never applied to hazard rasters because
+  SPC reports are reserved for validation.
   Output to: data/historical/mesh_0.05deg_corrected/YYYY/mesh_YYYYMMDD.tif
 
 MESH75 Recalibration (Witt-algorithm sources)
@@ -41,7 +43,8 @@ GridRad Cross-Calibration
 --------------------------
   GridRad MESH75 is systematically lower than MYRORSS/MRMS due to hourly
   temporal resolution, reflectivity smoothing, and coarser resolution.
-  Quantile mapping aligns GridRad to MYRORSS using the overlap period.
+  Quantile mapping aligns non-overlapping source-era distributions; this is a
+  versioned assumption checked by source-transition diagnostics.
 
 Environmental Filtering (all sources)
 --------------------------------------
@@ -59,7 +62,9 @@ Usage
 import argparse
 import csv
 import os
+import subprocess
 import sys
+import tempfile
 import time
 from collections import deque
 from contextlib import suppress
@@ -73,12 +78,20 @@ if str(_REPO_ROOT_FOR_IMPORTS) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORTS))
 
 try:
-    from _config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM
+    from _config import (
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
+        NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM, RNG_SEED, MESH75_A,
+        MESH75_B, WITT_INCH_TO_CM,
+    )
     from _io import sanitize_hail_values, write_geotiff
     from _logging import get_logger
     from _pipeline_cleanup import STAGE05_PID
 except ImportError:  # pragma: no cover - pytest importlib fallback
-    from scripts._config import REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN, NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM
+    from scripts._config import (
+        REPO_ROOT, DATA_ROOT, LOG_ROOT, NROWS, NCOLS, DX, LAT_MAX, LON_MIN,
+        NODATA, MAX_HAIL_MM, EVENT_ACTIVE_THRESH_MM, RNG_SEED, MESH75_A,
+        MESH75_B, WITT_INCH_TO_CM,
+    )
     from scripts._io import sanitize_hail_values, write_geotiff
     from scripts._logging import get_logger
     from scripts._pipeline_cleanup import STAGE05_PID
@@ -101,10 +114,10 @@ OUT_NCOLS = NCOLS
 OUT_DX = DX
 QA_MAX_HAIL_MM = MAX_HAIL_MM
 
-WITT_A     = 2.54
+WITT_A     = WITT_INCH_TO_CM
 WITT_B     = 0.5
-MH19_A     = 15.096
-MH19_B     = 0.206
+MH19_A     = MESH75_A
+MH19_B     = MESH75_B
 RATIO_EXP  = 2.0 * MH19_B
 
 MIN_MESH75_MM     = 5.0
@@ -113,10 +126,11 @@ MIN_MESH75_SEVERE = EVENT_ACTIVE_THRESH_MM
 OVERLAP_START_YEAR = 2005
 OVERLAP_END_YEAR   = 2011
 GRIDRAD_CALIB_START_YEAR = 2012
-GRIDRAD_CALIB_END_YEAR   = 2019
+GRIDRAD_CALIB_END_YEAR   = 2020
 N_PERCENTILES      = 200
 PERCENTILES        = np.linspace(0, 100, N_PERCENTILES + 1)
 MIN_PAIRS          = 1000
+PERSISTENCE_HISTORY_SIDECAR = ".prefilter_history.npy"
 
 _gridrad_days = None
 _qq_gridrad   = None
@@ -124,11 +138,8 @@ _qq_myrorss   = None
 _qq_type      = None
 _cqm_model    = None
 _filter_model = None
-_artifact_classifier_model = None
-_range_debias = None
 _range_km_grid = None
 _site_idx_grid = None
-_azimuth_grid = None
 _gridrad_history: deque = deque()
 
 log = get_logger("05_apply_mesh_bias_correction", LOG_ROOT).info
@@ -140,36 +151,16 @@ def reset_gridrad_history() -> None:
     _gridrad_history = deque()
 
 
-def init_range_debias(*, enable: bool = True) -> bool:
-    """Load optional range-debias table and distance grid."""
-    global _range_debias, _range_km_grid
-    _range_debias = None
-    if not enable:
-        return False
-    try:
-        from _radar_geometry import ensure_range_km_grid, load_range_debias
-    except ImportError:  # pragma: no cover
-        from scripts._radar_geometry import ensure_range_km_grid, load_range_debias
-    _range_debias = load_range_debias()
-    if _range_debias is None:
-        return False
-    if _range_km_grid is None:
-        _range_km_grid = ensure_range_km_grid()
-    return True
-
-
 def ensure_geometry_grids() -> None:
-    """Load per-cell range, site index, and azimuth grids (cached)."""
-    global _range_km_grid, _site_idx_grid, _azimuth_grid
+    """Load per-cell range and site-index grids used by deterministic QC."""
+    global _range_km_grid, _site_idx_grid
     try:
         from _radar_geometry import (
-            azimuth_to_nearest_site_deg,
             ensure_nearest_site_index_grid,
             ensure_range_km_grid,
         )
     except ImportError:  # pragma: no cover
         from scripts._radar_geometry import (
-            azimuth_to_nearest_site_deg,
             ensure_nearest_site_index_grid,
             ensure_range_km_grid,
         )
@@ -177,8 +168,6 @@ def ensure_geometry_grids() -> None:
         _range_km_grid = ensure_range_km_grid()
     if _site_idx_grid is None:
         _site_idx_grid = ensure_nearest_site_index_grid()
-    if _azimuth_grid is None:
-        _azimuth_grid = azimuth_to_nearest_site_deg()
 
 
 def init_artifact_grids(*, speckle_filter: bool = True) -> None:
@@ -470,51 +459,80 @@ def apply_probabilistic_environmental_filter(data: np.ndarray, lat_grid: np.ndar
     return apply_probabilistic_filter(data, day_of_year, lat_grid, skip_ml=skip_ml)
 
 
-def apply_artifact_classifier(
-    data: np.ndarray,
-    day_of_year: int,
-    source: str,
+def persistence_history_path(out_path: Path) -> Path:
+    """Sidecar storing the pre-filter GridRad field used by Pass 5."""
+    return out_path.with_name(out_path.name + PERSISTENCE_HISTORY_SIDECAR)
+
+
+def load_persistence_history_frame(
+    out_path: Path,
+    in_path: Path,
+    lat_grid: np.ndarray,
     *,
-    skip_ml: bool = False,
-) -> np.ndarray:
-    """Optional geometry-aware artifact down-weighting (deterministic fallback)."""
-    global _artifact_classifier_model
-    if skip_ml:
-        return data
-    ensure_geometry_grids()
-    if _range_km_grid is None or _azimuth_grid is None:
-        return data
-    if _artifact_classifier_model is None:
-        payload = _load_pickle_model(ARTIFACT_CLASSIFIER_FILE)
-        if isinstance(payload, dict) and "model" in payload:
-            _artifact_classifier_model = payload["model"]
-        else:
-            _artifact_classifier_model = payload
-    if _artifact_classifier_model is None:
-        return data
+    skip_ml: bool,
+) -> np.ndarray | None:
+    """Load or exactly reconstruct the pre-filter GridRad frame for resume."""
+    import rasterio
+
+    sidecar = persistence_history_path(out_path)
+    if sidecar.is_file():
+        try:
+            frame = np.load(sidecar, allow_pickle=False).astype(
+                np.float32, copy=False
+            )
+            if frame.shape != lat_grid.shape:
+                raise ValueError(
+                    f"shape {frame.shape} does not match {lat_grid.shape}"
+                )
+            return frame
+        except Exception as exc:
+            log(f"  WARN: cannot use persistence sidecar {sidecar.name}: {exc}")
+
     try:
-        from _artifact_features import apply_classifier_weights, build_feature_matrix
-    except ImportError:  # pragma: no cover
-        from scripts._artifact_features import apply_classifier_weights, build_feature_matrix
-    feats, active = build_feature_matrix(
-        data,
-        range_km=_range_km_grid,
-        azimuth_deg=_azimuth_grid,
-        day_of_year=day_of_year,
-        source=source,
-        active_mm=MIN_MESH75_MM,
+        with rasterio.open(in_path) as src:
+            data = src.read(1).astype(np.float32)
+        if data.shape != lat_grid.shape:
+            raise ValueError(
+                f"input shape {data.shape} does not match {lat_grid.shape}"
+            )
+        datestr = in_path.stem.replace("mesh_", "")
+        doy = datetime.strptime(datestr, "%Y%m%d").timetuple().tm_yday
+        return apply_optional_cqm(data, lat_grid, doy, skip_ml=skip_ml)
+    except Exception as exc:
+        log(f"  WARN: cannot reconstruct persistence history for {in_path.name}: {exc}")
+        return None
+
+
+def save_persistence_history_frame(out_path: Path, frame: np.ndarray) -> None:
+    """Atomically persist a pre-filter GridRad frame for resume-safe history."""
+    sidecar = persistence_history_path(out_path)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(
+        dir=sidecar.parent,
+        prefix=f".{sidecar.name}.",
+        suffix=".tmp",
     )
-    if feats.size == 0:
-        return data
-    if hasattr(_artifact_classifier_model, "predict_proba"):
-        prob = _artifact_classifier_model.predict_proba(feats)[:, 1]
-    else:
-        prob = _artifact_classifier_model.predict(feats)
-    prob = np.clip(np.asarray(prob, dtype=np.float32), 0.0, 1.0)
-    out = apply_classifier_weights(data, prob, active)
-    out[out < MIN_MESH75_MM] = 0.0
-    repaired, _ = sanitize_hail_values(out, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
-    return repaired
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            np.save(handle, frame.astype(np.float32, copy=False))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, sidecar)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+def append_gridrad_history(frame: np.ndarray) -> None:
+    """Append one GridRad day to the trailing persistence deque."""
+    global _gridrad_history
+    try:
+        from _radar_geometry import PERSISTENCE_HISTORY_MAX_DAYS
+    except ImportError:  # pragma: no cover
+        from scripts._radar_geometry import PERSISTENCE_HISTORY_MAX_DAYS
+    if _gridrad_history.maxlen != PERSISTENCE_HISTORY_MAX_DAYS:
+        _gridrad_history = deque(_gridrad_history, maxlen=PERSISTENCE_HISTORY_MAX_DAYS)
+    _gridrad_history.append(frame.astype(np.float32, copy=False))
 
 
 def build_lat_grid() -> np.ndarray:
@@ -529,17 +547,32 @@ def apply_environmental_filter(data, day_of_year, lat_grid):
         out[(lat_grid < 30.0) & (out < MIN_MESH75_SEVERE)] = 0.0
     return out
 
-def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debias: bool = True, speckle_filter: bool = True):
+def process_file(
+    in_path,
+    out_path,
+    lat_grid,
+    skip_ml: bool = False,
+    speckle_filter: bool = True,
+):
     import rasterio
 
+    datestr = in_path.stem.replace("mesh_", "")
     if out_path.exists():
+        if is_gridrad_source(datestr) and speckle_filter:
+            frame = load_persistence_history_frame(
+                out_path,
+                in_path,
+                lat_grid,
+                skip_ml=skip_ml,
+            )
+            if frame is not None:
+                append_gridrad_history(frame)
         return {"skipped": True}
 
     with rasterio.open(in_path) as src:
         data = src.read(1)
         profile = src.profile.copy()
 
-    datestr = in_path.stem.replace("mesh_", "")
     doy = datetime.strptime(datestr, "%Y%m%d").timetuple().tm_yday
 
     if is_gridrad_source(datestr):
@@ -549,35 +582,20 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debia
         corrected = apply_mesh75_correction(data)
         source = "MYRORSS/MRMS"
 
-    if range_debias and _range_debias is not None and _range_km_grid is not None:
-        try:
-            from _radar_geometry import apply_range_debias as _apply_range_debias
-            from _radar_geometry import classify_mesh_source_from_yyyymmdd
-        except ImportError:  # pragma: no cover
-            from scripts._radar_geometry import apply_range_debias as _apply_range_debias
-            from scripts._radar_geometry import classify_mesh_source_from_yyyymmdd
-        src_era = classify_mesh_source_from_yyyymmdd(datestr)
-        corrected = _apply_range_debias(corrected, _range_km_grid, src_era, _range_debias)
-
     n_speckle = 0
     artifact_counts: dict[str, int] = {}
     if speckle_filter and source == "GridRad":
         try:
             from _radar_geometry import (
-                PERSISTENCE_HISTORY_MAX_DAYS,
                 PERSISTENCE_MIN_HISTORY_DAYS,
                 remove_gridrad_artifacts,
             )
         except ImportError:  # pragma: no cover
             from scripts._radar_geometry import (
-                PERSISTENCE_HISTORY_MAX_DAYS,
                 PERSISTENCE_MIN_HISTORY_DAYS,
                 remove_gridrad_artifacts,
             )
         if _range_km_grid is not None and _site_idx_grid is not None:
-            global _gridrad_history
-            if _gridrad_history.maxlen != PERSISTENCE_HISTORY_MAX_DAYS:
-                _gridrad_history = deque(_gridrad_history, maxlen=PERSISTENCE_HISTORY_MAX_DAYS)
             history_stack = None
             if len(_gridrad_history) >= PERSISTENCE_MIN_HISTORY_DAYS:
                 history_stack = np.stack(list(_gridrad_history), axis=0)
@@ -588,12 +606,9 @@ def process_file(in_path, out_path, lat_grid, skip_ml: bool = False, range_debia
                 _site_idx_grid,
                 history=history_stack,
             )
-            _gridrad_history.append(pre_filter)
+            append_gridrad_history(pre_filter)
+            save_persistence_history_frame(out_path, pre_filter)
             n_speckle = sum(artifact_counts.values())
-
-    corrected = apply_artifact_classifier(
-        corrected, doy, source, skip_ml=skip_ml,
-    )
 
     filtered = apply_probabilistic_filter(corrected, doy, lat_grid, skip_ml=skip_ml)
     filtered, n_repaired = sanitize_hail_values(filtered, max_hail_mm=QA_MAX_HAIL_MM, nodata=NODATA)
@@ -630,7 +645,7 @@ def validate_outputs():
             errors.append(f"Count mismatch: {len(tifs)} corrected vs {len(in_tifs)} input")
         else:
             log(f"  Found {len(tifs):,} corrected MESH75 GeoTIFFs")
-        sample = random.sample(tifs, min(20, len(tifs)))
+        sample = random.Random(RNG_SEED).sample(tifs, min(20, len(tifs)))
         for p in sample:
             try:
                 with rasterio.open(p) as src:
@@ -661,6 +676,15 @@ def validate_outputs():
     log("Output validation passed ✓")
     return True
 
+def retrain_artifact_classifier() -> None:
+    """Train the research-only classifier artifact for diagnostic evaluation."""
+    train_script = REPO_ROOT / "scripts" / "train_artifact_classifier.py"
+    if not train_script.is_file():
+        raise FileNotFoundError(f"Artifact classifier trainer not found: {train_script}")
+    log(f"  Training artifact classifier → {ARTIFACT_CLASSIFIER_FILE.name}")
+    subprocess.run([sys.executable, str(train_script)], check=True)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Unified MESH correction: MESH75 + GridRad calibration + env filter.")
@@ -671,24 +695,16 @@ def main():
     parser.add_argument("--skip-ml", action="store_true",
                         help="Use deterministic calibration/filtering fallbacks even if optional artifacts exist")
     parser.add_argument("--retrain-models", action="store_true",
-                        help="Accepted for pipeline compatibility; training is external to this script")
-    parser.add_argument("--no-range-debias", action="store_true",
-                        help="Disable range-dependent debias even if range_debias.npz exists")
+                        help="Train the research classifier for diagnostics only; never applies it to hazard rasters")
     parser.add_argument("--no-speckle-filter", action="store_true",
-                        help="Disable GridRad artifact filter (five-pass: speckle, radial ring, azimuthal, filament, persistence)")
+                        help="Disable GridRad artifact filter (five core passes + site remediation)")
     args = parser.parse_args()
 
     if args.validate:
         sys.exit(0 if validate_outputs() else 1)
 
     if args.retrain_models:
-        train_script = REPO_ROOT / "scripts" / "train_artifact_classifier.py"
-        if train_script.is_file():
-            import subprocess
-            log(f"  Training artifact classifier → {ARTIFACT_CLASSIFIER_FILE.name}")
-            subprocess.run([sys.executable, str(train_script)], check=False)
-        else:
-            log("  WARN: train_artifact_classifier.py not found")
+        retrain_artifact_classifier()
 
     LOG_ROOT.mkdir(parents=True, exist_ok=True)
     STAGE05_PID.write_text(str(os.getpid()))
@@ -718,14 +734,11 @@ def _run_stage05_body(args) -> None:
 
     load_qq_map()
     log(f"  Cross-calibration type: {_qq_type}")
-    if init_range_debias(enable=not args.no_range_debias):
-        log("  Range debias: ON (range_debias.npz)")
-    else:
-        log("  Range debias: OFF (run radar_artifact_diagnostic.py to build range_debias.npz)")
+    log("  SPC role: validation/diagnostics only (never applied to hazard rasters)")
     if args.no_speckle_filter:
         log("  GridRad artifact filter: OFF")
     else:
-        log("  GridRad artifact filter: ON (isolated + radial ring + azimuthal + filament + persistence)")
+        log("  GridRad artifact filter: ON (five core passes + site remediation)")
     init_artifact_grids(speckle_filter=not args.no_speckle_filter)
     reset_gridrad_history()
 
@@ -750,7 +763,6 @@ def _run_stage05_body(args) -> None:
         result = process_file(
             in_path, out_path, lat_grid,
             skip_ml=args.skip_ml,
-            range_debias=not args.no_range_debias,
             speckle_filter=not args.no_speckle_filter,
         )
 

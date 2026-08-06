@@ -6,7 +6,10 @@
 
 ## 1. Purpose
 
-This document describes the implementation contract for the v2.2 hail hazard pipeline. It complements `docs/methodology.md`: the methodology document explains the scientific rationale, while this document specifies stage behavior, inputs, outputs, invariants, validation checks, and failure modes.
+This document describes the implementation contract for the v2.3.0 hail hazard
+pipeline. It complements `docs/methodology.md`: the methodology document
+explains the scientific rationale, while this document specifies stage
+behavior, inputs, outputs, invariants, validation checks, and failure modes.
 
 The pipeline is intentionally file-oriented. Each stage writes durable artifacts that can be inspected independently, rerun, validated, and excluded from git tracking. This design favors reproducibility and auditability over a monolithic in-memory workflow.
 
@@ -395,13 +398,12 @@ else:
     when same-day overlap is unavailable; median ratio ~1.10 above 10 mm
 ```
 
-Deterministic environmental filters (v2.2.2):
+Deterministic environmental filters (v2.2.2 / v2.3.0):
 
 ```text
 noise floor: 5 mm
 subtropical winter (Nov–Feb, lat < 30°N): require >= EVENT_ACTIVE_THRESH_MM (29.0 mm)
-range debias: multiply by per-era factor(range_km) when range_debias.npz exists
-GridRad artifact filter (five passes on GridRad days only):
+GridRad artifact filter (five core passes on GridRad days only):
   1. Isolated speckle — zero cells > 2.5 × local 3×3 median (>= 5 mm)
   2. Radial range ring — per (site, 10 km bin) vs ±1/±2 neighbors AND inner-range
      baseline (<= 75 km) for bins >= 50 km; thresholds 1.12× / 1.18× (far range)
@@ -409,28 +411,48 @@ GridRad artifact filter (five passes on GridRad days only):
   4. Background filament — 21×21 background; quiet-area thin rings
   5. Spatiotemporal persistence — 21-day trailing history; chronic (site, range)
      annuli and cells zeroed unless burst/storm-day exceptions apply
+     (resume-safe via .tif.prefilter_history.npy sidecars)
 ```
 
-Optional site-specific remediation (`site_remediation=True` in code) remains for nine
-QA-flagged WSR-88D radars but is disabled by default.
+Site-specific remediation is the sixth deterministic layer for nine QA-flagged
+WSR-88D radars. It is **enabled by default**
+(`site_remediation=True` in `remove_gridrad_artifacts`).
+
+SPC-derived research adjustments (opt-in; AGENTS rule #3):
+
+```text
+require --allow-spc-derived-adjustments (ignored with --skip-ml)
+range debias: multiply by per-era factor(range_km) when range_debias.npz exists
+hail-likelihood classifier: GridRad days only; multiplicative down-weight
+```
 
 Optional ML path (when artifacts exist and `--skip-ml` is false):
 
 ```text
+if geometry-aware artifact classifier exists:
+    apply it after the five core passes + site-remediation layer
 if hail-filter artifact exists:
     apply probabilistic filter instead of deterministic winter threshold
 ```
+
+The geometry-aware classifier is research functionality, not a prerequisite.
+Its training labels come from Stage 06. Therefore the required ordering is:
+deterministic Stage 05 baseline (`--skip-ml`) → Stage 06 → train and review
+`artifact_classifier.pkl` → optionally clean and rerun Stage 05+ with
+`--allow-spc-derived-adjustments` (and without `--skip-ml`).
 
 ### 9.2 Optional artifacts
 
 ```text
 data/analysis/calibration/gridrad_cqm_model.pkl
 data/analysis/calibration/hail_filter_model.pkl
+data/analysis/calibration/artifact_classifier.pkl      # trained after Stage 06
 data/analysis/calibration/range_debias.npz          # from radar_artifact_diagnostic.py
 data/analysis/calibration/nearest_radar_distance_km.npy
 ```
 
-CLI flags: `--no-range-debias`, `--no-speckle-filter` (disables full five-pass GridRad filter).
+CLI flags: `--allow-spc-derived-adjustments`, `--no-range-debias`, `--no-speckle-filter` (disables the five core
+GridRad passes and default-on site-remediation layer).
 
 ### 9.3 Hard requirement
 
@@ -564,7 +586,12 @@ Dense event cubes are prohibited as production event storage. They are memory-in
 **Script:** `scripts/diagnostics/hail_day_climatology.py` (optional, not a pipeline stage)  
 **Output:** `data/analysis/hail_day_climatology/`
 
-Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al. (2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm. **v2.2.2 adopted 29.0 mm** for Stage 08 based on this diagnostic (GP max **3.7** vs **5.5** days/yr at 25.4 mm).
+Run after Stage 05 (and ideally after Stage 08) to benchmark per-cell
+severe-hail-day frequencies against Cintineo et al. (2012) and Murillo et al.
+(2021). Default thresholds: 25.4, 29.0, 35.56, 41.91, 50.8, and 63.25 mm.
+v2.2.2 adopted 29.0 mm for Stage 08 based on a historical diagnostic snapshot
+(GP max 3.7 vs 5.5 days/yr at 25.4 mm); refresh those values after the validated
+v2.3.0 run.
 
 Review:
 
@@ -578,11 +605,12 @@ Review:
 **Helpers:** `scripts/_radar_geometry.py`  
 **Output:** `data/analysis/radar_artifacts/`; fit `data/analysis/calibration/range_debias.npz`
 
-Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Stage 05 applies `range_debias.npz` automatically on the next rerun.
+Run after Stage 05 and Stage 06 (SPC pairs required for debias fit). Scans the corrected archive by radar era (MYRORSS / GridRad / MRMS), computes speckle fractions, range-binned mean annual maxima, GridRad−MYRORSS difference maps, and SPC/MESH ratio vs range. Stage 05 applies `range_debias.npz` only when `--allow-spc-derived-adjustments` is set (research-only; ignored with `--skip-ml`).
 
-**2026-07-06:** four-pass filter with inner-range radial ring baseline (≤75 km for bins
-≥50 km; 1.12× / 1.18×). Stages 05–07 rebuild in progress (`logs/pipeline_05_07.run.log`).
-Run diagnostic after Stage 05/06 before downstream stages.
+**Historical 2026-07-06 snapshot:** four-pass filter with inner-range radial
+ring baseline (≤75 km for bins ≥50 km; 1.12× / 1.18×). The documented process
+state is no longer current. Follow `docs/RUN_NOTES.md`, then run the diagnostic
+after the final Stage 05/06 path before downstream interpretation.
 
 ### 12.7 Literature validation suite
 
