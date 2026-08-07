@@ -17,7 +17,13 @@ fi
 
 stamp_payload() {
   # Content fingerprint of the working tree (staging alone must not invalidate).
-  git ls-files -co --exclude-standard -z | sort -z | xargs -0 shasum -a 256
+  # Stream one file at a time — xargs can fail with sysconf(_SC_ARG_MAX) in
+  # restricted shells and would otherwise hash an empty payload.
+  git ls-files -co --exclude-standard -z | sort -z | while IFS= read -r -d '' f; do
+    if [[ -f "$f" || -L "$f" ]]; then
+      shasum -a 256 -- "$f"
+    fi
+  done
 }
 
 current_stamp() {
@@ -53,8 +59,10 @@ echo "[3/6] Ruff"
 
 echo ""
 echo "[4/6] Pipeline unit tests + 100% coverage (scripts + run_pipeline)"
+# Match CI marker selection so local gates catch CI-only coverage gaps.
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
   "$PYTHON" -m pytest -q tests -p pytest_cov \
+  -m "not integration and not regression and not slow" \
   --cov=scripts --cov=run_pipeline \
   --cov-report=term-missing:skip-covered \
   --cov-fail-under=100

@@ -217,7 +217,9 @@ the local pre-commit hook both enforce the same floors via
 #   python -m py_compile run_pipeline.py scripts/*.py
 #   ruff check .
 #   OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
-#     pytest -q tests -p pytest_cov --cov=scripts --cov=run_pipeline --cov-fail-under=100
+#     pytest -q tests -p pytest_cov \
+#     -m "not integration and not regression and not slow" \
+#     --cov=scripts --cov=run_pipeline --cov-fail-under=100
 #   PYTHONPATH=aws ... --cov-fail-under=100
 #   python run_pipeline.py --dry-run
 ```

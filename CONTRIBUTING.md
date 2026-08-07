@@ -147,6 +147,7 @@ Or run pieces manually:
 python scripts/check_policy_consistency.py
 OPENBLAS_NUM_THREADS=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
   pytest -q tests -p pytest_cov \
+  -m "not integration and not regression and not slow" \
   --cov=scripts --cov=run_pipeline --cov-fail-under=100
 ```
 
