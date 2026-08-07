@@ -1,16 +1,16 @@
-# Session Handoff — CONUS Hail Catastrophe Model v2.3.0
+# Session Handoff — CONUS Hail Catastrophe Model v2.4.1
 
 > Paste this file at the start of a new chat to restore full project context.
-> Last updated: 2026-07-31 (**v2.3.0**; AWS adapter secrets+docs+100% CI gate).
+> Last updated: 2026-07-31 (**v2.4.1**; AWS adapter secrets+docs+100% CI gate).
 
 ---
 
 ## Repository
 
 - **Local:** `/Users/melhauserc/GitHub/us-hail-cat-model`
-- **Branch:** **`v2.3.0`** — active development. Sole remote: **`origin`**
-  (`cmelhauser/us-hail-cat-model`). Model version **2.3.0**. `origin/main` already
-  carries the 2.3.0 codebase; this branch may be a few tip commits ahead (docs/CI).
+- **Branch:** **`v2.4.1`** — active development. Sole remote: **`origin`**
+  (`cmelhauser/us-hail-cat-model`). Model version **2.4.1**. `origin/main` holds
+  the merged `v2.4.0` tip; this branch carries the post-merge identity bump.
 - **Working tree:** should be kept clean except for intentional documentation or
   code edits in the current session
 - **AWS adapter:** `aws/` — Secrets Manager fields injected into ECS env; container

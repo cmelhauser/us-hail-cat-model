@@ -1,4 +1,4 @@
-# AGENTS.md - CONUS Hail Catastrophe Model v2.3.0
+# AGENTS.md - CONUS Hail Catastrophe Model v2.4.1
 
 For AI agents and developers. This is the single fastest way to orient
 yourself to this project. Read this file before touching code, docs, pipeline
@@ -19,7 +19,7 @@ States. It ingests three NOAA/NCAR radar datasets, applies bias correction and
 EVT fitting, and generates return-period hazard maps and a 50,000-year
 stochastic event catalog.
 
-- Version: **2.3.0** (Tier 0 radar QC + optional geometry-aware research classifier)
+- Version: **2.4.1** (Tier 0 radar QC + optional geometry-aware research classifier)
 - Output: gridded hail hazard only, not financial loss
 - Grid: 0.05 degree, 520 rows x 1180 columns, CONUS
 - Record: MYRORSS 1998-2011, GridRad 2012-2020-10-13, MRMS 2020-10-14-present
@@ -27,10 +27,11 @@ stochastic event catalog.
 - Python: 3.10+ for project support; the historical long-run environment used
   Python 3.9.6. Verify that no run is active before replacing that `.venv`.
 
-Current operating branch: **`v2.3.0`** (push/PR to `origin` only; CI on `main` and
-`v*`). Model release **2.3.0**. `origin/main` already carries the 2.3.0 codebase tip
-from the 2026-07-30 fast-forward; this branch may be a few commits ahead (docs/CI).
-Retired version branches (`v2.2.2`, `v2.2.3`, `v2.1`) are not active development.
+Current operating branch: **`v2.4.1`** (push/PR to `origin` only; CI on `main` and
+`v*`). Model release **2.4.1**. `origin/main` holds the merged `v2.4.0` tip
+(PR #20); this branch carries the post-merge identity bump to **2.4.1**.
+Retired version branches (`v2.4.0`, `v2.3.0`, `v2.2.2`, `v2.2.3`, `v2.1`) are not
+active development.
 
 ## Non-Negotiable Rules
 
@@ -342,7 +343,7 @@ These come from `scripts/_config.py`.
 
 ## Current Status
 
-Repository identity is **v2.3.0** on branch **`v2.3.0`**, with `origin` as the
+Repository identity is **v2.4.1** on branch **`v2.4.1`**, with `origin` as the
 sole remote. Pipeline run status is **unverified since 2026-07-09**; do not
 assert completion or reuse historical archive counts as current. The one
 canonical run-state section, verification steps, and ordered next actions are

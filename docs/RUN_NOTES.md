@@ -3,9 +3,9 @@
 ## Run Context
 
 - Date started: 2026-05-01 14:47 EDT
-- Active branch: **`v2.3.0`** (development on `origin` only). Model **2.3.0**.
-  `origin/main` already carries the 2.3.0 codebase tip (may lag this branch by
-  docs/CI commits). CI runs on `main` and `v*`.
+- Active branch: **`v2.4.1`** (development on `origin` only). Model **2.4.1**.
+  `origin/main` holds the merged `v2.4.0` tip (PR #20); this branch bumps
+  identity to 2.4.1. CI runs on `main` and `v*`.
 - Prior production mesh archived under `data/historical/mesh_0.05deg_archive_calendar_utc_00z/` (gitignored)
 - Historical note: the run began while work was still coordinated through the
   `v2.1` branch; that branch has since been merged and retired from active
@@ -22,16 +22,17 @@
 
 ## Canonical Current Run State
 
-**Status is unverified since 2026-07-09. Do not assume that the v2.3.0 rebuild
+**Status is unverified since 2026-07-09. Do not assume that the pipeline rebuild
 completed or that a previously documented process is still running. Check the
 process list, logs, manifests, and output validation before resuming or deleting
 outputs.** This is the only current run-state section in the repository; other
 documents must link here rather than duplicate stage status or next actions.
 
 The last verified snapshot on **2026-07-09** recorded Stage 01 and the other
-pre-04c inputs as available, with the v2.3.0 rebuild from Stage 04c through
-Stage 14 not yet verified complete. All stage counts and metrics below are
-historical snapshots until regenerated and validated for v2.3.0.
+pre-04c inputs as available, with the rebuild from Stage 04c through Stage 14
+not yet verified complete. All stage counts and metrics below are historical
+snapshots until regenerated and validated for the current model version
+(**2.4.1**).
 
 First establish the actual state:
 
@@ -45,7 +46,7 @@ tail -n 100 logs/04c_fill_gridrad_gap.log
 Treat missing screen sessions or stale logs as evidence to inspect outputs, not
 as proof that a run either failed or completed.
 
-If inspection confirms that the v2.3.0 rebuild still needs to be run:
+If inspection confirms that the rebuild still needs to be run:
 
 1. Rebuild Stage 04c with native GridRad QC, then run a deterministic Stage 05
    baseline (`--skip-ml`) and Stage 06. Stage 05 applies **five core artifact
@@ -115,7 +116,7 @@ superseded for final v2.2.2 hazard products):
 | Stage 14 | ✅ Complete | Figures and validation report (`14_render_figures.py`) |
 
 **Historical v2.2.2 parameters:** `EVENT_ACTIVE_THRESH_MM = 29.0`; era-pooled
-GridRad QM; five core artifact passes. v2.3.0 adds default-on site remediation
+GridRad QM; five core artifact passes. v2.3.0+ adds default-on site remediation
 as a sixth layer and an optional research classifier.
 
 **Historical archive count:** **9,797** `mesh_*.tif` under

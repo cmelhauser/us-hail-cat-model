@@ -1,6 +1,6 @@
-# CONUS Hail Catastrophe Model — v2.3.0
+# CONUS Hail Catastrophe Model — v2.4.1
 
-[![Version](https://img.shields.io/badge/version-v2.3.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v2.4.1-blue)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![CI](https://github.com/cmelhauser/us-hail-cat-model/actions/workflows/tests.yml/badge.svg)](https://github.com/cmelhauser/us-hail-cat-model/actions/workflows/tests.yml)
@@ -28,11 +28,11 @@ A radar-based probabilistic hail hazard model for the Continental United States.
 
 ## Overview
 
-**Active development branch:** `v2.3.0` on `origin` (`cmelhauser/us-hail-cat-model`). Model version **2.3.0** (`scripts/_config.py` / `pyproject.toml`). CI runs on pushes and PRs to `main` and `v*` branches.
+**Active development branch:** `v2.4.1` on `origin` (`cmelhauser/us-hail-cat-model`). Model version **2.4.1** (`scripts/_config.py` / `pyproject.toml`). CI runs on pushes and PRs to `main` and `v*` branches.
 
-Version 2.2+ uses **12 UTC → 12 UTC convective days**. **v2.2.1** introduced literature-aligned severe-hail thresholds and era-pooled GridRad calibration (`docs/methodology.md` §2.7). **v2.2.2** added GridRad artifact filtering and a diagnostic range-debias fit (§5.5). **v2.3.0** adds GridRad native QC (04c), site remediation, 10 km azimuth bins, and an optional diagnostic artifact classifier (`train_artifact_classifier.py`; never applied to hazard rasters). SPC remains validation-only.
+Version 2.2+ uses **12 UTC → 12 UTC convective days**. **v2.2.1** introduced literature-aligned severe-hail thresholds and era-pooled GridRad calibration (`docs/methodology.md` §2.7). **v2.2.2** added GridRad artifact filtering and a diagnostic range-debias fit (§5.5). **v2.4.1** adds GridRad native QC (04c), site remediation, 10 km azimuth bins, and an optional diagnostic artifact classifier (`train_artifact_classifier.py`; never applied to hazard rasters). SPC remains validation-only.
 
-**Preferred thresholds (v2.3.0):**
+**Preferred thresholds (v2.4.1):**
 
 | Constant | Value | Use |
 |----------|------:|-----|
@@ -61,7 +61,7 @@ historical counts or logs. The canonical state, verification checks, and
 ordered two-pass rebuild workflow are maintained only in
 [`docs/RUN_NOTES.md`](docs/RUN_NOTES.md#canonical-current-run-state).
 The v2.2.1 (2026-06-30) and v2.2.2 (2026-07-08) numbers are historical,
-superseded snapshots rather than current v2.3.0 results.
+superseded snapshots rather than current v2.4.1 results.
 
 ---
 
@@ -155,7 +155,7 @@ Stage 11b downloads [NOAA/NCEI ETOPO 2022](https://doi.org/10.25921/fd45-gt74) 6
 ```bash
 git clone https://github.com/cmelhauser/us-hail-cat-model.git
 cd us-hail-cat-model
-git checkout v2.3.0
+git checkout v2.4.1
 ./scripts/setup_git_remotes.sh   # origin-only
 python3.10 -m venv .venv
 source .venv/bin/activate
@@ -291,7 +291,7 @@ The following limitations should be documented before any underwriting, regulato
 - **Long return periods are extrapolative.** RP > ~500 years exceed the observed record and rely on GPD tail assumptions.
 - **Spatial dependence is simplified.** The stochastic catalog does not model inter-event spatial correlation beyond the historical footprint.
 - **Climate non-stationarity is not modeled.** The model assumes a stationary hail climate over the radar record.
-- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. Stage 05 uses range-dependent debias, five core GridRad artifact passes, and default-on site remediation, including spatiotemporal range-ring persistence from a 21-day trailing window. A broad GridRad–MYRORSS climatological offset can remain; final v2.3.0 values require post-run refresh after the rebuild is verified.
+- **Source-transition uncertainty.** The MYRORSS → GridRad → MRMS calibration introduces residual bias, particularly at the 2011 and 2020 transitions. Stage 05 uses range-dependent debias, five core GridRad artifact passes, and default-on site remediation, including spatiotemporal range-ring persistence from a 21-day trailing window. A broad GridRad–MYRORSS climatological offset can remain; final v2.4.1 values require post-run refresh after the rebuild is verified.
 - **Radar-site artifacts.** GridRad-era data can exhibit NEXRAD range rings and speckle in return-period maps if uncorrected; delete `mesh_0.05deg_corrected/`, rerun Stage 05 with the artifact filter, then `radar_artifact_diagnostic.py` and downstream stages after calibration changes.
 - **SPC validation is incomplete.** Report density is spatially and temporally uneven; rural areas are systematically underrepresented.
 - **Vulnerability and loss modeling are out of scope.** This repository delivers hazard only; MDR curves, exposure, and financial loss are future work (see `docs/methodology.md` §14).

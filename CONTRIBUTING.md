@@ -96,14 +96,14 @@ remotes from older clones. See `docs/GIT_REMOTES.md` for details.
 | Branch | Purpose |
 |--------|---------|
 | `main` | Stable tip; always should pass CI |
-| `v2.3.0` | **Active development branch** for model 2.3.0 (preferred checkout) |
+| `v2.4.1` | **Active development branch** for model 2.4.1 (preferred checkout) |
 | `v*` | Version branches; CI runs on pushes and PRs targeting them |
 | `codex/<name>` | AI-assisted or local work branches |
 | `feature/<name>` | New features or methodology changes |
 | `fix/<name>` | Bug fixes |
 | `docs/<name>` | Documentation-only changes |
 
-Base day-to-day work on **`v2.3.0`** unless coordinating a hotfix to `main`.
+Base day-to-day work on **`v2.4.1`** unless coordinating a hotfix to `main`.
 Keep branches focused; one concern per PR. Open PRs against `main` on
 **`origin`** (`cmelhauser/us-hail-cat-model`). Retired historical branches
 (`v2.1`, `v2.2.2`, `v2.2.3`) are not active development.

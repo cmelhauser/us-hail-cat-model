@@ -4,7 +4,7 @@ message: >
   using the metadata below.
 type: software
 title: "CONUS Hail Catastrophe Model"
-version: 2.3.0
+version: 2.4.1
 date-released: "2026-07-30"
 abstract: >
   A radar-based probabilistic hail hazard model for the Continental United States.
@@ -23,7 +23,7 @@ authors:
     website: "https://github.com/cmelhauser/us-hail-cat-model"
 license: MIT
 repository-code: "https://github.com/cmelhauser/us-hail-cat-model"
-# Release DOI is an external blocker: add a `doi:` field only after the v2.3.0
+# Release DOI is an external blocker: add a `doi:` field only after the v2.4.1
 # GitHub Release has been archived and Zenodo has minted the real identifier.
 # Do not invent a DOI or manuscript commit SHA.
 # theonlymuffinbot is the project pseudonym for all AI collaboration; not a

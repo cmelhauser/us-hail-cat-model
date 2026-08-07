@@ -1,7 +1,7 @@
 # Project Memory
 
-**CONUS Hail Catastrophe Model v2.3.0**
-**Last updated: 2026-08-05 (`v2.3.0`; run status unverified since 2026-07-09;
+**CONUS Hail Catastrophe Model v2.4.1**
+**Last updated: 2026-08-05 (`v2.4.1`; run status unverified since 2026-07-09;
 canonical state in `docs/RUN_NOTES.md`)**
 
 ---
@@ -9,8 +9,8 @@ canonical state in `docs/RUN_NOTES.md`)**
 ## 1. Canonical Project Identity
 
 - **Name:** CONUS Hail Catastrophe Model
-- **Current version:** **v2.3.0** (active branch `v2.3.0`; `MODEL_VERSION` 2.3.0).
-  `origin/main` already carries the 2.3.0 codebase; tip commits may lag this branch.
+- **Current version:** **v2.4.1** (active branch `v2.4.1`; `MODEL_VERSION` 2.4.1).
+  `origin/main` already carries the 2.4.1 codebase; tip commits may lag this branch.
 - **Model type:** hail hazard model
 - **Domain:** continental United States
 - **Primary hazard input:** radar-derived MESH / MESH75
@@ -28,7 +28,7 @@ Pipeline status is **unverified since 2026-07-09**. The single canonical
 run-state section, verification procedure, and ordered two-pass workflow are in
 [`RUN_NOTES.md`](RUN_NOTES.md#canonical-current-run-state). Historical archive
 counts, classifier scores, and stage outputs in this work log must not be
-presented as current v2.3.0 results until refreshed.
+presented as current v2.4.1 results until refreshed.
 
 Stage 05 uses five core GridRad artifact passes plus site-specific remediation
 as a sixth layer, enabled by default. SPC reports are validation-only and are
@@ -295,16 +295,16 @@ external release/submission actions.
 ## 10. Compact Context for AI Agents
 
 ```text
-Project: CONUS Hail Cat Model v2.3.0.
+Project: CONUS Hail Cat Model v2.4.1.
 Radar-first hail hazard model on 0.05° CONUS grid (520×1180).
 14-stage Python pipeline (01–13 hazard + 14 figures). Run via run_pipeline.py.
 SPC reports are validation only — never a hazard input.
 Events stored as sparse arrays (rows, cols, vals). Stage 13 must never build dense event cubes.
 Stage 05 must always work with --skip-ml (no ML artifacts required).
-Active branch: v2.3.0. Model 2.3.0. Sole remote: origin (cmelhauser/us-hail-cat-model).
+Active branch: v2.4.1. Model 2.4.1. Sole remote: origin (cmelhauser/us-hail-cat-model).
 AI collaborator pseudonym: theonlymuffinbot (not a separate GitHub repo).
 Run status unverified since 2026-07-09; inspect before resuming — see RUN_NOTES.
-Historical archive counts and prior event/stochastic catalogs are not current v2.3.0 results.
+Historical archive counts and prior event/stochastic catalogs are not current v2.4.1 results.
 Stage 01/02 manifests distinguish missing-source days from no-hail days.
 Mesh peak diagnostic: scripts/diagnostics/summarize_mesh_daily_peaks.py.
 Hail-day climatology: scripts/diagnostics/hail_day_climatology.py.

@@ -5,7 +5,7 @@ from __future__ import annotations
 run_pipeline.py — CONUS Hail Cat Model: Full Pipeline Runner
 ============================================================
 Runs all pipeline stages in order. Stops on any failure.
-Version comes from ``scripts._config.MODEL_VERSION`` (currently 2.3.0).
+Version comes from ``scripts._config.MODEL_VERSION`` (currently 2.4.1).
 
 Usage:
     python run_pipeline.py              # Run all stages

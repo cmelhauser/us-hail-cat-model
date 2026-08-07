@@ -1,7 +1,7 @@
 # AI Instructions for Future Work
 
-**CONUS Hail Catastrophe Model v2.3.0**
-**Last updated: 2026-08-06 (`v2.3.0`; origin-only remotes; CI on `main` + `v*`;
+**CONUS Hail Catastrophe Model v2.4.1**
+**Last updated: 2026-08-06 (`v2.4.1`; origin-only remotes; CI on `main` + `v*`;
 mandatory `./scripts/quality_gate.sh` before every commit; 100% coverage gates;
 see also `docs/RUN_NOTES.md` for live pipeline rebuild status)**
 
@@ -228,7 +228,7 @@ When asked to review the project:
 
 Current repository state:
 
-- Active branch: **`v2.3.0`** (model **2.3.0**). Sole remote: **`origin`**
+- Active branch: **`v2.4.1`** (model **2.4.1**). Sole remote: **`origin`**
   (`cmelhauser/us-hail-cat-model`). AI collaborator pseudonym: **theonlymuffinbot**.
 - GitHub Actions CI: Python 3.10/3.11/3.12 unit tests with **100%**
   `scripts`+`run_pipeline` coverage, policy check, dry-run; AWS job at **100%**
@@ -241,7 +241,7 @@ Current repository state:
   sparse-grid coordinate fix).
 - **Stages 02–04a / 03 complete**; GridRad gap-era archive under Stage **04c**.
 - **Mesh archive:** **9,797** TIFFs (5,023 + 2,714 + 2,060).
-- **v2.3.0 rebuild:** from **04c** (native QC) through **14** — see `docs/RUN_NOTES.md`.
+- **v2.4.1 rebuild:** from **04c** (native QC) through **14** — see `docs/RUN_NOTES.md`.
 - Diagnostic summaries (gitignored; regenerate or load externally):
   `data/analysis/mesh_daily_peaks/`, `data/analysis/hail_day_climatology/`.
 
@@ -338,7 +338,7 @@ scripts/_config.py = single source of truth for constants and is imported by all
 scripts/_logging.py = get_logger() factory wired into all stage scripts.
 OPEN DOC WATCH: methodology.md §13 and uncertainty.md §5.1 document monthly CV Mar–Sep for σ_perturb; keep them aligned with code if Stage 13 changes.
 First full run started 2026-05-01 via Codex.
-Active branch: v2.3.0. Model 2.3.0 (12 UTC → 12 UTC convective days).
+Active branch: v2.4.1. Model 2.4.1 (12 UTC → 12 UTC convective days).
 Sole remote: origin (cmelhauser/us-hail-cat-model). AI collaborator: theonlymuffinbot.
 Stage 01 + 02 + 04c primary ingest complete (9,584 mesh TIFFs). Stages 05–14 are the active blocker.
 ```
